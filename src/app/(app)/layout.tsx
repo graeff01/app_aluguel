@@ -10,6 +10,7 @@ import { OfflineBanner } from "@/components/online-status";
 import { UserMenu } from "@/components/user-menu";
 import { ForcePasswordDialog } from "@/components/force-password";
 import { pushConfig } from "@/lib/push";
+import { RefreshOnFocus } from "@/components/refresh-on-focus";
 import { cx } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -90,6 +91,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     return (
       <div className="flex min-h-dvh flex-col">
         <OfflineBanner />
+        <RefreshOnFocus />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-2.5">
             <Link href="/minhas" className="flex items-center gap-2">
@@ -119,6 +121,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <SideNav groups={groups} productName={settings.productName} />
       <div className="flex min-w-0 flex-1 flex-col">
         <OfflineBanner />
+        <RefreshOnFocus />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 md:px-8">
             <Link href="/" className="flex items-center gap-2 md:hidden">

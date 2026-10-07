@@ -4,6 +4,7 @@ import { LinkButton, Badge, cx } from "./ui";
 import { Icon } from "./icons";
 import { VisitStatusBadge } from "./visit-badges";
 import { ContactButtons } from "./contact-buttons";
+import { TONE_BAR, visitTone } from "@/lib/visit-tone";
 import type { VisitListItem } from "@/server/queries";
 
 export function VisitCard({ v, now = new Date(), showConsultant, showDate }: { v: VisitListItem; now?: Date; showConsultant?: boolean; showDate?: boolean }) {
@@ -13,9 +14,9 @@ export function VisitCard({ v, now = new Date(), showConsultant, showDate }: { v
   const overdue24 = awaiting && now.getTime() - v.scheduledEnd.getTime() > 24 * 3600_000;
   const otherDay = showDate || dayKey(v.scheduledStart) !== dayKey(now);
   return (
-    <li className={cx("group relative overflow-hidden rounded-3xl border bg-surface shadow-card transition-shadow hover:shadow-float", awaiting ? "border-accent/30" : "border-line")}>
-      {awaiting && <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-accent" />}
-      <div className="flex gap-4 p-4 sm:p-5">
+    <li className="animate-rise group relative overflow-hidden rounded-[26px] border border-line bg-surface shadow-card transition-shadow hover:shadow-float">
+      <span aria-hidden className={cx("absolute inset-y-0 left-0 w-[5px]", TONE_BAR[visitTone(v, now)])} />
+      <div className="flex gap-4 py-4 pr-4 pl-5 sm:py-5 sm:pr-5 sm:pl-6">
         <div className="w-16 shrink-0 border-r border-line pr-4 text-right">
           {otherDay && <p className="text-[11px] font-semibold tracking-wide text-ink-3 uppercase">{fmt.shortDate(v.scheduledStart).replace(".", "")}</p>}
           <p className="num text-[19px] leading-tight font-bold">{fmt.time(v.scheduledStart)}</p>

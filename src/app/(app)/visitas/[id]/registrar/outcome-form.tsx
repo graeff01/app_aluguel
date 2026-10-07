@@ -96,6 +96,9 @@ export function OutcomeForm(p: Props) {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
         setSave({ kind: "saved" });
+        try {
+          navigator.vibrate?.(18); // confirmação tátil discreta (Android)
+        } catch {}
         if (data.next?.id && !p.isEdit) {
           // vai direto para a próxima pendente
           router.replace(`/visitas/${data.next.id}/registrar?anterior=salvo&restantes=${data.next.remaining}`);
