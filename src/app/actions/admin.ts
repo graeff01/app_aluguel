@@ -258,6 +258,8 @@ export async function settingsAction(_: ActionState, fd: FormData) {
         consultantCanUpdateOpp: str(fd, "consultantCanUpdateOpp") === "1",
         consultantCanCreateVisit: str(fd, "consultantCanCreateVisit") === "1",
         consultantCanCorrectData: str(fd, "consultantCanCorrectData") === "1",
+        remindersEnabled: str(fd, "remindersEnabled") === "1",
+        reminderHour: int("reminderHour", 6, 20),
       };
       await db.$transaction(async (tx) => {
         await tx.appSettings.update({ where: { id: 1 }, data });

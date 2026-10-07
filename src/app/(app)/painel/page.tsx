@@ -7,6 +7,7 @@ import { Avatar, Field, Input, PageHeader, Section, Segmented, cx } from "@/comp
 import { Icon } from "@/components/icons";
 import { BarList, Delta, RateValue, StatTile, VsTeam, rateDetail } from "@/components/stats";
 import { SyncButton } from "@/components/sync-button";
+import { WeeklyChart } from "@/components/weekly-chart";
 
 export const metadata = { title: "Painel" };
 
@@ -139,6 +140,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           href={individual ? hist({ situacao: "SCHEDULED" }) : "/pendencias"}
         />
       </div>
+
+      <Section title="Evolução semanal" hint={individual ? `Semanas de ${individual.name.split(" ")[0]}` : "Equipe, últimas 8 semanas"}>
+        <WeeklyChart weeks={d.weekly} />
+      </Section>
 
       <Section title="Visitas no período">
         <dl className="grid grid-cols-3 divide-line overflow-hidden rounded-3xl border border-line bg-surface shadow-card max-lg:divide-y lg:grid-cols-6 lg:divide-x">

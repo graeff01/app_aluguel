@@ -3,6 +3,7 @@ import { fmt, dayKey } from "@/lib/time";
 import { LinkButton, Badge, cx } from "./ui";
 import { Icon } from "./icons";
 import { VisitStatusBadge } from "./visit-badges";
+import { ContactButtons } from "./contact-buttons";
 import type { VisitListItem } from "@/server/queries";
 
 export function VisitCard({ v, now = new Date(), showConsultant, showDate }: { v: VisitListItem; now?: Date; showConsultant?: boolean; showDate?: boolean }) {
@@ -41,12 +42,17 @@ export function VisitCard({ v, now = new Date(), showConsultant, showDate }: { v
               {v.assignmentStatus === "NEEDS_REVIEW" && <Badge tone="warn">Atribuição em revisão</Badge>}
             </div>
           )}
-          {canRegister && started && (
-            <LinkButton href={`/visitas/${v.id}/registrar`} className="relative z-[1] mt-4 w-full sm:w-auto">
-              Registrar resultado
-              <Icon name="arrow" className="size-4" />
-            </LinkButton>
-          )}
+          {(canRegister && started) || v.phoneNormalized ? (
+            <div className="mt-4 flex items-center gap-2">
+              {canRegister && started && (
+                <LinkButton href={`/visitas/${v.id}/registrar`} className="relative z-[1] flex-1 sm:flex-none">
+                  Registrar resultado
+                  <Icon name="arrow" className="size-4" />
+                </LinkButton>
+              )}
+              <ContactButtons phone={v.phoneNormalized} name={v.clientName} compact />
+            </div>
+          ) : null}
         </div>
       </div>
     </li>

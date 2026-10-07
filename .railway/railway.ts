@@ -15,6 +15,9 @@ export default defineRailway(() => {
     TOKEN_ENCRYPTION_KEY: preserve(),
     GOOGLE_CLIENT_ID: preserve(),
     GOOGLE_CLIENT_SECRET: preserve(),
+    VAPID_PUBLIC_KEY: preserve(),
+    VAPID_PRIVATE_KEY: preserve(),
+    VAPID_SUBJECT: preserve(),
   };
 
   const web = service("web", {

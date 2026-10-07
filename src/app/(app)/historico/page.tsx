@@ -21,7 +21,21 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   };
   return (
     <>
-      <PageHeader title="Histórico" subtitle={`${result.total} visita${result.total === 1 ? "" : "s"}`} />
+      <PageHeader
+        title="Histórico"
+        subtitle={`${result.total} visita${result.total === 1 ? "" : "s"}`}
+        action={
+          global && result.total > 0 ? (
+            <a
+              href={`/api/export/visitas?${new URLSearchParams(Object.entries(sp).filter(([k, v]) => v && k !== "pagina") as [string, string][])}`}
+              className="inline-flex min-h-12 items-center gap-2 rounded-full border border-line-strong bg-surface px-5 text-[15px] font-semibold shadow-card transition hover:border-ink-3"
+              download
+            >
+              <span aria-hidden>↓</span> Exportar CSV
+            </a>
+          ) : undefined
+        }
+      />
       <form className="mb-6 rounded-3xl border border-line bg-surface p-5 shadow-card" role="search">
         <Field label="Buscar por nome, telefone ou código" htmlFor="q">
           <Input id="q" name="q" type="search" defaultValue={sp.q} placeholder="Ex.: Maria, 51 9..., 654321" />

@@ -7,11 +7,13 @@ import { fmt } from "@/lib/time";
 import { formatPhone } from "@/lib/phone";
 import { Alert, Panel } from "@/components/ui";
 import { OutcomeForm } from "./outcome-form";
+import { ContactButtons } from "@/components/contact-buttons";
 import { notFound } from "next/navigation";
 
 export const metadata = { title: "Registrar resultado" };
 
-export default async function RegisterPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function RegisterPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ anterior?: string; restantes?: string }> }) {
+  const sp = await searchParams;
   const actor = await requireActor();
   const { id } = await params;
   const { visit, settings } = await orNotFound(getVisitDetail(actor, id));
@@ -29,7 +31,17 @@ export default async function RegisterPage({ params }: { params: Promise<{ id: s
       <Link href={`/visitas/${visit.id}`} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
         ← Detalhes da visita
       </Link>
-      <h1 className="mb-3 text-2xl font-bold">{isEdit ? "Alterar resultado" : "Registrar resultado"}</h1>
+      {sp.anterior === "salvo" && (
+        <div role="status" className="mb-5 flex items-center justify-between gap-3 rounded-2xl bg-good-soft px-4 py-3 text-sm text-good">
+          <span>
+            <strong>✓ Resultado anterior salvo.</strong> Esta é a próxima pendente{Number(sp.restantes) > 1 ? ` (${sp.restantes} na fila)` : ""}.
+          </span>
+          <Link href="/hoje" className="shrink-0 font-semibold underline">
+            Parar
+          </Link>
+        </div>
+      )}
+      <h1 className="mb-3 text-[28px] leading-tight font-bold tracking-[-0.03em]">{isEdit ? "Alterar resultado" : "Registrar resultado"}</h1>
       {visit.excluded && <Alert tone="warn" title="Esta visita foi excluída dos indicadores pela gestão." />}
       <Panel className="mb-6">
         <p className="text-sm text-ink-3">
@@ -41,6 +53,7 @@ export default async function RegisterPage({ params }: { params: Promise<{ id: s
           {visit.phoneRaw ? <> · {formatPhone(visit.phoneNormalized, visit.phoneRaw)}</> : <> · <span className="text-warn">sem telefone</span></>}
         </p>
         <p className="text-ink-2">Responsável: {visit.consultant?.name ?? "—"}</p>
+        <ContactButtons phone={visit.phoneNormalized} name={visit.clientName} compact className="mt-3" />
         {canCorrectVisitData(actor, visit, settings) && (
           <Link href={`/visitas/${visit.id}/corrigir?voltar=registrar`} className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-primary">
             Dados errados? Corrigir

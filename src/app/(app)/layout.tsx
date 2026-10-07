@@ -9,6 +9,7 @@ import { BottomNav, SideNav, type NavItem } from "@/components/nav";
 import { OfflineBanner } from "@/components/online-status";
 import { UserMenu } from "@/components/user-menu";
 import { ForcePasswordDialog } from "@/components/force-password";
+import { pushConfig } from "@/lib/push";
 import { cx } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -112,7 +113,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   <span className="sr-only md:hidden">{health.message}</span>
                 </>
               )}
-              <UserMenu name={actor.name} email={actor.email} role={actor.role} showProfile={global} />
+              <UserMenu name={actor.name} email={actor.email} role={actor.role} showProfile={global} pushKey={pushConfig()?.publicKey ?? null} />
             </div>
           </div>
         </header>

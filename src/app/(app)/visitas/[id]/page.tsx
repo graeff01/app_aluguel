@@ -9,6 +9,7 @@ import { CONFLICT_LABEL, EVALUATION_LABEL, MATCH_LABEL, OPP_STATUS_LABEL, STATUS
 import { Alert, Badge, KeyValue, LinkButton, Panel, Section } from "@/components/ui";
 import { VisitStatusBadge } from "@/components/visit-badges";
 import { VisitAdminTools } from "./admin-tools";
+import { ContactButtons } from "@/components/contact-buttons";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Visita" };
@@ -64,6 +65,7 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
           </LinkButton>
         )}
       </div>
+      <ContactButtons phone={visit.phoneNormalized} name={visit.clientName} className="-mt-3 mb-6" />
       {awaiting && <p className="-mt-3 mb-5 text-sm text-warn">O horário terminou, mas isso não confirma a visita. Registre o que aconteceu.</p>}
 
       <div className="mb-10 grid gap-4 lg:grid-cols-2">

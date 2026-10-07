@@ -12,6 +12,14 @@ Web responsivo + PWA instalável, interface em português, fuso `America/Sao_Pau
 3. Após a visita, a consultora abre **Hoje** → **Registrar resultado** → informa se aconteceu, o resultado, o motivo (se negativa) e a observação → **Salvar** (confirmação real do servidor).
 4. A gestora acompanha **Painel**, **Revisão** (atribuições, conflitos, eventos ambíguos, vínculos de clientes) e **Andamento** (oportunidades).
 
+### Recursos adicionais
+
+- **Próxima pendente:** após salvar um resultado, a consultora vai direto para a próxima visita aguardando registro.
+- **Ligar / WhatsApp:** botões no card e no detalhe (somente com telefone validado; apenas abrem o contato, nada é enviado automaticamente).
+- **Lembretes no celular (Web Push):** ativados por cada pessoa no menu da conta. Envio diário (hora configurável, exceto domingo) pelo worker: consultora recebe a contagem das próprias pendências > 24 h; gestora recebe o resumo da equipe. Conteúdo só com contagens. No iPhone exige o app instalado na tela de início (iOS 16.4+).
+- **Evolução semanal** no painel (8 semanas, segunda a domingo): agendadas, realizadas, positivas e cobertura.
+- **Exportar CSV** (gestão) com os filtros do Histórico; separador `;`, compatível com Excel, proteção contra fórmulas e registro na auditoria.
+
 ## Stack
 
 | Item | Escolha |

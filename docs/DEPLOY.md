@@ -117,6 +117,7 @@ O Postgres de produção **não tem acesso público**. Para rodar scripts, abra 
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | web, worker | para integração | Credencial OAuth “Aplicativo da Web” |
 | `GOOGLE_REDIRECT_URI` | web | não | Padrão `${APP_URL}/api/google/callback` |
 | `SETUP_TOKEN` | web | só na implantação | Remova após criar o admin |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | web, worker | para lembretes | Chaves do Web Push (mesmas nos dois). Trocar as chaves invalida as inscrições: cada pessoa reativa os lembretes. |
 | `WORKER_TICK_MS` | worker | não | Laço do worker (padrão 15000) |
 | `PORT` | web | automático | Injetado pelo Railway |
 

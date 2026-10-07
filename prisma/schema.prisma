@@ -43,6 +43,8 @@ model User {
   closedOpps       Opportunity[]          @relation("OppClosedResponsible")
   oppEvents        OpportunityEvent[]
   auditLogs        AuditLog[]
+  pushSubscriptions PushSubscription[]
+  reminderLogs     ReminderLog[]
   syncRuns         SyncRun[]
   googleConnection GoogleConnection[]
 }
@@ -110,6 +112,10 @@ model AppSettings {
   consultantCanCreateVisit Boolean  @default(true)
   consultantCanCorrectData Boolean  @default(true)
   noteMaxLength            Int      @default(2000)
+  /// lembretes de pendências (notificação no celular)
+  remindersEnabled         Boolean  @default(true)
+  /// hora local (America/Sao_Paulo) do envio diário
+  reminderHour             Int      @default(9)
   updatedAt                DateTime @updatedAt
 }
 
@@ -546,4 +552,36 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+// ───────────────────────────── Lembretes (Web Push) ─────────────────────────────
+
+/** Inscrição de notificação de um aparelho. Conteúdo das notificações: só contagens, sem dados de clientes. */
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
+
+  @@index([userId])
+}
+
+/** Um lembrete por usuário por dia (idempotência entre reinícios e réplicas do worker). */
+model ReminderLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// dia operacional YYYY-MM-DD
+  day       String
+  kind      String
+  count     Int
+  delivered Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, day, kind])
 }

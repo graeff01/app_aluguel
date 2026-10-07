@@ -3,7 +3,7 @@
  * Cache SOMENTE de arquivos estáticos públicos (JS/CSS do build, ícones) e da página offline.
  * Nunca armazena respostas de API, páginas autenticadas ou dados de clientes.
  */
-const VERSION = "v1";
+const VERSION = "v2";
 const STATIC_CACHE = `static-${VERSION}`;
 const PRECACHE = ["/offline.html", "/icons/icon-192.png"];
 
@@ -60,4 +60,41 @@ self.addEventListener("fetch", (event) => {
     // páginas sempre da rede (autenticadas, não cacheadas); sem rede → página offline estática
     event.respondWith(fetch(req).catch(() => caches.match("/offline.html")));
   }
+});
+
+// ── Lembretes (Web Push): conteúdo só com contagens, sem dados de clientes ──
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  const title = data.title || "Visitas Locação";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || "Você tem visitas aguardando resultado.",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: data.tag || "lembrete",
+      renotify: false,
+      data: { url: typeof data.url === "string" && data.url.startsWith("/") ? data.url : "/pendencias" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/pendencias";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if ("focus" in c) {
+          c.navigate(url);
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
 });

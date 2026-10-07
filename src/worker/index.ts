@@ -10,10 +10,12 @@ import { db } from "@/lib/db";
 import { log, errorCode } from "@/lib/log";
 import { getSettings } from "@/lib/settings";
 import { executeRun } from "@/server/sync/runner";
+import { sendDailyReminders } from "@/server/reminders";
 
 const TICK_MS = Number(process.env.WORKER_TICK_MS ?? 15_000);
 const WORKER_ID = process.env.RAILWAY_REPLICA_ID ?? process.env.HOSTNAME ?? "local";
 let stopping = false;
+let lastReminderCheck = 0;
 
 async function heartbeat(startedAt: Date) {
   await db.workerHeartbeat.upsert({
@@ -59,6 +61,10 @@ async function main() {
     try {
       await heartbeat(startedAt);
       await tick();
+      if (Date.now() - lastReminderCheck > 10 * 60_000) {
+        lastReminderCheck = Date.now();
+        await sendDailyReminders().catch((e) => log.error("reminders.failed", { code: errorCode(e) }));
+      }
     } catch (e) {
       log.error("worker.tick_failed", { code: errorCode(e) });
     }

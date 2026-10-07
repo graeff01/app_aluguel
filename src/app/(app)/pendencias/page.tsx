@@ -6,6 +6,8 @@ import { Empty, PageHeader, Section, Badge } from "@/components/ui";
 import { VisitCard } from "@/components/visit-card";
 import Link from "next/link";
 import { fmt } from "@/lib/time";
+import { pushConfig } from "@/lib/push";
+import { PushPrompt } from "@/components/push-toggle";
 
 export const metadata = { title: "Pendências" };
 
@@ -20,6 +22,7 @@ export default async function PendingPage() {
   return (
     <>
       <PageHeader title="Pendências" subtitle="O horário encerrado não confirma que a visita aconteceu — registre o que houve." />
+      <PushPrompt publicKey={pushConfig()?.publicKey ?? null} />
       <Section title={`Aguardando resultado (${awaiting.length})`} action={old ? <Badge tone="warn">{old} há mais de 24 h</Badge> : undefined}>
         {awaiting.length === 0 ? (
           <Empty title="Tudo registrado">Nenhuma visita encerrada sem resultado.</Empty>

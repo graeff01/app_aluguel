@@ -38,6 +38,12 @@ export default async function SettingsPage() {
           <YesNo name="consultantCanCorrectData" value={s.consultantCanCorrectData} label="Podem corrigir dados (nome, telefone, código) das próprias visitas" />
           <YesNo name="consultantCanCreateVisit" value={s.consultantCanCreateVisit} label="Podem cadastrar visita manual" />
         </Section>
+        <Section title="Lembretes de pendências">
+          <YesNo name="remindersEnabled" value={s.remindersEnabled} label="Enviar lembrete diário no celular" hint="Para quem ativou os lembretes no aparelho. Consultora: visitas dela há mais de 24 h sem registro. Gestora: resumo da equipe. Não envia aos domingos." />
+          <Field label="Horário do envio (Brasília)" htmlFor="reminderHour">
+            <Input id="reminderHour" name="reminderHour" type="number" min={6} max={20} defaultValue={s.reminderHour} />
+          </Field>
+        </Section>
         <Section title="Sincronização">
           <div className="grid gap-x-3 sm:grid-cols-2">
             <Field label="Intervalo (minutos)" htmlFor="syncIntervalMinutes">

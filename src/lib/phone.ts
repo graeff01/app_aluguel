@@ -48,3 +48,10 @@ export const PHONE_PROBLEM_LABEL: Record<NonNullable<PhoneResult["problem"]>, st
   INCOMPLETO: "Telefone incompleto",
   INVALIDO: "Telefone inválido",
 };
+
+/** Links de contato (somente para telefone validado). Não enviam nada automaticamente. */
+export function contactLinks(normalized: string | null | undefined) {
+  if (!normalized) return null;
+  const digits = normalized.replace(/\D/g, "");
+  return { tel: `tel:${normalized}`, whatsapp: `https://wa.me/${digits}` };
+}

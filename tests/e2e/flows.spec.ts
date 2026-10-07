@@ -23,6 +23,9 @@ test("consultora registra resultado no celular (fluxo principal)", async ({ page
   await expect(page.getByText("Cliente Da B")).toHaveCount(0); // não vê visitas de outra consultora
 
   const card = page.locator("li", { hasText: "Cliente Alfa" });
+  // ligar / WhatsApp apenas abrem o contato
+  await expect(card.getByRole("link", { name: "Ligar para Cliente Alfa" })).toHaveAttribute("href", "tel:+5551998760001");
+  await expect(card.getByRole("link", { name: "Abrir WhatsApp para Cliente Alfa" })).toHaveAttribute("href", "https://wa.me/5551998760001");
   await card.getByRole("link", { name: "Registrar resultado" }).click();
   const save = page.getByRole("button", { name: "Salvar resultado" });
   await expect(save).toBeDisabled();
@@ -34,8 +37,13 @@ test("consultora registra resultado no celular (fluxo principal)", async ({ page
   await page.getByLabel(/Observação/).fill("Achou longe do trabalho.");
   await expect(save).toBeEnabled();
   await save.click();
-  await expect(page.getByText("Resultado salvo no servidor.")).toBeVisible();
-  await expect(page.getByText("Realizada · Negativa").first()).toBeVisible();
+  // encadeia para a próxima pendente (a mais antiga)
+  await expect(page.getByText("Resultado anterior salvo.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Registrar resultado" })).toBeVisible();
+  await expect(page.getByText("Cliente Beta").first()).toBeVisible();
+  await page.goto("/historico?q=Alfa");
+  await page.locator("a", { hasText: "Cliente Alfa" }).first().click();
+  await expect(page.getByText("Negativa").first()).toBeVisible();
   await expect(page.getByText("Achou longe do trabalho.").first()).toBeVisible();
 });
 
@@ -54,7 +62,7 @@ test("sem conexão: não diz salvo e mantém o texto; ao voltar, salva", async (
   await expect(page.getByText("Resultado salvo")).toHaveCount(0);
   await context.setOffline(false);
   await page.getByRole("button", { name: "Tentar novamente" }).click();
-  await expect(page.getByText("Resultado salvo no servidor.")).toBeVisible();
+  await expect(page.getByText("Resultado anterior salvo.")).toBeVisible(); // salvou e seguiu para a próxima pendente
 });
 
 test("consultora não acessa visita alheia por URL nem por API", async ({ page, request }, info) => {
@@ -83,6 +91,8 @@ test("consultora não acessa visita alheia por URL nem por API", async ({ page, 
   // sem cabeçalho/origem → bloqueado (CSRF)
   const csrf = await request.post(`/api/visits/x/outcome`, { data: {} });
   expect(csrf.status()).toBe(403);
+  // consultora não exporta CSV
+  expect((await page.request.get("/api/export/visitas")).status()).toBe(403);
 });
 
 test("gestora usa o painel no desktop", async ({ page }, info) => {
@@ -92,7 +102,15 @@ test("gestora usa o painel no desktop", async ({ page }, info) => {
   await expect(page.getByRole("navigation", { name: "Principal" }).first()).toBeVisible();
   await expect(page.getByText("Taxa de positivas", { exact: true })).toBeVisible();
   await expect(page.getByText("Conversão da coorte", { exact: true })).toBeVisible();
-  await expect(page.getByRole("table")).toBeVisible(); // por imóvel (desktop)
+  await expect(page.getByRole("heading", { name: "Evolução semanal" })).toBeVisible();
+  await expect(page.getByRole("table")).toHaveCount(2); // evolução semanal + por imóvel
+  // exportação CSV (gestão)
+  const res = await page.request.get("/api/export/visitas");
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-type"]).toContain("text/csv");
+  const csv = await res.text();
+  expect(csv.split("\r\n")[0]).toContain("Data;Início;Fim;Consultora;Cliente");
+  expect(csv).toContain("Cliente Alfa");
   // visão individual por consultora, comparada com a equipe
   await page.getByRole("link", { name: /Consultora A/ }).first().click();
   await expect(page.getByRole("heading", { name: "Consultora A" })).toBeVisible();

@@ -61,6 +61,16 @@ async function awaitingWhere(actor: AuthzActor, now: Date, before?: Date): Promi
   };
 }
 
+/** Próxima visita aguardando resultado (a mais antiga), para encadear registros. */
+export async function nextPending(actor: AuthzActor, excludeId: string, now = new Date()) {
+  const where = { ...(await awaitingWhere(actor, now)), id: { not: excludeId }, consultantId: hasGlobalView(actor) ? { not: null } : actor.id };
+  const [next, remaining] = await Promise.all([
+    db.visit.findFirst({ where, orderBy: { scheduledStart: "asc" }, select: { id: true } }),
+    db.visit.count({ where }),
+  ]);
+  return next ? { id: next.id, remaining } : null;
+}
+
 /** Pendências: resultados aguardando registro e dados/identificação a corrigir. */
 export async function listPending(actor: AuthzActor, now = new Date()) {
   const awaiting = await db.visit.findMany({ where: await awaitingWhere(actor, now), select: visitListSelect, orderBy: { scheduledStart: "asc" } });
@@ -88,7 +98,8 @@ export type HistoryFilter = {
   page?: number;
 };
 
-export async function listHistory(actor: AuthzActor, f: HistoryFilter) {
+/** Filtro do histórico (também usado na exportação). Sempre inclui o escopo do usuário. */
+export function historyWhere(actor: AuthzActor, f: HistoryFilter): Prisma.VisitWhereInput {
   const where: Prisma.VisitWhereInput = { ...visitScope(actor) };
   const and: Prisma.VisitWhereInput[] = [];
   const q = f.q?.trim();
@@ -110,6 +121,11 @@ export async function listHistory(actor: AuthzActor, f: HistoryFilter) {
   if (f.status === "POSITIVE" || f.status === "NEGATIVE" || f.status === "UNDECIDED") and.push({ evaluation: f.status });
   if (f.consultantId && hasGlobalView(actor)) and.push({ consultantId: f.consultantId === "none" ? null : f.consultantId });
   if (and.length) where.AND = and;
+  return where;
+}
+
+export async function listHistory(actor: AuthzActor, f: HistoryFilter) {
+  const where = historyWhere(actor, f);
   const take = 30;
   const page = Math.max(1, f.page ?? 1);
   const [items, total] = await Promise.all([
@@ -241,11 +257,27 @@ export async function dashboard(actor: AuthzActor, f: DashboardFilter, now = new
     { from: prevFrom, to: prevTo, now, resultsStartDate: dateOnlyKey(settings.resultsStartDate), consultantId, propertyCode },
   );
 
+  // Evolução semanal: 8 semanas (segunda a domingo) terminando na semana de `to`
+  const toDate = new Date(to + "T12:00:00Z");
+  const weekEnd = addDays(to, (7 - toDate.getUTCDay()) % 7); // domingo
+  const weeksStart = addDays(weekEnd, -8 * 7 + 1);
+  const weekVisitsRaw = await db.visit.findMany({
+    where: { ...visitScope(actor), scheduledStart: { gte: startOfDayInTz(weeksStart), lt: endOfDayInTz(weekEnd) } },
+    select: { id: true, status: true, evaluation: true, scheduledStart: true, scheduledEnd: true, consultantId: true, realizedById: true, propertyCode: true, clientId: true, clientMatch: true, negativeReasonId: true, excluded: true },
+  });
+  const weekVisits = weekVisitsRaw.map((v) => ({ ...v, clientIdentity: null }));
+  const weekly = Array.from({ length: 8 }, (_, i) => {
+    const wFrom = addDays(weeksStart, i * 7);
+    const wTo = addDays(wFrom, 6);
+    const wm = computeMetrics(weekVisits, [], { ...base, from: wFrom, to: wTo, consultantId });
+    return { from: wFrom, to: wTo, scheduled: wm.totals.scheduled, done: wm.totals.done, positive: wm.evaluations.positive, positiveRate: wm.positiveRate, coverage: wm.coverage, awaiting: wm.totals.awaiting, future: wFrom > dayKey(now) };
+  });
+
   const [reasons, users] = await Promise.all([
     db.reason.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }] }),
     db.user.findMany({ where: hasGlobalView(actor) ? {} : { id: actor.id }, select: { id: true, name: true, role: true, active: true } }),
   ]);
-  return { from, to, consultantId, propertyCode, metrics, team, perConsultant, previous: { from: prevFrom, to: prevTo, totals: previous.totals, positiveRate: previous.positiveRate }, reasons, users, settings };
+  return { from, to, consultantId, propertyCode, metrics, team, perConsultant, weekly, previous: { from: prevFrom, to: prevTo, totals: previous.totals, positiveRate: previous.positiveRate }, reasons, users, settings };
 }
 
 // ─────────────── Oportunidades e clientes ───────────────
