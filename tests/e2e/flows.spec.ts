@@ -7,18 +7,20 @@ async function login(page: Page, email: string) {
   await page.getByLabel("E-mail").fill(email);
   await page.getByLabel("Senha").fill(PW);
   await page.getByRole("button", { name: "Entrar" }).click();
-  await page.waitForURL(/\/(hoje|painel)/);
+  await page.waitForURL(/\/(minhas|painel)/);
 }
 
 test.describe.configure({ mode: "serial" });
 
-test("consultora registra resultado no celular (fluxo principal)", async ({ page }, info) => {
+test("consultora registra resultado no celular (tela única)", async ({ page }, info) => {
   test.skip(info.project.name !== "mobile");
   await login(page, "a@e2e.test");
   await expect(page.getByRole("heading", { name: /^Bo(m|a) (dia|tarde|noite)/ })).toBeVisible();
-  // pendência de dia anterior com destaque discreto
-  await expect(page.getByText(/anterior(es)? aguardando resultado/)).toBeVisible();
-  await page.getByRole("link", { name: "Pendências" }).first().click();
+  await expect(page.getByText(/visitas? esperando o seu registro/)).toBeVisible();
+  // tela única: sem menus de navegação nem acesso a outras telas
+  await expect(page.getByRole("navigation", { name: "Principal" })).toHaveCount(0);
+  await page.goto("/historico");
+  await expect(page).toHaveURL(/\/minhas/);
   await expect(page.getByText("Cliente Alfa")).toBeVisible();
   await expect(page.getByText("Cliente Da B")).toHaveCount(0); // não vê visitas de outra consultora
 
@@ -26,7 +28,7 @@ test("consultora registra resultado no celular (fluxo principal)", async ({ page
   // ligar / WhatsApp apenas abrem o contato
   await expect(card.getByRole("link", { name: "Ligar para Cliente Alfa" })).toHaveAttribute("href", "tel:+5551998760001");
   await expect(card.getByRole("link", { name: "Abrir WhatsApp para Cliente Alfa" })).toHaveAttribute("href", "https://wa.me/5551998760001");
-  await card.getByRole("link", { name: "Registrar resultado" }).click();
+  await card.getByRole("link", { name: /^Registrar resultado/ }).click();
   const save = page.getByRole("button", { name: "Salvar resultado" });
   await expect(save).toBeDisabled();
   await page.getByText("Sim, aconteceu").click();
@@ -41,17 +43,18 @@ test("consultora registra resultado no celular (fluxo principal)", async ({ page
   await expect(page.getByText("Resultado anterior salvo.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Registrar resultado" })).toBeVisible();
   await expect(page.getByText("Cliente Beta").first()).toBeVisible();
-  await page.goto("/historico?q=Alfa");
-  await page.locator("a", { hasText: "Cliente Alfa" }).first().click();
-  await expect(page.getByText("Negativa").first()).toBeVisible();
-  await expect(page.getByText("Achou longe do trabalho.").first()).toBeVisible();
+  await page.getByRole("link", { name: "← Minhas visitas" }).click();
+  await page.getByText(/Registradas nos últimos 7 dias/).click();
+  const done = page.locator("li", { hasText: "Cliente Alfa" });
+  await expect(done.getByText("Negativa")).toBeVisible();
+  await expect(done.getByText("Achou longe do trabalho.")).toBeVisible();
 });
 
 test("sem conexão: não diz salvo e mantém o texto; ao voltar, salva", async ({ page, context }, info) => {
   test.skip(info.project.name !== "mobile");
   await login(page, "a@e2e.test");
-  await page.goto("/pendencias");
-  await page.locator("li", { hasText: "Cliente Offline" }).getByRole("link", { name: "Registrar resultado" }).click();
+  await page.goto("/minhas");
+  await page.locator("li", { hasText: "Cliente Offline" }).getByRole("link", { name: /^Registrar resultado/ }).click();
   await page.getByText("Cliente não compareceu").click();
   await page.getByLabel(/Observação/).fill("Liguei duas vezes, sem resposta.");
   await context.setOffline(true);
@@ -68,11 +71,9 @@ test("sem conexão: não diz salvo e mantém o texto; ao voltar, salva", async (
 test("consultora não acessa visita alheia por URL nem por API", async ({ page, request }, info) => {
   test.skip(info.project.name !== "mobile");
   await login(page, "b@e2e.test");
-  await page.goto("/historico?q=Alfa");
-  await expect(page.getByText("Nenhuma visita encontrada")).toBeVisible();
-  // descobre o id da visita da B e tenta com a A
-  await page.goto("/historico");
-  const href = await page.locator("a", { hasText: "Cliente Da B" }).first().getAttribute("href");
+  await expect(page.getByText("Cliente Alfa")).toHaveCount(0);
+  const regHref = await page.locator("li", { hasText: "Cliente Da B" }).getByRole("link", { name: /^Registrar resultado/ }).getAttribute("href");
+  const href = regHref!.replace(/\/registrar$/, "");
   await page.getByLabel("Menu da conta").click();
   await page.getByRole("button", { name: "Sair" }).click();
   await page.waitForURL(/login/);

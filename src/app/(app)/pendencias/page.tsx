@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { requireActor } from "@/lib/require";
 import { hasGlobalView } from "@/lib/authz";
 import { listPending } from "@/server/queries";
@@ -15,6 +16,7 @@ const ISSUE: Record<string, string> = { MISSING_NAME: "sem nome", MISSING_CODE: 
 
 export default async function PendingPage() {
   const actor = await requireActor();
+  if (!hasGlobalView(actor)) redirect("/minhas");
   const now = new Date();
   const { awaiting, dataIssues: issues } = await listPending(actor, now);
   const global = hasGlobalView(actor);

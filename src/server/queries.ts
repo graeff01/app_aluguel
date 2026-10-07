@@ -61,6 +61,30 @@ async function awaitingWhere(actor: AuthzActor, now: Date, before?: Date): Promi
   };
 }
 
+/**
+ * Tela única da consultora: o que registrar, o que vem pela frente e o que já registrou.
+ * Escopo sempre restrito à própria consultora.
+ */
+export async function listMine(actor: AuthzActor, now = new Date()) {
+  const scope = { ...visitScope(actor), excluded: false };
+  const today = dayKey(now);
+  const [awaiting, upcoming, done] = await Promise.all([
+    db.visit.findMany({ where: await awaitingWhere(actor, now), select: visitListSelect, orderBy: { scheduledStart: "asc" } }),
+    db.visit.findMany({
+      where: { ...scope, status: "SCHEDULED", scheduledEnd: { gt: now }, scheduledStart: { lt: endOfDayInTz(addDays(today, 1)) } },
+      select: visitListSelect,
+      orderBy: { scheduledStart: "asc" },
+    }),
+    db.visit.findMany({
+      where: { ...scope, status: { not: "SCHEDULED" }, scheduledStart: { gte: startOfDayInTz(addDays(today, -6)) } },
+      select: { ...visitListSelect, note: true },
+      orderBy: { scheduledStart: "desc" },
+      take: 30,
+    }),
+  ]);
+  return { awaiting, upcoming, done, today };
+}
+
 /** Próxima visita aguardando resultado (a mais antiga), para encadear registros. */
 export async function nextPending(actor: AuthzActor, excludeId: string, now = new Date()) {
   const where = { ...(await awaitingWhere(actor, now)), id: { not: excludeId }, consultantId: hasGlobalView(actor) ? { not: null } : actor.id };

@@ -19,6 +19,7 @@ type Props = {
   initial: { status: Status | null; evaluation: Evaluation | null; negativeReasonId: string | null; note: string };
   isEdit: boolean;
   future: boolean;
+  afterSave: string;
 };
 
 const STATUS_OPTIONS: { value: Status; label: string; hint?: string }[] = [
@@ -101,7 +102,7 @@ export function OutcomeForm(p: Props) {
           router.refresh();
           return;
         }
-        router.replace(`/visitas/${p.visitId}?salvo=1`);
+        router.replace(p.afterSave);
         router.refresh();
         return;
       }

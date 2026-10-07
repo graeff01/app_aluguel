@@ -85,6 +85,35 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // consultora só vê o status da agenda quando há problema que a afeta
   const showHealth = global || health.level === "stale" || health.level === "error";
 
+  // Consultora: tela única, sem menus (só "Minhas visitas" e o registro)
+  if (!global) {
+    return (
+      <div className="flex min-h-dvh flex-col">
+        <OfflineBanner />
+        <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
+          <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-2.5">
+            <Link href="/minhas" className="flex items-center gap-2">
+              <span aria-hidden className="grid size-8 place-items-center rounded-xl bg-primary text-sm font-extrabold text-white">
+                V
+              </span>
+              <span className="text-[15px] font-bold tracking-[-0.02em]">{settings.productName}</span>
+            </Link>
+            <div className="flex items-center gap-2">
+              {showHealth && (
+                <span className="flex items-center gap-1.5 text-[12px] text-ink-2" title={health.message}>
+                  <span aria-hidden className={cx("size-2 rounded-full", dot)} />
+                  <span className="sr-only">{health.message}</span>
+                </span>
+              )}
+              <UserMenu name={actor.name} email={actor.email} role={actor.role} showProfile={false} pushKey={pushConfig()?.publicKey ?? null} />
+            </div>
+          </div>
+        </header>
+        <main className="mx-auto w-full max-w-xl flex-1 px-4 pt-6 pb-16">{children}</main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-dvh">
       <SideNav groups={groups} productName={settings.productName} />

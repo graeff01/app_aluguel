@@ -4,5 +4,5 @@ import { hasGlobalView } from "@/lib/authz";
 
 export default async function Home() {
   const a = await requireActor();
-  redirect(hasGlobalView(a) ? "/painel" : "/hoje");
+  redirect(hasGlobalView(a) ? "/painel" : "/minhas");
 }

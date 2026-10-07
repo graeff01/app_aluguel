@@ -8,11 +8,14 @@ import { updateOpportunity, transferOpportunity } from "@/server/opportunities";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
 import { getActor } from "@/lib/session";
 import { toState } from "@/lib/action";
+import { hasGlobalView } from "@/lib/authz";
 
 export async function correctVisitAction(_: ActionState, fd: FormData): Promise<ActionState> {
   const id = str(fd, "visitId");
   const back = str(fd, "voltar");
+  let consultantIsGlobal = true;
   const state = await runAction(async (actor) => {
+    consultantIsGlobal = hasGlobalView(actor);
     await correctVisitData(actor, id, {
       expectedVersion: Number(str(fd, "version")),
       clientName: str(fd, "clientName"),
@@ -25,14 +28,16 @@ export async function correctVisitAction(_: ActionState, fd: FormData): Promise<
   });
   if (state.ok) {
     revalidatePath("/", "layout");
-    redirect(back === "registrar" ? `/visitas/${id}/registrar` : `/visitas/${id}?corrigido=1`);
+    redirect(back === "registrar" || !consultantIsGlobal ? `/visitas/${id}/registrar` : `/visitas/${id}?corrigido=1`);
   }
   return state;
 }
 
 export async function createVisitAction(_: ActionState, fd: FormData): Promise<ActionState> {
   let createdId = "";
+  let toMine = false;
   const state = await runAction(async (actor) => {
+    toMine = !hasGlobalView(actor);
     const v = await createManualVisit(actor, {
       requestId: str(fd, "requestId"),
       scheduledStart: str(fd, "scheduledStart"),
@@ -46,7 +51,7 @@ export async function createVisitAction(_: ActionState, fd: FormData): Promise<A
   });
   if (state.ok && createdId) {
     revalidatePath("/", "layout");
-    redirect(`/visitas/${createdId}?criada=1`);
+    redirect(toMine ? "/minhas" : `/visitas/${createdId}?criada=1`);
   }
   return state;
 }

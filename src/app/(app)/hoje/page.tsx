@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireActor } from "@/lib/require";
 import { hasGlobalView } from "@/lib/authz";
@@ -17,6 +18,7 @@ function greeting(now: Date) {
 
 export default async function TodayPage() {
   const actor = await requireActor();
+  if (!hasGlobalView(actor)) redirect("/minhas");
   const now = new Date();
   const { visits, previousPending, oldestPending } = await listToday(actor, now);
   const global = hasGlobalView(actor);

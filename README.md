@@ -9,7 +9,7 @@ Web responsivo + PWA instalável, interface em português, fuso `America/Sao_Pau
 
 1. A visita é marcada na agenda central do Google com a consultora convidada.
 2. O **worker** importa o evento (somente leitura) e atribui a visita à consultora pelo **e-mail convidado**.
-3. Após a visita, a consultora abre **Hoje** → **Registrar resultado** → informa se aconteceu, o resultado, o motivo (se negativa) e a observação → **Salvar** (confirmação real do servidor).
+3. Após a visita, a consultora abre o app — **tela única “Minhas visitas”** (sem menus: “Para registrar”, “Próximas” e “Registradas”) → toca no card → informa se aconteceu, o resultado, o motivo (se negativa) e a observação → **Salvar** (confirmação real do servidor).
 4. A gestora acompanha **Painel**, **Revisão** (atribuições, conflitos, eventos ambíguos, vínculos de clientes) e **Andamento** (oportunidades).
 
 ### Recursos adicionais

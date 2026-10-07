@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireActor, orNotFound } from "@/lib/require";
 import { getVisitDetail } from "@/server/queries";
-import { canConcludeVisit, canCorrectVisitData } from "@/lib/authz";
+import { canConcludeVisit, canCorrectVisitData, hasGlobalView } from "@/lib/authz";
 import { db } from "@/lib/db";
 import { fmt } from "@/lib/time";
 import { formatPhone } from "@/lib/phone";
@@ -26,17 +26,18 @@ export default async function RegisterPage({ params, searchParams }: { params: P
   const missing = [!visit.clientName?.trim() && "nome do cliente", !visit.propertyCode?.trim() && "código do imóvel"].filter(Boolean) as string[];
   const isEdit = visit.status !== "SCHEDULED" && !visit.autoCanceled;
   const now = new Date();
+  const global = hasGlobalView(actor);
   return (
     <>
-      <Link href={`/visitas/${visit.id}`} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
-        ← Detalhes da visita
+      <Link href={global ? `/visitas/${visit.id}` : "/minhas"} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
+        ← {global ? "Detalhes da visita" : "Minhas visitas"}
       </Link>
       {sp.anterior === "salvo" && (
         <div role="status" className="mb-5 flex items-center justify-between gap-3 rounded-2xl bg-good-soft px-4 py-3 text-sm text-good">
           <span>
             <strong>✓ Resultado anterior salvo.</strong> Esta é a próxima pendente{Number(sp.restantes) > 1 ? ` (${sp.restantes} na fila)` : ""}.
           </span>
-          <Link href="/hoje" className="shrink-0 font-semibold underline">
+          <Link href={global ? "/hoje" : "/minhas"} className="shrink-0 font-semibold underline">
             Parar
           </Link>
         </div>
@@ -68,6 +69,7 @@ export default async function RegisterPage({ params, searchParams }: { params: P
         noteMax={settings.noteMaxLength}
         reasons={reasons}
         isEdit={isEdit}
+        afterSave={global ? `/visitas/${visit.id}?salvo=1` : "/minhas?salvo=1"}
         future={visit.scheduledStart.getTime() > now.getTime() + 15 * 60_000}
         initial={{
           status: isEdit ? (visit.status as "DONE") : null,

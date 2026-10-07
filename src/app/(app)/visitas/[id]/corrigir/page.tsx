@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireActor, orNotFound } from "@/lib/require";
 import { getVisitDetail } from "@/server/queries";
-import { canCorrectVisitData } from "@/lib/authz";
+import { canCorrectVisitData, hasGlobalView } from "@/lib/authz";
 import { toLocalInput } from "@/lib/time";
 import { CorrectionForm } from "./form";
 import { Panel } from "@/components/ui";
@@ -22,7 +22,7 @@ export default async function CorrectPage({ params, searchParams }: { params: Pr
   const p = (src?.parsed ?? null) as ParsedVisit | null;
   return (
     <>
-      <Link href={`/visitas/${visit.id}`} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
+      <Link href={hasGlobalView(actor) ? `/visitas/${visit.id}` : `/visitas/${visit.id}/registrar`} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
         ← Voltar
       </Link>
       <h1 className="mb-1 text-2xl font-bold">Corrigir dados da visita</h1>
