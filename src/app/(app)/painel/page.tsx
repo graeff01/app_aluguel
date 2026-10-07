@@ -8,6 +8,10 @@ import { Icon } from "@/components/icons";
 import { BarList, Delta, RateValue, StatTile, VsTeam, rateDetail } from "@/components/stats";
 import { SyncButton } from "@/components/sync-button";
 import { WeeklyChart } from "@/components/weekly-chart";
+import { Funnel } from "@/components/funnel";
+import { opportunityFunnel, staleOpportunities } from "@/server/insights";
+import { InlineAction } from "@/components/inline-action";
+import { nudgeAction } from "@/app/actions/manager";
 
 export const metadata = { title: "Painel" };
 
@@ -36,6 +40,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     return firstNames.filter((f) => f === first).length > 1 ? name.replace(/\s*\(.*?\)/, "") : first;
   };
   const goal = d.settings.coverageGoal;
+  const [funnel, stale] = await Promise.all([
+    opportunityFunnel(actor, { from: d.from, to: d.to, consultantId: d.consultantId, propertyCode: d.propertyCode }),
+    staleOpportunities(actor, now),
+  ]);
+  const staleMine = d.consultantId ? stale.filter((o) => o.responsibleId === d.consultantId) : stale;
   const attention = d.perConsultant
     .filter((c) => c.metrics.totals.awaitingOver24h > 0)
     .sort((a, b) => b.metrics.totals.awaitingOver24h - a.metrics.totals.awaitingOver24h);
@@ -121,17 +130,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </p>
           <ul className="grid gap-2 sm:grid-cols-2">
             {attention.map(({ user, metrics: cm }) => (
-              <li key={user.id}>
-                <Link href={q({ consultora: user.id })} className="press flex items-center justify-between gap-3 rounded-2xl bg-surface px-4 py-3 shadow-card">
-                  <span className="flex items-center gap-3">
+              <li key={user.id} className="flex items-center gap-2 rounded-2xl bg-surface p-2 pl-4 shadow-card">
+                <Link href={q({ consultora: user.id })} className="press flex min-w-0 flex-1 items-center justify-between gap-3 py-1">
+                  <span className="flex min-w-0 items-center gap-3">
                     <Avatar name={user.name} size="sm" />
-                    <span className="font-semibold">{user.name}</span>
+                    <span className="truncate font-semibold">{user.name}</span>
                   </span>
                   <span className="num text-right text-sm">
                     <strong className="text-[17px] text-bad">{cm.totals.awaitingOver24h}</strong>
                     <span className="block text-[11px] text-ink-3">há mais de 24 h</span>
                   </span>
                 </Link>
+                <InlineAction action={nudgeAction} fields={{ consultantId: user.id }} label="Cobrar" />
               </li>
             ))}
           </ul>
@@ -169,6 +179,22 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           href={individual ? hist({ situacao: "SCHEDULED" }) : "/pendencias"}
         />
       </div>
+
+      {staleMine.length > 0 && (
+        <Link href="/oportunidades?paradas=1" className="press mb-8 flex items-center justify-between gap-3 rounded-3xl border border-accent/30 bg-accent-soft px-5 py-4">
+          <span>
+            <span className="block font-bold text-accent-strong">
+              {staleMine.length} {staleMine.length === 1 ? "oportunidade parada" : "oportunidades paradas"}
+            </span>
+            <span className="text-sm text-ink-2">Sem movimento há mais de {d.settings.staleOpportunityDays} dias. A mais antiga está parada há {staleMine[0].idleDays} dias.</span>
+          </span>
+          <span aria-hidden className="text-xl text-accent-strong">→</span>
+        </Link>
+      )}
+
+      <Section title="Funil de locação" hint="Oportunidades cliente–imóvel com 1ª visita realizada no período, acompanhadas até hoje">
+        <Funnel {...funnel} />
+      </Section>
 
       <Section title="Evolução semanal" hint={individual ? `Semanas de ${individual.name.split(" ")[0]}` : "Equipe, últimas 8 semanas"}>
         <WeeklyChart weeks={d.weekly} goal={goal} />
@@ -302,8 +328,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       </div>
 
       <Section title="Por imóvel" hint="Volume ao lado das taxas — poucas visitas não sustentam conclusões">
-        <PropertyTable rows={m.byProperty.slice(0, 20)} link={(k) => (k === "—" ? hist({}) : q({ imovel: k }))} />
-        {m.byProperty.length > 20 && <p className="mt-2 text-sm text-ink-3">Mostrando os 20 imóveis com mais visitas. Use “Personalizar” para filtrar um código.</p>}
+        <PropertyTable rows={m.byProperty.slice(0, 8)} link={(k) => (k === "—" ? hist({}) : `/imoveis/${encodeURIComponent(k)}`)} />
+        <Link href="/imoveis" className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold underline underline-offset-4">
+          Ver todos os imóveis ({m.byProperty.length}) →
+        </Link>
       </Section>
 
       <details className="mb-8 rounded-3xl border border-line bg-surface p-5 shadow-card">

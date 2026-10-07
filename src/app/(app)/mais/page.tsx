@@ -13,6 +13,7 @@ export default async function MorePage() {
     ["/visitas/nova", "Visita manual", "Cadastro de contingência"],
     ...(hasGlobalView(a)
       ? ([
+          ["/imoveis", "Imóveis", "Desempenho e motivos por imóvel"],
           ["/clientes", "Clientes", "Cadastros e identificação"],
           ["/config/usuarios", "Usuários", "Acessos e e-mails da agenda"],
         ] as [string, string, string][])

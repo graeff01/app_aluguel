@@ -21,7 +21,7 @@ export default defineRailway(() => {
   };
 
   const web = service("web", {
-    source: github(REPO, { branch: "main" }),
+    source: github(REPO, { branch: "main", checkSuites: true }),
     build: { builder: "RAILPACK", buildCommand: "npm run build" },
     start: "npm run start",
     preDeploy: "npm run db:migrate",
@@ -35,7 +35,7 @@ export default defineRailway(() => {
   });
 
   const worker = service("worker", {
-    source: github(REPO, { branch: "main" }),
+    source: github(REPO, { branch: "main", checkSuites: true }),
     build: { builder: "RAILPACK", buildCommand: "npm run build" },
     start: "npm run worker",
     preDeploy: "npm run db:migrate",

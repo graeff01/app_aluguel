@@ -3,6 +3,7 @@ import { Manrope } from "next/font/google";
 import "./globals.css";
 import { getSettingsSafe } from "@/lib/settings-safe";
 import { ServiceWorkerRegister } from "@/components/sw-register";
+import { ErrorReporter } from "@/components/error-reporter";
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope", display: "swap" });
 
@@ -35,6 +36,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-dvh font-sans antialiased">
         {children}
         <ServiceWorkerRegister />
+        <ErrorReporter />
       </body>
     </html>
   );

@@ -14,6 +14,7 @@ const RUN_LABEL = { SUCCESS: "Sucesso", FAILED: "Falhou", RUNNING: "Executando",
 export default async function DiagnosticsPage() {
   await requireAdmin();
   const conn = await db.googleConnection.findFirst({ where: { status: { not: "DISCONNECTED" } }, orderBy: { connectedAt: "desc" } });
+  const errors = await db.errorEvent.findMany({ orderBy: { lastSeenAt: "desc" }, take: 30 });
   const [state, runs, beats, counts] = await Promise.all([
     conn?.calendarId ? db.syncState.findUnique({ where: { calendarId: conn.calendarId } }) : null,
     db.syncRun.findMany({ orderBy: { createdAt: "desc" }, take: 25, include: { requestedBy: { select: { name: true } } } }),
@@ -51,6 +52,28 @@ export default async function DiagnosticsPage() {
           </ActionForm>
         </Panel>
       </div>
+      <Section title={`Erros recentes (${errors.length})`} id="erros" hint="Agrupados por tipo. Mensagens sem dados pessoais. Admin recebe aviso no celular quando surge um tipo novo.">
+        {errors.length === 0 ? (
+          <p className="rounded-3xl border border-dashed border-line-strong bg-surface-2 p-5 text-sm text-ink-3">Nenhum erro registrado.</p>
+        ) : (
+          <ul className="divide-y divide-line overflow-hidden rounded-3xl border border-line bg-surface text-sm shadow-card">
+            {errors.map((e) => (
+              <li key={e.id} className="px-5 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-semibold">
+                    {e.source === "client" ? "Aparelho" : e.source === "worker" ? "Worker" : "Servidor"}
+                    {e.path ? <span className="font-normal text-ink-3"> · {e.path}</span> : null}
+                  </span>
+                  <Badge tone={Date.now() - e.lastSeenAt.getTime() < 3600_000 ? "bad" : "neutral"}>
+                    {e.count}× · último {fmt.dateTime(e.lastSeenAt)}
+                  </Badge>
+                </div>
+                <p className="mt-1 break-words text-ink-2">{e.message}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
       <Section title="Execuções recentes">
         <ul className="divide-y divide-line overflow-hidden rounded-3xl border border-line bg-surface shadow-card text-sm">
           {runs.map((r) => {

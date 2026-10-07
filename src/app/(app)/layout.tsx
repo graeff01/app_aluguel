@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireActor } from "@/lib/require";
+import { isMobileRequest } from "@/lib/session";
 import { hasGlobalView, isAdmin, visitScope } from "@/lib/authz";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
@@ -60,6 +61,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             { href: "/revisao", label: "Revisão", icon: "review", badge: reviewCount },
             { href: "/historico", label: "Histórico", icon: "history" },
             { href: "/oportunidades", label: "Andamento", icon: "pipeline" },
+            { href: "/imoveis", label: "Imóveis", icon: "home" },
             { href: "/clientes", label: "Clientes", icon: "clients" },
           ] as NavItem[],
         },
@@ -89,8 +91,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // consultora só vê o status da agenda quando há problema que a afeta
   const showHealth = global || health.level === "stale" || health.level === "error";
 
-  // Consultora: tela única, sem menus (só "Minhas visitas" e o registro)
-  if (!global) {
+  // Consultora (e gestão que escolheu, no celular): tela única, sem menus
+  const simple = !global || (actor.simpleMobile && (await isMobileRequest()));
+  if (simple) {
     return (
       <div className="flex min-h-dvh flex-col">
         <OfflineBanner />
@@ -108,7 +111,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   <span className="sr-only">{health.message}</span>
                 </span>
               )}
-              <UserMenu name={actor.name} email={actor.email} role={actor.role} showProfile={false} pushKey={pushConfig()?.publicKey ?? null} />
+              <UserMenu name={actor.name} email={actor.email} role={actor.role} showProfile={global} simpleMobile={actor.simpleMobile} pushKey={pushConfig()?.publicKey ?? null} />
             </div>
           </div>
         </header>
@@ -147,7 +150,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   <span className="sr-only md:hidden">{health.message}</span>
                 </>
               )}
-              <UserMenu name={actor.name} email={actor.email} role={actor.role} showProfile={global} pushKey={pushConfig()?.publicKey ?? null} />
+              <UserMenu name={actor.name} email={actor.email} role={actor.role} showProfile={global} simpleMobile={actor.simpleMobile} pushKey={pushConfig()?.publicKey ?? null} />
             </div>
           </div>
         </header>

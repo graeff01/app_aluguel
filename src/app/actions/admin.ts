@@ -261,6 +261,7 @@ export async function settingsAction(_: ActionState, fd: FormData) {
         remindersEnabled: str(fd, "remindersEnabled") === "1",
         reminderHour: int("reminderHour", 6, 20),
         coverageGoal: int("coverageGoal", 50, 100),
+        staleOpportunityDays: int("staleOpportunityDays", 2, 60),
         propertyUrlTemplate: (() => {
           const t = str(fd, "propertyUrlTemplate").trim();
           if (!/^https:\/\/[^\s]+$/.test(t) || !t.includes("{codigo}")) throw new AppError("VALIDATION", "Link do imóvel inválido.", { propertyUrlTemplate: "Use um endereço https com {codigo}." });

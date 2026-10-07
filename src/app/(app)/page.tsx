@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 import { requireActor } from "@/lib/require";
 import { hasGlobalView } from "@/lib/authz";
+import { isMobileRequest } from "@/lib/session";
 
 export default async function Home() {
   const a = await requireActor();
-  redirect(hasGlobalView(a) ? "/painel" : "/minhas");
+  if (!hasGlobalView(a) || (a.simpleMobile && (await isMobileRequest()))) redirect("/minhas");
+  redirect("/painel");
 }

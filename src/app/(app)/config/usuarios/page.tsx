@@ -38,8 +38,9 @@ export default async function UsersPage() {
           ))}
         </ul>
       </Section>
-      <Section title="Novo usuário">
-        <ActionForm action={createUserAction} className="max-w-xl rounded-3xl border border-line bg-surface p-5 shadow-card" resetOnSuccess>
+      <details className="mb-10">
+        <summary className="inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-full bg-primary px-6 font-semibold text-on-primary shadow-float">+ Novo usuário</summary>
+        <ActionForm action={createUserAction} className="mt-4 max-w-xl rounded-3xl border border-line bg-surface p-5 shadow-card" resetOnSuccess>
           <Field label="Nome" htmlFor="name">
             <Input id="name" name="name" required />
           </Field>
@@ -61,7 +62,7 @@ export default async function UsersPage() {
           </Field>
           <SubmitButton>Criar usuário</SubmitButton>
         </ActionForm>
-      </Section>
+      </details>
     </>
   );
 }

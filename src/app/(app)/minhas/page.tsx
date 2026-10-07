@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { requireActor } from "@/lib/require";
 import { hasGlobalView } from "@/lib/authz";
-import { listMine, type VisitListItem } from "@/server/queries";
+import { listMine, visitListSelect, type VisitListItem } from "@/server/queries";
 import { dayKey, fmt } from "@/lib/time";
 import { pushConfig } from "@/lib/push";
 import { EVALUATION_LABEL, STATUS_LABEL } from "@/lib/labels";
@@ -12,6 +11,9 @@ import { ContactButtons } from "@/components/contact-buttons";
 import { relativeTime, TONE_BAR, TONE_TEXT, visitTone } from "@/lib/visit-tone";
 import { PushPrompt } from "@/components/push-toggle";
 import { PropertyThumb } from "@/components/property-preview";
+import { InstallHint } from "@/components/install-hint";
+import { historyWhere } from "@/server/queries";
+import { db } from "@/lib/db";
 
 export const metadata = { title: "Minhas visitas" };
 
@@ -29,7 +31,7 @@ function when(v: VisitListItem, today: string) {
 const TONE_LABEL = { overdue: "Atrasada", awaiting: "Aguardando resultado", live: "Em andamento", upcoming: "Agendada" } as const;
 
 /** Card da tela única: barra de status colorida + texto; foto do imóvel; ações na base. */
-function MineCard({ v, today, now, mode, index }: { v: VisitListItem & { note?: string | null }; today: string; now: Date; mode: "awaiting" | "upcoming" | "done"; index: number }) {
+function MineCard({ v, today, now, mode, index, team }: { v: VisitListItem & { note?: string | null }; today: string; now: Date; mode: "awaiting" | "upcoming" | "done"; index: number; team?: boolean }) {
   const tone = visitTone(v, now);
   const startsSoon = v.scheduledStart.getTime() <= now.getTime() + 15 * 60_000;
   const tappable = mode !== "upcoming" || startsSoon;
@@ -47,6 +49,7 @@ function MineCard({ v, today, now, mode, index }: { v: VisitListItem & { note?: 
         <p className="mt-0.5 text-[13px] font-medium text-ink-3">
           {when(v, today)}
           {rel && ` · ${rel}`}
+          {team && ` · ${v.consultant?.name.split(" ")[0] ?? "sem consultora"}`}
         </p>
         <p className="mt-1 text-[18px] leading-snug font-bold tracking-[-0.015em] break-words">{v.clientName ?? <span className="text-warn">Cliente sem nome</span>}</p>
         <p className="mt-1 flex items-center gap-1.5 text-sm text-ink-2">
@@ -87,12 +90,16 @@ function MineCard({ v, today, now, mode, index }: { v: VisitListItem & { note?: 
   );
 }
 
-export default async function MinePage({ searchParams }: { searchParams: Promise<{ salvo?: string }> }) {
+export default async function MinePage({ searchParams }: { searchParams: Promise<{ salvo?: string; busca?: string }> }) {
   const actor = await requireActor();
-  if (hasGlobalView(actor)) redirect("/hoje");
+  const team = hasGlobalView(actor);
   const sp = await searchParams;
   const now = new Date();
+  const busca = sp.busca?.trim().slice(0, 80) ?? "";
   const { awaiting, upcoming, done, today } = await listMine(actor, now);
+  const results = busca
+    ? await db.visit.findMany({ where: historyWhere(actor, { q: busca }), select: { ...visitListSelect, note: true }, orderBy: { scheduledStart: "desc" }, take: 40 })
+    : [];
   const isToday = (d: Date) => dayKey(d) === today;
   const todayDone = done.filter((v) => isToday(v.scheduledStart)).length;
   const todayTotal = todayDone + awaiting.filter((v) => isToday(v.scheduledStart)).length + upcoming.filter((v) => isToday(v.scheduledStart)).length;
@@ -101,7 +108,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
     <div className="mx-auto max-w-xl">
       <p className="mb-1 text-xs font-semibold tracking-[0.14em] text-accent-strong uppercase">{fmt.longDate(now)}</p>
       <h1 className="text-[30px] leading-tight font-bold tracking-[-0.035em]">
-        {greeting(now)}, {actor.name.split(" ")[0]}
+        {team ? "Visitas da equipe" : `${greeting(now)}, ${actor.name.split(" ")[0]}`}
       </h1>
       <p className="mt-1.5 text-[15px] text-ink-2">
         {awaiting.length === 0
@@ -133,7 +140,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         </div>
       )}
 
-      {awaiting.length === 0 && (
+      {awaiting.length === 0 && !busca && (
         <div className="animate-rise mb-9 rounded-[26px] border border-good/15 bg-good-soft px-6 py-8 text-center">
           <span aria-hidden className="animate-pop mx-auto mb-3 grid size-12 place-items-center rounded-full bg-good text-xl text-bg shadow-[0_8px_20px_-8px_var(--good)]">
             ✓
@@ -143,6 +150,57 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         </div>
       )}
 
+      <form role="search" className="mb-6" action="/minhas">
+        <label htmlFor="busca" className="sr-only">
+          Buscar visita por nome, telefone ou código
+        </label>
+        <div className="relative">
+          <svg aria-hidden viewBox="0 0 24 24" className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-ink-3" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <input
+            id="busca"
+            name="busca"
+            type="search"
+            defaultValue={busca}
+            placeholder="Buscar por nome, telefone ou código"
+            className="block min-h-12 w-full rounded-full border border-line-strong bg-surface pr-4 pl-12 text-[15px] shadow-card placeholder:text-ink-3 focus:border-ink focus:outline-none"
+          />
+        </div>
+      </form>
+
+      {busca ? (
+        <section aria-labelledby="t-busca" className="mb-9">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 id="t-busca" className="text-[12px] font-bold tracking-[0.12em] text-ink-3 uppercase">
+              {results.length} resultado{results.length === 1 ? "" : "s"} para “{busca}”
+            </h2>
+            <Link href="/minhas" className="text-sm font-semibold text-ink underline underline-offset-4">
+              Limpar
+            </Link>
+          </div>
+          {results.length === 0 ? (
+            <p className="rounded-3xl border border-dashed border-line-strong px-5 py-6 text-center text-sm text-ink-3">Nenhuma visita encontrada.</p>
+          ) : (
+            <ul className="space-y-3">
+              {results.map((v, i) => (
+                <MineCard
+                  key={v.id}
+                  v={v}
+                  today={today}
+                  now={now}
+                  index={i}
+                  team={team}
+                  mode={v.status !== "SCHEDULED" ? "done" : v.scheduledEnd <= now ? "awaiting" : "upcoming"}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : (
+        <>
+      <InstallHint />
       <PushPrompt publicKey={pushConfig()?.publicKey ?? null} />
 
       {awaiting.length > 0 && (
@@ -152,7 +210,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
           </h2>
           <ul className="space-y-3">
             {awaiting.map((v, i) => (
-              <MineCard key={v.id} v={v} today={today} now={now} mode="awaiting" index={i} />
+              <MineCard key={v.id} v={v} today={today} now={now} mode="awaiting" index={i} team={team} />
             ))}
           </ul>
         </section>
@@ -167,7 +225,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         ) : (
           <ul className="space-y-3">
             {upcoming.map((v, i) => (
-              <MineCard key={v.id} v={v} today={today} now={now} mode="upcoming" index={awaiting.length + i} />
+              <MineCard key={v.id} v={v} today={today} now={now} mode="upcoming" index={awaiting.length + i} team={team} />
             ))}
           </ul>
         )}
@@ -181,10 +239,13 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
           </summary>
           <ul className="space-y-3">
             {done.map((v, i) => (
-              <MineCard key={v.id} v={v} today={today} now={now} mode="done" index={i} />
+              <MineCard key={v.id} v={v} today={today} now={now} mode="done" index={i} team={team} />
             ))}
           </ul>
         </details>
+      )}
+
+        </>
       )}
 
       <p className="pb-6 text-center text-sm text-ink-3">

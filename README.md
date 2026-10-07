@@ -23,6 +23,12 @@ Web responsivo + PWA instalável, interface em português, fuso `America/Sao_Pau
 - **Foto e título do imóvel** lidos da página pública do anúncio (`og:image`/`og:title`), a partir do link configurável com `{codigo}`; atualizados pelo worker em lotes pequenos, com cache de 7 dias. Só o código do imóvel é enviado.
 - **Respostas rápidas** e lembrete de ditado na observação; **Desfazer** por 5 s após o primeiro registro.
 - **Painel:** destaque de pendência acumulada (> 24 h) por consultora e **meta de cobertura** configurável (padrão 90%).
+- **Gestão:** página de cada imóvel (desempenho e motivos de recusa), funil de locação com tempos médios, Andamento em lista ou quadro (arrastar), oportunidades paradas, botão **Cobrar** pendências e resumo semanal automático às segundas.
+- **Consultora:** busca de visitas antigas, alterar senha, aviso de instalação do app, prévia do imóvel ao cadastrar visita manual.
+- **Tela simples no celular** opcional também para a gestão (menu da conta).
+- **Lembretes por e-mail** para quem não ativou notificações (opcional, via Resend: `RESEND_API_KEY` e `EMAIL_FROM`).
+- **Registro de erros próprio** (navegador, servidor e worker), sem dados pessoais, no Diagnóstico; admin é avisado no celular quando surge um erro novo.
+- **CI:** GitHub Actions roda typecheck, testes (Postgres real), build e E2E; o Railway só publica quando a verificação passa.
 - **Exportar CSV** (gestão) com os filtros do Histórico; separador `;`, compatível com Excel, proteção contra fórmulas e registro na auditoria.
 
 ## Stack

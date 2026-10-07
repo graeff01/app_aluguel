@@ -17,7 +17,7 @@ export function PropertyThumb({ photoUrl, className }: { photoUrl?: string | nul
 }
 
 /** Bloco do imóvel: foto ampla, título do anúncio e link para o site. */
-export function PropertyCard({ code, photoUrl, title, template }: { code: string | null; photoUrl?: string | null; title?: string | null; template: string }) {
+export function PropertyCard({ code, photoUrl, title, template, statsHref }: { code: string | null; photoUrl?: string | null; title?: string | null; template: string; statsHref?: string }) {
   if (!code) return null;
   const href = template.includes("{codigo}") ? propertyUrl(template, code) : null;
   return (
@@ -31,6 +31,11 @@ export function PropertyCard({ code, photoUrl, title, template }: { code: string
         <div className="min-w-0">
           <p className="text-[12px] font-bold tracking-[0.08em] text-ink-3 uppercase">Imóvel {code}</p>
           {title && <p className="mt-0.5 text-sm leading-snug font-medium text-ink-2">{title}</p>}
+          {statsHref && (
+            <a href={statsHref} className="mt-1 inline-block text-[13px] font-semibold text-ink underline underline-offset-4">
+              Desempenho deste imóvel
+            </a>
+          )}
         </div>
         {href && (
           <a href={href} target="_blank" rel="noopener noreferrer" className="press inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-line-strong px-4 text-sm font-semibold hover:border-ink-3">

@@ -7,9 +7,9 @@ import { OPP_STATUS_LABEL } from "@/lib/labels";
 
 type Opp = { id: string; version: number; status: string; responsibleId: string | null };
 
-export function OppForm({ opp, lostReasons, users, today }: { opp: Opp; lostReasons: { id: string; label: string }[]; users: { id: string; name: string }[]; today: string }) {
+export function OppForm({ opp, lostReasons, users, today, initialTo }: { opp: Opp; lostReasons: { id: string; label: string }[]; users: { id: string; name: string }[]; today: string; initialTo?: string }) {
   const options = ["FOLLOW_UP", "DOCS_REVIEW", "CLOSED_WON", "LOST"].filter((s) => s !== opp.status);
-  const [to, setTo] = useState(options[0]);
+  const [to, setTo] = useState(initialTo && options.includes(initialTo) ? initialTo : options[0]);
   const closed = opp.status === "CLOSED_WON" || opp.status === "LOST";
   return (
     <ActionForm action={opportunityAction} className="max-w-xl rounded-3xl border border-line bg-surface p-5 shadow-card" key={opp.version}>

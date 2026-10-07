@@ -14,7 +14,7 @@ export function sessionCookieName() {
   return env.secureCookies ? "__Host-vl_session" : "vl_session";
 }
 
-export type Actor = { id: string; name: string; email: string; role: Role; mustChangePassword: boolean };
+export type Actor = { id: string; name: string; email: string; role: Role; mustChangePassword: boolean; simpleMobile: boolean };
 
 export async function createSession(userId: string) {
   const token = randomToken(32);
@@ -56,11 +56,17 @@ export const getActor = cache(async (): Promise<Actor | null> => {
     });
   }
   const u = session.user;
-  return { id: u.id, name: u.name, email: u.email, role: u.role, mustChangePassword: u.mustChangePassword };
+  return { id: u.id, name: u.name, email: u.email, role: u.role, mustChangePassword: u.mustChangePassword, simpleMobile: u.simpleMobile };
 });
 
 /** IP do cliente (atrás do proxy do Railway) — usado só para limitação de tentativas. */
 export async function clientIp(): Promise<string> {
   const h = await headers();
   return (h.get("x-forwarded-for")?.split(",")[0] ?? h.get("x-real-ip") ?? "local").trim();
+}
+
+/** Celular pelo user-agent (só para escolher o layout; nunca para autorização). */
+export async function isMobileRequest(): Promise<boolean> {
+  const h = await headers();
+  return h.get("sec-ch-ua-mobile") === "?1" || /Mobi|Android|iPhone|iPad|iPod/i.test(h.get("user-agent") ?? "");
 }

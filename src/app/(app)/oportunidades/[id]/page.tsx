@@ -12,7 +12,8 @@ import { OppForm, TransferForm } from "./forms";
 
 export const metadata = { title: "Oportunidade" };
 
-export default async function OppPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function OppPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ para?: string }> }) {
+  const { para } = await searchParams;
   const actor = await requireActor();
   const { id } = await params;
   const opp = await orNotFound(getOpportunity(actor, id));
@@ -47,7 +48,7 @@ export default async function OppPage({ params }: { params: Promise<{ id: string
       </Panel>
       {canUpdate && (
         <Section title="Atualizar andamento">
-          <OppForm opp={{ id: opp.id, version: opp.version, status: opp.status, responsibleId: opp.responsibleId }} lostReasons={lostReasons} users={users} today={dayKey(new Date())} />
+          <OppForm initialTo={para} opp={{ id: opp.id, version: opp.version, status: opp.status, responsibleId: opp.responsibleId }} lostReasons={lostReasons} users={users} today={dayKey(new Date())} />
         </Section>
       )}
       {global && (

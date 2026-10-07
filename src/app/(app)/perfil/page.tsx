@@ -2,7 +2,7 @@ import { requireManager } from "@/lib/require";
 import { ROLE_LABEL } from "@/lib/labels";
 import { logoutAction } from "@/app/actions/auth";
 import { PageHeader, Panel, Section, KeyValue } from "@/components/ui";
-import { PasswordForm } from "./password-form";
+import { PasswordForm } from "@/components/password-form";
 import { InstallHelp } from "./install-help";
 
 export const metadata = { title: "Perfil" };

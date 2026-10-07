@@ -188,3 +188,36 @@ test("modo escuro segue o aparelho", async ({ browser }, info) => {
   expect(bg).toBe("rgb(18, 20, 22)");
   await ctx.close();
 });
+
+test("gestora: funil, imóveis, quadro de andamento e abas da visita", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  await login(page, "gestora@e2e.test");
+  await expect(page.getByRole("heading", { name: "Funil de locação" })).toBeVisible();
+  await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Imóveis" }).click();
+  await page.getByRole("link", { name: /00444/ }).first().click();
+  await expect(page.getByRole("heading", { name: "00444" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Por que não avançou" })).toBeVisible();
+  // quadro: mover de acompanhamento para documentação
+  await page.goto("/oportunidades?vista=quadro");
+  const follow = page.getByRole("region", { name: "Em acompanhamento" });
+  await expect(follow.getByText("Cliente Kanban", { exact: true })).toBeVisible();
+  await follow.getByLabel("Mover Cliente Kanban para").selectOption("DOCS_REVIEW");
+  await expect(page.getByRole("region", { name: "Documentação em análise" }).getByText("Cliente Kanban", { exact: true })).toBeVisible();
+  // abas no detalhe da visita
+  await page.goto("/imoveis/00444");
+  await page.locator('a[href^="/visitas/"]', { hasText: "Cliente Kanban" }).first().click();
+  await page.getByRole("tab", { name: /Histórico/ }).click();
+  await expect(page.getByRole("tabpanel").getByText("Gostou e vai trazer a família.")).toBeVisible();
+});
+
+test("consultora busca visita antiga e acessa alterar senha", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await login(page, "a@e2e.test");
+  await page.getByLabel("Buscar visita por nome, telefone ou código").fill("Beta");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText(/resultados? para “Beta”/)).toBeVisible();
+  await expect(page.getByText("Cliente Beta")).toBeVisible();
+  await page.getByLabel("Menu da conta").click();
+  await page.getByRole("link", { name: "Alterar senha" }).click();
+  await expect(page.getByRole("heading", { name: "Alterar senha" })).toBeVisible();
+});

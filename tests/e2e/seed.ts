@@ -3,7 +3,7 @@ import { db } from "../../src/lib/db";
 import { hashPassword } from "../../src/lib/password";
 import { ensureReferenceData } from "../../src/lib/settings";
 import { toLocalInput } from "../../src/lib/time";
-import { createManualVisit } from "../../src/server/visits";
+import { concludeVisit, createManualVisit } from "../../src/server/visits";
 
 export const PW = "senha-e2e-segura-1";
 
@@ -21,4 +21,6 @@ await createManualVisit(admin, { requestId: "e2e-seed-a1", scheduledStart: ago(3
 await createManualVisit(admin, { requestId: "e2e-seed-a2", scheduledStart: ago(30), clientName: "Cliente Beta", phoneRaw: "", propertyCode: "00888", consultantId: a.id });
 await createManualVisit(admin, { requestId: "e2e-seed-a3", scheduledStart: ago(2), clientName: "Cliente Offline", phoneRaw: "(51) 99876-0003", propertyCode: "00999", consultantId: a.id });
 await createManualVisit(admin, { requestId: "e2e-seed-b1", scheduledStart: ago(3), clientName: "Cliente Da B", phoneRaw: "(51) 99876-0002", propertyCode: "00555", consultantId: b.id });
+const kb = await createManualVisit(admin, { requestId: "e2e-seed-kanban", scheduledStart: ago(120), clientName: "Cliente Kanban", phoneRaw: "(51) 99876-0444", propertyCode: "00444", consultantId: b.id });
+await concludeVisit(admin, kb.id, { requestId: "e2e-seed-kanban-done", expectedVersion: 1, status: "DONE", evaluation: "POSITIVE", note: "Gostou e vai trazer a família." });
 await db.$disconnect();

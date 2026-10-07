@@ -15,6 +15,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const global = hasGlobalView(actor);
   const result = await listHistory(actor, { q: sp.q, from: sp.de, to: sp.ate, status: sp.situacao, consultantId: sp.consultora, page: Number(sp.pagina) || 1 });
+  const activeFilters = [sp.q, sp.de, sp.ate, sp.situacao, sp.consultora].filter(Boolean).length;
   const consultants = global ? await db.user.findMany({ where: { role: "CONSULTANT" }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
   const qs = (page: number) => {
     const p = new URLSearchParams(Object.entries(sp).filter(([, v]) => v) as [string, string][]);
@@ -38,7 +39,11 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
           ) : undefined
         }
       />
-      <form className="mb-6 rounded-3xl border border-line bg-surface p-5 shadow-card" role="search">
+      <details className="mb-6" open={activeFilters > 0}>
+        <summary className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-line bg-surface px-4 text-sm font-semibold shadow-card">
+          Buscar e filtrar{activeFilters ? ` (${activeFilters})` : ""}
+        </summary>
+      <form className="mt-3 rounded-3xl border border-line bg-surface p-5 shadow-card" role="search">
         <Field label="Buscar por nome, telefone ou código" htmlFor="q">
           <Input id="q" name="q" type="search" defaultValue={sp.q} placeholder="Ex.: Maria, 51 9..., 654321" />
         </Field>
@@ -83,6 +88,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
           </Link>
         </div>
       </form>
+      </details>
       {result.items.length === 0 ? (
         <Empty title="Nenhuma visita encontrada" />
       ) : (

@@ -10,6 +10,7 @@ import { Alert, Badge, KeyValue, LinkButton, Panel, Section } from "@/components
 import { VisitStatusBadge } from "@/components/visit-badges";
 import { VisitAdminTools } from "./admin-tools";
 import { ContactButtons } from "@/components/contact-buttons";
+import { Tabs } from "@/components/tabs";
 import { PropertyCard } from "@/components/property-preview";
 import { db } from "@/lib/db";
 
@@ -70,9 +71,16 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
       {awaiting && <p className="-mt-3 mb-5 text-sm text-warn">O horário terminou, mas isso não confirma a visita. Registre o que aconteceu.</p>}
 
       <div className="mb-6 max-w-xl">
-        <PropertyCard code={visit.propertyCode} photoUrl={visit.property?.photoUrl} title={visit.property?.title} template={settings.propertyUrlTemplate} />
+        <PropertyCard code={visit.propertyCode} photoUrl={visit.property?.photoUrl} title={visit.property?.title} template={settings.propertyUrlTemplate} statsHref={global && visit.propertyCode ? `/imoveis/${encodeURIComponent(visit.propertyCode)}` : undefined} />
       </div>
-      <div className="mb-10 grid gap-4 lg:grid-cols-2">
+      <Tabs
+        tabs={[
+          {
+            id: "resumo",
+            label: "Resumo",
+            content: (
+              <>
+      <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <Panel>
           <h2 className="mb-3 font-semibold">Dados da visita</h2>
           <KeyValue
@@ -107,7 +115,6 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
           )}
         </Panel>
       </div>
-
       {visit.opportunity && (
         <Section title="Andamento">
           <Panel>
@@ -123,7 +130,15 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
           </Panel>
         </Section>
       )}
-
+              </>
+            ),
+          },
+          {
+            id: "historico",
+            label: "Histórico",
+            count: visit.history.length,
+            content: visit.history.length ? (
+              <>
       {visit.history.length > 0 && (
         <Section title="Histórico de registros">
           <ol className="space-y-2">
@@ -142,7 +157,17 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
           </ol>
         </Section>
       )}
-
+              </>
+            ) : (
+              <p className="text-ink-3">Nenhum registro ainda.</p>
+            ),
+          },
+          {
+            id: "cliente",
+            label: "Cliente",
+            count: relatedVisits.length,
+            content: relatedVisits.length ? (
+              <>
       {relatedVisits.length > 0 && (
         <Section title="Outras visitas deste cliente">
           <ul className="divide-y divide-line overflow-hidden rounded-3xl border border-line bg-surface shadow-card">
@@ -162,7 +187,18 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
           </ul>
         </Section>
       )}
-
+              </>
+            ) : (
+              <p className="text-ink-3">Nenhuma outra visita deste cliente{global ? "" : " com você"}.</p>
+            ),
+          },
+          ...(global || visit.sourceEvent?.description
+            ? [
+                {
+                  id: "gestao",
+                  label: global ? "Gestão" : "Agenda",
+                  content: (
+                    <>
       {visit.sourceEvent?.description && (
         <details className="mb-8 rounded-3xl border border-line bg-surface p-5 shadow-card">
           <summary className="min-h-11 cursor-pointer font-semibold">Descrição do evento na agenda</summary>
@@ -170,8 +206,14 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
           <p className="mt-2 text-sm whitespace-pre-wrap text-ink-2">{visit.sourceEvent.description}</p>
         </details>
       )}
-
       {global && <VisitAdminTools visitId={visit.id} consultants={consultants} currentConsultantId={visit.consultantId} excluded={visit.excluded} />}
+                    </>
+                  ),
+                },
+              ]
+            : []),
+        ]}
+      />
     </>
   );
 }

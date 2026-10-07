@@ -117,6 +117,7 @@ O Postgres de produção **não tem acesso público**. Para rodar scripts, abra 
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | web, worker | para integração | Credencial OAuth “Aplicativo da Web” |
 | `GOOGLE_REDIRECT_URI` | web | não | Padrão `${APP_URL}/api/google/callback` |
 | `SETUP_TOKEN` | web | só na implantação | Remova após criar o admin |
+| `RESEND_API_KEY` / `EMAIL_FROM` | worker | não | Lembretes por e-mail para quem não usa notificação no celular (ex.: `EMAIL_FROM="Visitas Locação <avisos@seudominio.com.br>"`, domínio verificado no Resend). |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | web, worker | para lembretes | Chaves do Web Push (mesmas nos dois). Trocar as chaves invalida as inscrições: cada pessoa reativa os lembretes. |
 | `WORKER_TICK_MS` | worker | não | Laço do worker (padrão 15000) |
 | `PORT` | web | automático | Injetado pelo Railway |
@@ -152,6 +153,12 @@ Os testes automatizados usam uma **API Google simulada**. Antes de considerar a 
 ---
 
 ## 6. Backup e restauração
+
+> **Situação atual:** o workspace VELOCE está no plano **Hobby**, que não inclui backups automáticos de volume (recurso do plano Pro). A tentativa de ativar pela API retornou “Not Authorized”. Opções: migrar o workspace para Pro e ativar *Backups* (diário/semanal/mensal) no serviço Postgres, ou adotar backup lógico periódico para um bucket (ver abaixo).
+
+### Publicação protegida por testes
+
+Cada push na `main` dispara o GitHub Actions (`.github/workflows/ci.yml`): typecheck, testes de unidade e integração com Postgres, build de produção e fluxos E2E. Os serviços do Railway usam `checkSuites: true` (em `.railway/railway.ts`) e só fazem deploy quando a verificação passa.
 
 - **Backups do Railway:** no serviço Postgres, *Backups* → habilite agendamento (diário + semanal). Teste uma restauração antes de entrar em produção.
 - **Backup lógico manual** (antes de mudanças grandes):

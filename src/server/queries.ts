@@ -310,10 +310,13 @@ export async function dashboard(actor: AuthzActor, f: DashboardFilter, now = new
 
 export async function listOpportunities(actor: AuthzActor, f: { status?: string; consultantId?: string; q?: string }) {
   const where: Prisma.OpportunityWhereInput = { ...opportunityScope(actor) };
-  if (f.status === "OPEN" || !f.status) where.status = { in: ["FOLLOW_UP", "DOCS_REVIEW"] };
+  if (f.status === "ALL") {
+    // quadro: todas as abertas + encerradas nos últimos 30 dias
+    where.OR = [{ status: { in: ["FOLLOW_UP", "DOCS_REVIEW"] } }, { updatedAt: { gte: new Date(Date.now() - 30 * 86400_000) } }];
+  } else if (f.status === "OPEN" || !f.status) where.status = { in: ["FOLLOW_UP", "DOCS_REVIEW"] };
   else if (["FOLLOW_UP", "DOCS_REVIEW", "CLOSED_WON", "LOST"].includes(f.status)) where.status = f.status as never;
   if (f.consultantId && hasGlobalView(actor)) where.responsibleId = f.consultantId;
-  if (f.q?.trim()) where.OR = [{ client: { name: { contains: f.q.trim(), mode: "insensitive" } } }, { property: { code: { contains: f.q.trim() } } }];
+  if (f.q?.trim()) where.AND = [{ OR: [{ client: { name: { contains: f.q.trim(), mode: "insensitive" } } }, { property: { code: { contains: f.q.trim() } } }] }];
   return db.opportunity.findMany({
     where,
     include: {
@@ -321,9 +324,11 @@ export async function listOpportunities(actor: AuthzActor, f: { status?: string;
       property: { select: { code: true } },
       responsible: { select: { id: true, name: true } },
       _count: { select: { visits: true } },
+      events: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+      visits: { orderBy: { scheduledStart: "desc" }, take: 1, select: { scheduledStart: true } },
     },
     orderBy: { updatedAt: "desc" },
-    take: 200,
+    take: 300,
   });
 }
 

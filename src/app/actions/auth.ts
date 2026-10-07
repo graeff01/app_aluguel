@@ -127,3 +127,11 @@ export async function setInitialPasswordAction(_: ActionState, fd: FormData): Pr
   await createSession(actor.id);
   redirect("/");
 }
+
+/** Gestão: alterna a tela única no celular. */
+export async function toggleSimpleMobileAction() {
+  const actor = await getActor();
+  if (!actor) redirect("/login");
+  await db.user.update({ where: { id: actor.id }, data: { simpleMobile: !actor.simpleMobile } });
+  redirect(actor.simpleMobile ? "/painel" : "/minhas");
+}

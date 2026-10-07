@@ -26,6 +26,8 @@ model User {
   passwordHash  String?
   /// senha provisória definida pela gestão: troca obrigatória no próximo login
   mustChangePassword Boolean @default(false)
+  /// gestão: preferir a tela única (Minhas visitas) no celular
+  simpleMobile       Boolean @default(false)
   role          Role
   active        Boolean   @default(true)
   deactivatedAt DateTime?
@@ -120,6 +122,8 @@ model AppSettings {
   propertyUrlTemplate      String   @default("https://www.auxiliadorapredial.com.br/imovel/aluguel/{codigo}?tag=8086")
   /// meta de cobertura de registro (%) exibida no painel
   coverageGoal             Int      @default(90)
+  /// oportunidade aberta sem movimento há N dias é destacada como parada
+  staleOpportunityDays     Int      @default(7)
   updatedAt                DateTime @updatedAt
 }
 
@@ -593,4 +597,22 @@ model ReminderLog {
   createdAt DateTime @default(now())
 
   @@unique([userId, day, kind])
+}
+
+// ───────────────────────────── Monitoramento de erros ─────────────────────────────
+
+/** Erro agrupado por assinatura. Mensagens são limpas de e-mails, telefones e números longos. */
+model ErrorEvent {
+  id          String   @id @default(cuid())
+  fingerprint String   @unique
+  source      String
+  message     String
+  path        String?
+  count       Int      @default(1)
+  lastUserId  String?
+  notifiedAt  DateTime?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  @@index([lastSeenAt])
 }

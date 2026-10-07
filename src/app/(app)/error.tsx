@@ -1,7 +1,12 @@
 "use client";
+import { useEffect } from "react";
 import { Button } from "@/components/ui";
+import { reportClientError } from "@/components/error-reporter";
 
-export default function AppError({ reset }: { error: Error; reset: () => void }) {
+export default function AppError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useEffect(() => {
+    reportClientError(error.message || "Erro ao renderizar", error.stack);
+  }, [error]);
   return (
     <div role="alert" className="rounded-2xl border border-bad/30 bg-surface p-6">
       <h1 className="text-lg font-semibold">Não foi possível carregar esta tela</h1>
