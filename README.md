@@ -125,7 +125,7 @@ Mapa dos critérios de aceitação → testes: veja [docs/TESTES.md](docs/TESTES
 
 ## Publicação
 
-Veja **[docs/DEPLOY.md](docs/DEPLOY.md)** (Railway, Google Cloud, checklist, backup/restauração, rotação de segredos, rollback).
+Produção: Railway, projeto `app_aluguel` (infra em `.railway/railway.ts`). **Todo push na `main` publica automaticamente.** Veja **[docs/DEPLOY.md](docs/DEPLOY.md)** (Google Cloud, checklist, backup/restauração, rotação de segredos, rollback).
 
 ## Segurança (resumo)
 

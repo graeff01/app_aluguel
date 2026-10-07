@@ -1,16 +1,20 @@
 # Guia de publicação — Railway + Google Agenda
 
-Este guia leva o Visitas Locação do repositório até produção. **Nada foi publicado ainda.** Siga na ordem e marque o checklist ao final.
+Este guia leva o Visitas Locação do repositório até produção. Siga na ordem e marque o checklist ao final.
+
+> **Estado atual:** projeto Railway `app_aluguel` (workspace VELOCE), ambiente `production`, criado por IaC a partir de `.railway/railway.ts`. Repositório `graeff01/app_aluguel`, branch `main` — **cada push na main gera deploy automático em produção** (web e worker). URL: https://web-production-3d500.up.railway.app
 
 ---
 
 ## 1. Visão geral
 
-| Serviço Railway | Comando | Config |
-|---|---|---|
-| **Postgres** | (plugin gerenciado) | — |
-| **web** | `npm run start` (escuta `0.0.0.0:$PORT`) | `railway.json` |
-| **worker** | `npm run worker` (processo persistente, sem porta) | `railway.worker.json` |
+| Serviço Railway | Comando |
+|---|---|
+| **Postgres** | banco gerenciado |
+| **web** | `npm run start` (escuta `0.0.0.0:$PORT`) |
+| **worker** | `npm run worker` (processo persistente, sem porta) |
+
+Infraestrutura declarada em **`.railway/railway.ts`** (Infrastructure as Code do Railway; substitui `railway.json`, descontinuado em 01/12/2026). Para alterar: edite o arquivo e rode `railway config plan` e `railway config apply`. Segredos não ficam no arquivo — são definidos com `railway variables --set` e marcados com `preserve()`.
 
 - Build (ambos): `npm run build` → `prisma generate` + `next build` + bundle do worker em `dist/worker.mjs`.
 - Pré-deploy (ambos): `npm run db:migrate` (`prisma migrate deploy`). Executa antes de a nova versão receber tráfego; se falhar, o deploy não prossegue. É idempotente e seguro em paralelo (o Prisma usa bloqueio próprio).
@@ -52,12 +56,13 @@ Com acesso “ver apenas livre/ocupado”, o app mostra o calendário como **sem
 
 ---
 
-## 3. Railway — passo a passo
+## 3. Railway — passo a passo (para recriar do zero)
+
+Atalho com a CLI (≥ 5.42): `railway init` → `railway config apply` (cria Postgres, web e worker) → `railway variables --service web --set TOKEN_ENCRYPTION_KEY=... --set SETUP_TOKEN=...` e o mesmo `TOKEN_ENCRYPTION_KEY` no worker → `railway domain --service web`. O passo a passo manual equivalente:
 
 1. **Novo projeto** → *Deploy from GitHub repo* (este repositório).
 2. **Adicionar Postgres:** *New → Database → PostgreSQL*.
 3. **Serviço web** (o criado a partir do repo):
-   - *Settings → Config-as-code*: `railway.json` (padrão).
    - *Variables*:
      - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}`
      - `APP_URL` = `https://<domínio do serviço>` (gere em *Settings → Networking → Generate Domain* ou use domínio próprio)
@@ -65,7 +70,7 @@ Com acesso “ver apenas livre/ocupado”, o app mostra o calendário como **sem
      - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
      - `SETUP_TOKEN` = texto aleatório ≥ 16 caracteres (temporário, só para criar o 1º admin)
 4. **Serviço worker:** *New → GitHub Repo* (mesmo repositório) → renomeie para `worker`.
-   - *Settings → Config-as-code → Railway Config File*: `/railway.worker.json`
+   - Start command: `npm run worker`; restart policy: Always; pré-deploy: `npm run db:migrate`.
    - *Variables*: as mesmas `DATABASE_URL`, `TOKEN_ENCRYPTION_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `APP_URL` (use *Shared Variables* do projeto para não duplicar).
    - Não gere domínio público para o worker.
    - **Mantenha 1 réplica** (várias réplicas são seguras — há advisory lock —, mas desnecessárias).
@@ -117,7 +122,7 @@ Opção B (terminal): `railway run --service web npm run admin:create -- --email
 - [ ] URI de callback de produção cadastrada **idêntica** a `APP_URL/api/google/callback`.
 - [ ] Postgres criado; backups habilitados (seção 6).
 - [ ] Variáveis definidas nos serviços web e worker (mesma `TOKEN_ENCRYPTION_KEY`).
-- [ ] Worker usando `/railway.worker.json`.
+- [ ] Worker com start `npm run worker` (definido em `.railway/railway.ts`).
 - [ ] Deploy: pré-deploy de migração OK; healthcheck OK; worker com batimento.
 - [ ] Primeiro admin criado; `SETUP_TOKEN` removido.
 - [ ] Gestora e consultoras criadas; e-mails da agenda vinculados; links de senha entregues.
