@@ -5,7 +5,8 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function createClient() {
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL ?? "" });
-  return new PrismaClient({ adapter });
+  // transações com folga para picos de latência (padrão do Prisma: 5 s)
+  return new PrismaClient({ adapter, transactionOptions: { timeout: 15_000, maxWait: 5_000 } });
 }
 
 /** Cliente Prisma único por processo (app e worker). Criado sob demanda. */
