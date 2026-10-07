@@ -62,7 +62,7 @@ export function GoogleSetupGuide({ configured, connected, calendarSelected }: { 
       {steps.map((s, i) => (
         <li key={s.title} className={`rounded-2xl border p-4 ${i === next ? "border-accent/40 bg-surface shadow-card" : "border-line bg-surface"}`}>
           <div className="flex items-start gap-3">
-            <span className={`num grid size-7 shrink-0 place-items-center rounded-full text-[13px] font-bold ${s.done ? "bg-good-soft text-good" : i === next ? "bg-accent text-white" : "bg-black/[0.05] text-ink-3"}`}>
+            <span className={`num grid size-7 shrink-0 place-items-center rounded-full text-[13px] font-bold ${s.done ? "bg-good-soft text-good" : i === next ? "bg-accent text-white" : "bg-tint text-ink-3"}`}>
               {s.done ? "✓" : i + 1}
             </span>
             <div className="min-w-0 flex-1">

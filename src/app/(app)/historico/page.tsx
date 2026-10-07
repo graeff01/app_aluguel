@@ -77,7 +77,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
           )}
         </div>
         <div className="flex gap-2">
-          <button className="min-h-12 rounded-full bg-primary px-6 font-semibold text-white shadow-float">Filtrar</button>
+          <button className="min-h-12 rounded-full bg-primary px-6 font-semibold text-on-primary shadow-float">Filtrar</button>
           <Link href="/historico" className="inline-flex min-h-12 items-center px-4 text-primary">
             Limpar
           </Link>

@@ -260,9 +260,18 @@ export async function settingsAction(_: ActionState, fd: FormData) {
         consultantCanCorrectData: str(fd, "consultantCanCorrectData") === "1",
         remindersEnabled: str(fd, "remindersEnabled") === "1",
         reminderHour: int("reminderHour", 6, 20),
+        coverageGoal: int("coverageGoal", 50, 100),
+        propertyUrlTemplate: (() => {
+          const t = str(fd, "propertyUrlTemplate").trim();
+          if (!/^https:\/\/[^\s]+$/.test(t) || !t.includes("{codigo}")) throw new AppError("VALIDATION", "Link do imóvel inválido.", { propertyUrlTemplate: "Use um endereço https com {codigo}." });
+          return t;
+        })(),
       };
+      const before = await db.appSettings.findUniqueOrThrow({ where: { id: 1 } });
       await db.$transaction(async (tx) => {
         await tx.appSettings.update({ where: { id: 1 }, data });
+        // novo link de imóvel: refaz as pré-visualizações
+        if (before.propertyUrlTemplate !== data.propertyUrlTemplate) await tx.property.updateMany({ data: { pageCheckedAt: null } });
         await audit(tx, { actorId: actor.id, action: "settings.updated", entityType: "AppSettings", entityId: "1", changes: { ...data, resultsStartDate: start } });
       });
       return "Configurações salvas.";

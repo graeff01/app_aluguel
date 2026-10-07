@@ -56,7 +56,7 @@ export default async function TodayPage() {
       {previousPending > 0 && (
         <Link
           href="/pendencias"
-          className="mb-6 flex items-center justify-between gap-3 rounded-3xl bg-primary px-5 py-4 text-white shadow-float transition hover:bg-[#33373b]"
+          className="mb-6 flex items-center justify-between gap-3 rounded-3xl bg-primary px-5 py-4 text-on-primary shadow-float transition hover:opacity-90"
         >
           <span className="flex items-center gap-3">
             <span className="num grid size-10 shrink-0 place-items-center rounded-full bg-accent text-[15px] font-bold">{previousPending}</span>
@@ -64,10 +64,10 @@ export default async function TodayPage() {
               <span className="block font-semibold">
                 {previousPending === 1 ? "Visita anterior aguardando resultado" : "Visitas anteriores aguardando resultado"}
               </span>
-              {oldestPending && <span className="text-sm text-white/60">A mais antiga é de {fmt.date(oldestPending)}</span>}
+              {oldestPending && <span className="text-sm text-on-primary/60">A mais antiga é de {fmt.date(oldestPending)}</span>}
             </span>
           </span>
-          <Icon name="arrow" className="size-5 shrink-0 text-white/70" />
+          <Icon name="arrow" className="size-5 shrink-0 text-on-primary/70" />
         </Link>
       )}
 

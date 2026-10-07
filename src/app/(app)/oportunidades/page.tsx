@@ -44,7 +44,7 @@ export default async function OppsPage({ searchParams }: { searchParams: Promise
           <Input id="q" name="q" defaultValue={sp.q} type="search" />
         </Field>
         <div>
-          <button className="min-h-12 rounded-full bg-primary px-6 font-semibold text-white shadow-float">Filtrar</button>
+          <button className="min-h-12 rounded-full bg-primary px-6 font-semibold text-on-primary shadow-float">Filtrar</button>
         </div>
       </form>
       {opps.length === 0 ? (

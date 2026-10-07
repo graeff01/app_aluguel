@@ -19,7 +19,7 @@ export function InstallHelp() {
   return (
     <div className="rounded-3xl border border-line bg-surface p-5 shadow-card">
       {prompt && (
-        <button className="mb-4 min-h-12 rounded-full bg-primary px-6 font-semibold text-white shadow-float" onClick={() => prompt.prompt().then(() => setPrompt(null))}>
+        <button className="mb-4 min-h-12 rounded-full bg-primary px-6 font-semibold text-on-primary shadow-float" onClick={() => prompt.prompt().then(() => setPrompt(null))}>
           Instalar aplicativo
         </button>
       )}

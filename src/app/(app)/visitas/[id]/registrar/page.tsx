@@ -8,11 +8,12 @@ import { formatPhone } from "@/lib/phone";
 import { Alert, Panel } from "@/components/ui";
 import { OutcomeForm } from "./outcome-form";
 import { ContactButtons } from "@/components/contact-buttons";
+import { PropertyCard } from "@/components/property-preview";
 import { notFound } from "next/navigation";
 
 export const metadata = { title: "Registrar resultado" };
 
-export default async function RegisterPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ anterior?: string; restantes?: string }> }) {
+export default async function RegisterPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ anterior?: string; restantes?: string; desfeito?: string }> }) {
   const sp = await searchParams;
   const actor = await requireActor();
   const { id } = await params;
@@ -32,7 +33,12 @@ export default async function RegisterPage({ params, searchParams }: { params: P
       <Link href={global ? `/visitas/${visit.id}` : "/minhas"} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
         ← {global ? "Detalhes da visita" : "Minhas visitas"}
       </Link>
-      {sp.anterior === "salvo" && (
+      {sp.desfeito && (
+        <div role="status" className="mb-5 rounded-2xl bg-accent-soft px-4 py-3 text-sm font-semibold text-accent-strong">
+          Registro desfeito. A visita voltou a aguardar resultado.
+        </div>
+      )}
+      {sp.anterior === "salvo" && !sp.desfeito && (
         <div role="status" className="mb-5 flex items-center justify-between gap-3 rounded-2xl bg-good-soft px-4 py-3 text-sm text-good">
           <span>
             <strong>✓ Resultado anterior salvo.</strong> Esta é a próxima pendente{Number(sp.restantes) > 1 ? ` (${sp.restantes} na fila)` : ""}.
@@ -61,6 +67,9 @@ export default async function RegisterPage({ params, searchParams }: { params: P
           </Link>
         )}
       </Panel>
+      <div className="mb-6">
+        <PropertyCard code={visit.propertyCode} photoUrl={visit.property?.photoUrl} title={visit.property?.title} template={settings.propertyUrlTemplate} />
+      </div>
       <OutcomeForm
         visitId={visit.id}
         version={visit.version}

@@ -9,7 +9,7 @@ import { PushToggle } from "./push-toggle";
 export function UserMenu({ name, email, role, showProfile, pushKey }: { name: string; email: string; role: string; showProfile: boolean; pushKey: string | null }) {
   return (
     <details className="relative">
-      <summary className="flex min-h-11 cursor-pointer items-center gap-2 rounded-full py-1 pr-1 pl-1 hover:bg-black/[0.04] md:pr-3" aria-label="Menu da conta">
+      <summary className="flex min-h-11 cursor-pointer items-center gap-2 rounded-full py-1 pr-1 pl-1 hover:bg-tint md:pr-3" aria-label="Menu da conta">
         <Avatar name={name} size="sm" />
         <span className="hidden text-sm font-semibold md:inline">{name.split(" ")[0]}</span>
       </summary>
@@ -21,7 +21,7 @@ export function UserMenu({ name, email, role, showProfile, pushKey }: { name: st
         </div>
         <PushToggle publicKey={pushKey} />
         {showProfile && (
-          <Link href="/perfil" className="mt-1 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium hover:bg-black/[0.04]">
+          <Link href="/perfil" className="mt-1 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium hover:bg-tint">
             <Icon name="user" className="size-[18px] text-ink-3" /> Perfil e senha
           </Link>
         )}

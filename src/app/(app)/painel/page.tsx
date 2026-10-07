@@ -35,6 +35,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const first = name.split(" ")[0];
     return firstNames.filter((f) => f === first).length > 1 ? name.replace(/\s*\(.*?\)/, "") : first;
   };
+  const goal = d.settings.coverageGoal;
+  const attention = d.perConsultant
+    .filter((c) => c.metrics.totals.awaitingOver24h > 0)
+    .sort((a, b) => b.metrics.totals.awaitingOver24h - a.metrics.totals.awaitingOver24h);
   const individual = d.perConsultant.find((c) => c.user.id === d.consultantId)?.user ?? null;
   const reasonName = new Map(d.reasons.map((r) => [r.id, r.label]));
 
@@ -98,7 +102,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <Input id="imovel" name="imovel" defaultValue={d.propertyCode ?? ""} />
             </Field>
             <div className="flex items-start pt-[26px]">
-              <button className="min-h-12 w-full rounded-full bg-primary px-6 font-semibold text-white">Aplicar</button>
+              <button className="min-h-12 w-full rounded-full bg-primary px-6 font-semibold text-on-primary">Aplicar</button>
             </div>
           </form>
         </details>
@@ -108,6 +112,31 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </Link>
         )}
       </div>
+
+      {!individual && attention.length > 0 && (
+        <div className="mb-8 rounded-3xl border border-bad/20 bg-bad-soft p-5">
+          <p className="mb-3 flex items-center gap-2 font-bold text-bad">
+            <span aria-hidden className="grid size-6 place-items-center rounded-full bg-bad text-[13px] text-bg">!</span>
+            Pendência acumulada
+          </p>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {attention.map(({ user, metrics: cm }) => (
+              <li key={user.id}>
+                <Link href={q({ consultora: user.id })} className="press flex items-center justify-between gap-3 rounded-2xl bg-surface px-4 py-3 shadow-card">
+                  <span className="flex items-center gap-3">
+                    <Avatar name={user.name} size="sm" />
+                    <span className="font-semibold">{user.name}</span>
+                  </span>
+                  <span className="num text-right text-sm">
+                    <strong className="text-[17px] text-bad">{cm.totals.awaitingOver24h}</strong>
+                    <span className="block text-[11px] text-ink-3">há mais de 24 h</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Destaques */}
       <div className="mb-10 grid gap-4 lg:grid-cols-3">
@@ -142,7 +171,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       </div>
 
       <Section title="Evolução semanal" hint={individual ? `Semanas de ${individual.name.split(" ")[0]}` : "Equipe, últimas 8 semanas"}>
-        <WeeklyChart weeks={d.weekly} />
+        <WeeklyChart weeks={d.weekly} goal={goal} />
       </Section>
 
       <Section title="Visitas no período">
@@ -185,8 +214,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <StatTile
             label="Cobertura de registro"
             value={<RateValue r={m.coverage} />}
-            compare={individual ? <VsTeam mine={m.coverage} team={team.coverage} /> : undefined}
-            detail={`${m.coverage.num} de ${m.coverage.den} encerradas · ${m.coverage.rescheduled} remarcadas`}
+            compare={
+              individual ? (
+                <VsTeam mine={m.coverage} team={team.coverage} />
+              ) : m.coverage.value !== null ? (
+                <GoalChip value={m.coverage.value} goal={goal} />
+              ) : undefined
+            }
+            detail={`${m.coverage.num} de ${m.coverage.den} encerradas · meta ${goal}% · ${m.coverage.rescheduled} remarcadas`}
           />
           <StatTile label="Clientes distintos" value={m.clients.confirmed} detail={`${m.clients.pending} com identificação pendente`} href="/clientes?identidade=PENDING" />
           <StatTile
@@ -219,7 +254,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <Section title="Consultoras" hint="Toque em uma consultora para ver a visão individual">
           <div className="grid gap-4 md:grid-cols-2">
             {d.perConsultant.map(({ user, metrics: cm }) => (
-              <Link key={user.id} href={q({ consultora: user.id })} className="group rounded-3xl border border-line bg-surface p-5 shadow-card transition-shadow hover:shadow-float">
+              <Link
+                key={user.id}
+                href={q({ consultora: user.id })}
+                className={cx("group relative overflow-hidden rounded-3xl border bg-surface p-5 shadow-card transition-shadow hover:shadow-float", cm.totals.awaitingOver24h > 0 ? "border-bad/30" : "border-line")}
+              >
+                {cm.totals.awaitingOver24h > 0 && <span aria-hidden className="absolute inset-y-0 left-0 w-[5px] bg-bad" />}
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <Avatar name={user.name} size="md" />
@@ -236,7 +276,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   {[
                     ["Positivas", formatRate(cm.positiveRate), cm.positiveRate.den ? `${cm.positiveRate.num}/${cm.positiveRate.den}` : ""],
                     ["Não comp.", formatRate(cm.noShowRate), cm.noShowRate.den ? `${cm.noShowRate.num}/${cm.noShowRate.den}` : ""],
-                    ["Pendentes", String(cm.totals.awaiting), cm.totals.awaitingOver24h ? `${cm.totals.awaitingOver24h} > 24 h` : ""],
+                    ["Pendentes", String(cm.totals.awaiting), cm.totals.awaitingOver24h ? `${cm.totals.awaitingOver24h} há > 24 h` : ""],
                     ["Fechamentos", String(cm.closures.count), ""],
                   ].map(([k, v, sub]) => (
                     <div key={k}>
@@ -344,5 +384,15 @@ function PropertyTable({ rows, link }: { rows: Row[]; link: (k: string) => strin
         </table>
       </div>
     </>
+  );
+}
+
+function GoalChip({ value, goal }: { value: number; goal: number }) {
+  const ok = value * 100 >= goal;
+  return (
+    <span className={cx("inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[12px] font-semibold", ok ? "bg-good-soft text-good" : "bg-bad-soft text-bad")}>
+      <span aria-hidden>{ok ? "✓" : "▼"}</span>
+      {ok ? `Meta de ${goal}% atingida` : `Abaixo da meta de ${goal}%`}
+    </span>
   );
 }

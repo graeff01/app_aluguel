@@ -8,10 +8,10 @@ export function cx(...c: (string | false | null | undefined)[]) {
 const btnBase =
   "inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 text-[15px] font-semibold tracking-[-0.01em] transition-[background,box-shadow,transform] duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100";
 export const btnVariant = {
-  primary: "bg-primary text-white shadow-[0_1px_0_rgb(255_255_255/0.08)_inset,0_6px_16px_-6px_rgb(29_32_35/0.45)] hover:bg-[#33373b]",
+  primary: "bg-primary text-on-primary shadow-[0_6px_16px_-6px_rgb(29_32_35/0.45)] hover:opacity-90 dark:shadow-none",
   accent: "bg-accent text-white shadow-[0_6px_16px_-6px_color-mix(in_srgb,var(--accent)_60%,transparent)] hover:brightness-105",
   secondary: "border border-line-strong bg-surface text-ink hover:border-ink-3 hover:bg-surface-2",
-  ghost: "text-ink hover:bg-black/[0.04]",
+  ghost: "text-ink hover:bg-tint",
   danger: "border border-bad/30 bg-surface text-bad hover:bg-bad-soft",
 };
 export type BtnVariant = keyof typeof btnVariant;
@@ -71,8 +71,8 @@ export function Empty({ title, children, icon = "◌" }: { title: string; childr
 }
 
 const tones = {
-  neutral: "bg-black/[0.05] text-ink-2",
-  info: "bg-[#eef1f4] text-[#3d4b5a]",
+  neutral: "bg-tint text-ink-2",
+  info: "bg-[#eef1f4] text-[#3d4b5a] dark:bg-[#22303f] dark:text-[#a9bfd6]",
   good: "bg-good-soft text-good",
   warn: "bg-warn-soft text-warn",
   bad: "bg-bad-soft text-bad",
@@ -152,7 +152,7 @@ export function Avatar({ name, size = "md", tone = "dark" }: { name: string; siz
     .map((w) => w[0]?.toUpperCase())
     .join("");
   const s = { sm: "size-7 text-[11px]", md: "size-9 text-xs", lg: "size-14 text-lg" }[size];
-  const t = { dark: "bg-primary text-white", light: "bg-black/[0.06] text-ink", accent: "bg-accent text-white" }[tone];
+  const t = { dark: "bg-primary text-on-primary", light: "bg-tint text-ink", accent: "bg-accent text-white" }[tone];
   return (
     <span aria-hidden className={cx("inline-grid shrink-0 place-items-center rounded-full font-bold tracking-tight", s, t)}>
       {initials || "?"}
@@ -172,7 +172,7 @@ export function Segmented({ items, label }: { items: { href: string; label: Reac
               aria-current={it.active ? "true" : undefined}
               className={cx(
                 "inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold whitespace-nowrap transition-colors",
-                it.active ? "bg-primary text-white" : "text-ink-2 hover:bg-black/[0.04] hover:text-ink",
+                it.active ? "bg-primary text-on-primary" : "text-ink-2 hover:bg-tint hover:text-ink",
               )}
             >
               {it.label}

@@ -11,6 +11,7 @@ import { log, errorCode } from "@/lib/log";
 import { getSettings } from "@/lib/settings";
 import { executeRun } from "@/server/sync/runner";
 import { sendDailyReminders } from "@/server/reminders";
+import { refreshPropertyPreviews } from "@/server/property-preview";
 
 const TICK_MS = Number(process.env.WORKER_TICK_MS ?? 15_000);
 const WORKER_ID = process.env.RAILWAY_REPLICA_ID ?? process.env.HOSTNAME ?? "local";
@@ -64,6 +65,7 @@ async function main() {
       if (Date.now() - lastReminderCheck > 10 * 60_000) {
         lastReminderCheck = Date.now();
         await sendDailyReminders().catch((e) => log.error("reminders.failed", { code: errorCode(e) }));
+        await refreshPropertyPreviews().catch((e) => log.error("property_preview.failed", { code: errorCode(e) }));
       }
     } catch (e) {
       log.error("worker.tick_failed", { code: errorCode(e) });

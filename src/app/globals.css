@@ -25,6 +25,39 @@
   --warn-soft: #fbf0df;
   --shadow: 0 1px 2px rgb(29 32 35 / 0.04), 0 4px 16px -4px rgb(29 32 35 / 0.06);
   --shadow-lg: 0 2px 4px rgb(29 32 35 / 0.04), 0 16px 40px -12px rgb(29 32 35 / 0.14);
+  --on-primary: #ffffff;
+  --tint: rgb(29 32 35 / 0.05);
+  --tint-strong: rgb(29 32 35 / 0.15);
+  color-scheme: light;
+}
+
+/* Modo escuro: segue o aparelho. Superfícies grafite quentes, laranja mantido como destaque. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent-strong: color-mix(in srgb, var(--accent) 80%, #ffffff);
+    --accent-soft: color-mix(in srgb, var(--accent) 16%, #1b1e21);
+    --primary: #ecebe7; /* ação principal clara sobre fundo escuro */
+    --on-primary: #17191b;
+    --bg: #121416;
+    --surface: #1b1e21;
+    --surface-2: #202427;
+    --ink: #eceae6;
+    --ink-2: #b9bdc2;
+    --ink-3: #8b9197;
+    --line: #2b2f34;
+    --line-strong: #3b4046;
+    --good: #82c672;
+    --good-soft: #1b2a19;
+    --bad: #f08c78;
+    --bad-soft: #35211c;
+    --warn: #ecb662;
+    --warn-soft: #302616;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px -4px rgb(0 0 0 / 0.35);
+    --shadow-lg: 0 2px 4px rgb(0 0 0 / 0.3), 0 16px 40px -12px rgb(0 0 0 / 0.6);
+    --tint: rgb(255 255 255 / 0.06);
+    --tint-strong: rgb(255 255 255 / 0.18);
+    color-scheme: dark;
+  }
 }
 
 @theme inline {
@@ -46,6 +79,9 @@
   --color-bad-soft: var(--bad-soft);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
+  --color-on-primary: var(--on-primary);
+  --color-tint: var(--tint);
+  --color-tint-strong: var(--tint-strong);
   --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --shadow-card: var(--shadow);
   --shadow-float: var(--shadow-lg);

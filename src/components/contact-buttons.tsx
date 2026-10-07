@@ -24,7 +24,7 @@ export function ContactButtons({ phone, name, compact, className }: { phone: str
   const shape = compact ? "relative z-[1] grid size-11 place-items-center rounded-full" : "inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold";
   return (
     <div className={cx("flex gap-2", className)}>
-      <a href={links.tel} className={cx(shape, "press bg-[#e8f0fe] text-[#1a56c4] ring-1 ring-[#1a56c4]/10 hover:bg-[#dbe7fd]")} aria-label={`Ligar${who}`}>
+      <a href={links.tel} className={cx(shape, "press bg-[#e8f0fe] text-[#1a56c4] ring-1 ring-[#1a56c4]/10 hover:bg-[#dbe7fd] dark:bg-[#1b2a45] dark:text-[#93b8ff] dark:ring-[#93b8ff]/15 dark:hover:bg-[#22355a]")} aria-label={`Ligar${who}`}>
         <PhoneIcon className="size-[19px]" />
         {!compact && "Ligar"}
       </a>
@@ -32,7 +32,7 @@ export function ContactButtons({ phone, name, compact, className }: { phone: str
         href={links.whatsapp}
         target="_blank"
         rel="noopener noreferrer"
-        className={cx(shape, "press bg-[#e3f7eb] text-[#0f7a3c] ring-1 ring-[#0f7a3c]/10 hover:bg-[#d3f2df]")}
+        className={cx(shape, "press bg-[#e3f7eb] text-[#0f7a3c] ring-1 ring-[#0f7a3c]/10 hover:bg-[#d3f2df] dark:bg-[#14301f] dark:text-[#5fd68e] dark:ring-[#5fd68e]/15 dark:hover:bg-[#1a3d28]")}
         aria-label={`Abrir WhatsApp${who}`}
       >
         <WhatsIcon className="size-[21px]" />

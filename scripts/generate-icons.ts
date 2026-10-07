@@ -1,26 +1,23 @@
-/** Gera ícones PNG locais (monograma genérico "VL" — não é logotipo da imobiliária). Rodar: npm run icons */
+/** Gera os ícones do app a partir do símbolo da Auxiliadora Predial (public/brand). Rodar: npm run icons */
 import sharp from "sharp";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 
-const COLOR = "#1f5f8b";
-function svg(size: number, padding: number) {
-  const r = Math.round(size * 0.22);
-  const inner = size - padding * 2;
-  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <rect width="${size}" height="${size}" fill="${padding ? COLOR : "none"}"/>
-  <rect x="${padding}" y="${padding}" width="${inner}" height="${inner}" rx="${padding ? 0 : r}" fill="${COLOR}"/>
-  <text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="${Math.round(inner * 0.42)}" fill="#ffffff">VL</text>
-</svg>`);
-}
-
+const symbol = readFileSync("public/brand/auxiliadora-simbolo.svg");
 mkdirSync("public/icons", { recursive: true });
-const jobs: [string, number, number][] = [
-  ["icon-192.png", 192, 0],
-  ["icon-512.png", 512, 0],
-  ["maskable-512.png", 512, 64],
-  ["apple-touch-icon.png", 180, 18],
-];
-for (const [name, size, pad] of jobs) {
-  await sharp(svg(size, pad)).png().toFile(`public/icons/${name}`);
+
+async function icon(name: string, size: number, padRatio: number, radius: number) {
+  const inner = Math.round(size * (1 - padRatio * 2));
+  const mark = await sharp(symbol, { density: 600 }).resize(inner, inner, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+  const bg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect width="${size}" height="${size}" rx="${radius}" fill="#ffffff"/></svg>`);
+  await sharp(bg)
+    .composite([{ input: mark, gravity: "center" }])
+    .png()
+    .toFile(`public/icons/${name}`);
   console.log("ok", name);
 }
+
+await icon("icon-192.png", 192, 0.16, 0);
+await icon("icon-512.png", 512, 0.16, 0);
+await icon("maskable-512.png", 512, 0.24, 0); // área segura para recorte circular
+await icon("apple-touch-icon.png", 180, 0.16, 0);
+await icon("favicon-32.png", 32, 0.06, 0);

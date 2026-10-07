@@ -1,4 +1,5 @@
 import { getSettingsSafe } from "@/lib/settings-safe";
+import { BrandLogo } from "@/components/brand";
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const s = await getSettingsSafe();
@@ -9,9 +10,9 @@ export default async function PublicLayout({ children }: { children: React.React
         <div aria-hidden className="pointer-events-none absolute -top-40 -right-40 size-[520px] rounded-full border border-white/[0.06]" />
         <div aria-hidden className="pointer-events-none absolute -top-16 -right-16 size-[280px] rounded-full border border-white/[0.06]" />
         <div aria-hidden className="pointer-events-none absolute -bottom-48 -left-24 size-[460px] rounded-full bg-accent/[0.08] blur-3xl" />
-        <div className="relative flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-2xl bg-accent text-base font-extrabold">V</span>
-          <span className="text-lg font-bold tracking-[-0.02em]">{s.productName}</span>
+        <div className="relative">
+          <BrandLogo tone="light" className="h-11 w-auto" />
+          <p className="mt-3 text-[12px] font-semibold tracking-[0.16em] text-white/45 uppercase">{s.productName}</p>
         </div>
         <div className="relative max-w-md">
           <p className="mb-4 text-xs font-semibold tracking-[0.18em] text-accent uppercase">Locação</p>
@@ -23,9 +24,9 @@ export default async function PublicLayout({ children }: { children: React.React
 
       <main className="flex flex-col justify-center px-6 py-12 sm:px-12">
         <div className="mx-auto w-full max-w-sm">
-          <div className="mb-10 flex items-center gap-3 lg:hidden">
-            <span className="grid size-10 place-items-center rounded-2xl bg-primary text-base font-extrabold text-white">V</span>
-            <span className="text-lg font-bold tracking-[-0.02em]">{s.productName}</span>
+          <div className="mb-10 lg:hidden">
+            <BrandLogo tone="auto" className="h-10 w-auto" />
+            <p className="mt-2.5 text-[12px] font-semibold tracking-[0.16em] text-ink-3 uppercase">{s.productName}</p>
           </div>
           {children}
         </div>

@@ -427,3 +427,42 @@ export async function resolveConflict(actor: AuthzActor, visitId: string, action
     await audit(tx, { actorId: actor.id, action: "visit.conflict_resolved", entityType: "Visit", entityId: visitId, changes: { conflito: visit.syncConflict, acao: action, observacao: note || null } });
   });
 }
+
+// ─────────────── Desfazer (janela curta após o primeiro registro) ───────────────
+
+export const UNDO_WINDOW_MS = 20_000; // a interface oferece 5 s; folga para latência de rede
+
+/**
+ * Desfaz o PRIMEIRO registro de resultado feito pela própria pessoa, logo após salvar.
+ * Volta a visita para "agendada" (pendente), remove o vínculo com a oportunidade e registra auditoria.
+ */
+export async function undoConclusion(actor: AuthzActor, visitId: string, requestId: string, now = new Date()) {
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Visit" WHERE id = ${visitId} FOR UPDATE`;
+    const visit = await tx.visit.findUnique({ where: { id: visitId } });
+    if (!visit || !canViewVisit(actor, visit)) throw notFound();
+    const history = await tx.visitOutcomeHistory.findMany({ where: { visitId }, orderBy: { createdAt: "desc" } });
+    const expired = !visit.concludedAt || now.getTime() - visit.concludedAt.getTime() > UNDO_WINDOW_MS;
+    if (visit.lastRequestId !== requestId || visit.concludedById !== actor.id || history.length !== 1 || expired) {
+      throw new AppError("INVALID_STATE", "Não é mais possível desfazer. Use “Alterar resultado” se precisar corrigir.");
+    }
+    await detachVisitFromOpportunity(tx, visit.id, actor.id);
+    await tx.visit.update({
+      where: { id: visit.id },
+      data: {
+        status: "SCHEDULED",
+        evaluation: null,
+        negativeReasonId: null,
+        note: null,
+        concludedAt: null,
+        concludedById: null,
+        realizedById: null,
+        lastRequestId: null,
+        version: { increment: 1 },
+      },
+    });
+    await tx.visitOutcomeHistory.deleteMany({ where: { visitId } });
+    await audit(tx, { actorId: actor.id, action: "visit.undone", entityType: "Visit", entityId: visit.id, changes: { desfeito: { status: visit.status, evaluation: visit.evaluation } } });
+    return tx.visit.findUniqueOrThrow({ where: { id: visit.id } });
+  });
+}

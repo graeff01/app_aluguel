@@ -85,7 +85,7 @@ export function PushToggle({ publicKey }: { publicKey: string | null }) {
         aria-pressed={on}
       >
         <span>Lembretes de pendências</span>
-        <span aria-hidden className={cx("relative h-6 w-10 shrink-0 rounded-full transition-colors", on ? "bg-accent" : "bg-black/15")}>
+        <span aria-hidden className={cx("relative h-6 w-10 shrink-0 rounded-full transition-colors", on ? "bg-accent" : "bg-tint-strong")}>
           <span className={cx("absolute top-0.5 size-5 rounded-full bg-white shadow transition-[left]", on ? "left-[18px]" : "left-0.5")} />
         </span>
       </button>
@@ -126,7 +126,7 @@ export function PushPrompt({ publicKey }: { publicKey: string | null }) {
           Agora não
         </button>
         {state !== "ios-install" && (
-          <button type="button" onClick={enable} disabled={state === "busy"} className="min-h-11 rounded-full bg-primary px-5 text-sm font-semibold text-white disabled:opacity-50">
+          <button type="button" onClick={enable} disabled={state === "busy"} className="min-h-11 rounded-full bg-primary px-5 text-sm font-semibold text-on-primary disabled:opacity-50">
             {state === "busy" ? "Ativando…" : "Ativar"}
           </button>
         )}

@@ -71,11 +71,11 @@ export default async function GooglePage({ searchParams }: { searchParams: Promi
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {googleConfigured() ? (
-              <a href="/api/google/connect" className="inline-flex min-h-12 items-center rounded-full bg-primary px-6 font-semibold text-white shadow-float">
+              <a href="/api/google/connect" className="inline-flex min-h-12 items-center rounded-full bg-primary px-6 font-semibold text-on-primary shadow-float">
                 {conn ? "Reconectar / trocar conta" : "Conectar conta Google"}
               </a>
             ) : (
-              <span className="inline-flex min-h-12 items-center rounded-full bg-black/[0.05] px-6 font-semibold text-ink-3">Conectar conta Google (aguardando credenciais)</span>
+              <span className="inline-flex min-h-12 items-center rounded-full bg-tint px-6 font-semibold text-ink-3">Conectar conta Google (aguardando credenciais)</span>
             )}
             {conn && (
               <ActionForm action={disconnectGoogleAction} confirm="Desconectar a conta Google? A importação para; registros são mantidos.">

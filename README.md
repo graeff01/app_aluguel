@@ -18,6 +18,11 @@ Web responsivo + PWA instalável, interface em português, fuso `America/Sao_Pau
 - **Ligar / WhatsApp:** botões no card e no detalhe (somente com telefone validado; apenas abrem o contato, nada é enviado automaticamente).
 - **Lembretes no celular (Web Push):** ativados por cada pessoa no menu da conta. Envio diário (hora configurável, exceto domingo) pelo worker: consultora recebe a contagem das próprias pendências > 24 h; gestora recebe o resumo da equipe. Conteúdo só com contagens. No iPhone exige o app instalado na tela de início (iOS 16.4+).
 - **Evolução semanal** no painel (8 semanas, segunda a domingo): agendadas, realizadas, positivas e cobertura.
+- **Marca Auxiliadora Predial** (logotipo e símbolo em `public/brand`, ícones do app gerados com `npm run icons`).
+- **Modo escuro** automático, seguindo o aparelho.
+- **Foto e título do imóvel** lidos da página pública do anúncio (`og:image`/`og:title`), a partir do link configurável com `{codigo}`; atualizados pelo worker em lotes pequenos, com cache de 7 dias. Só o código do imóvel é enviado.
+- **Respostas rápidas** e lembrete de ditado na observação; **Desfazer** por 5 s após o primeiro registro.
+- **Painel:** destaque de pendência acumulada (> 24 h) por consultora e **meta de cobertura** configurável (padrão 90%).
 - **Exportar CSV** (gestão) com os filtros do Histórico; separador `;`, compatível com Excel, proteção contra fórmulas e registro na auditoria.
 
 ## Stack

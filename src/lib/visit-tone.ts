@@ -6,8 +6,8 @@ export type VisitToneKey = "overdue" | "awaiting" | "live" | "upcoming" | "posit
 export const TONE_BAR: Record<VisitToneKey, string> = {
   overdue: "bg-[#c2452d]",
   awaiting: "bg-accent",
-  live: "bg-[#2f6fde]",
-  upcoming: "bg-[#9db6d6]",
+  live: "bg-[#2f6fde] dark:bg-[#5b8ff0]",
+  upcoming: "bg-[#9db6d6] dark:bg-[#4e6582]",
   positive: "bg-good",
   negative: "bg-bad",
   undecided: "bg-[#9aa0a7]",
@@ -16,9 +16,9 @@ export const TONE_BAR: Record<VisitToneKey, string> = {
 };
 
 export const TONE_TEXT: Record<VisitToneKey, string> = {
-  overdue: "text-[#a8402d]",
+  overdue: "text-[#a8402d] dark:text-[#f0907b]",
   awaiting: "text-accent-strong",
-  live: "text-[#2357b3]",
+  live: "text-[#2357b3] dark:text-[#93b8ff]",
   upcoming: "text-ink-3",
   positive: "text-good",
   negative: "text-bad",

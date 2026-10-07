@@ -26,7 +26,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
           </Select>
         </Field>
         <div className="flex items-end pb-4">
-          <button className="min-h-12 rounded-full bg-primary px-6 font-semibold text-white shadow-float">Buscar</button>
+          <button className="min-h-12 rounded-full bg-primary px-6 font-semibold text-on-primary shadow-float">Buscar</button>
         </div>
       </form>
       {clients.length === 0 ? (

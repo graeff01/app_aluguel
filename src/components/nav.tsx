@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cx } from "./ui";
 import { Icon, type IconName } from "./icons";
+import { BrandLogo } from "./brand";
 
 export type NavItem = { href: string; label: string; icon: IconName; badge?: number };
 
@@ -18,7 +19,7 @@ export function BottomNav({ items }: { items: NavItem[] }) {
   return (
     <nav aria-label="Principal" className="pb-safe fixed inset-x-0 bottom-0 z-20 px-3 md:hidden">
       <ul
-        className="mx-auto mb-1 grid max-w-md rounded-[26px] border border-white/60 bg-white/85 p-1.5 shadow-float backdrop-blur-xl"
+        className="mx-auto mb-1 grid max-w-md rounded-[26px] border border-line/60 bg-surface/85 p-1.5 shadow-float backdrop-blur-xl"
         style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
       >
         {items.map((it) => {
@@ -30,7 +31,7 @@ export function BottomNav({ items }: { items: NavItem[] }) {
                 aria-current={active ? "page" : undefined}
                 className={cx(
                   "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-[20px] text-[11px] font-semibold transition-colors",
-                  active ? "bg-primary text-white" : "text-ink-3 hover:text-ink",
+                  active ? "bg-primary text-on-primary" : "text-ink-3 hover:text-ink",
                 )}
               >
                 <Icon name={it.icon} className="size-[22px]" />
@@ -55,11 +56,9 @@ export function SideNav({ groups, productName }: { groups: { title?: string; ite
   const path = usePathname();
   return (
     <nav aria-label="Principal" className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col overflow-y-auto bg-[#1f2124] px-4 py-6 text-white md:flex">
-      <Link href="/" className="mb-8 flex items-center gap-2.5 px-3">
-        <span aria-hidden className="grid size-8 place-items-center rounded-xl bg-accent text-sm font-extrabold">
-          V
-        </span>
-        <span className="text-[15px] font-bold tracking-[-0.02em]">{productName}</span>
+      <Link href="/" className="mb-8 block px-3">
+        <BrandLogo tone="light" className="h-9 w-auto" />
+        <span className="mt-2 block text-[12px] font-semibold tracking-[0.14em] text-white/45 uppercase">{productName}</span>
       </Link>
       {groups.map((g, i) => (
         <div key={i} className="mb-6">

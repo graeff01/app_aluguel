@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useOnline } from "@/components/online-status";
 import { cx } from "@/components/ui";
 import { EVALUATION_LABEL, STATUS_LABEL } from "@/lib/labels";
+import { appendNote, quickNotesFor } from "@/lib/quick-notes";
 
 type Status = "DONE" | "NO_SHOW" | "CANCELED" | "RESCHEDULED";
 type Evaluation = "POSITIVE" | "NEGATIVE" | "UNDECIDED";
@@ -64,6 +65,7 @@ export function OutcomeForm(p: Props) {
   }, [dirty, save.kind]);
 
   const blockedByData = status === "DONE" && p.missingData.length > 0;
+  const quick = quickNotesFor(status, status === "DONE" ? evaluation : null);
   const trimmed = note.trim();
   const problems: string[] = [];
   if (!status) problems.push("Informe se a visita aconteceu.");
@@ -99,13 +101,14 @@ export function OutcomeForm(p: Props) {
         try {
           navigator.vibrate?.(18); // confirmação tátil discreta (Android)
         } catch {}
+        const undo = data.undo ? `desfazer=${data.undo.visitId}.${data.undo.requestId}` : "";
         if (data.next?.id && !p.isEdit) {
           // vai direto para a próxima pendente
-          router.replace(`/visitas/${data.next.id}/registrar?anterior=salvo&restantes=${data.next.remaining}`);
+          router.replace(`/visitas/${data.next.id}/registrar?anterior=salvo&restantes=${data.next.remaining}${undo ? `&${undo}` : ""}`);
           router.refresh();
           return;
         }
-        router.replace(p.afterSave);
+        router.replace(undo ? `${p.afterSave}${p.afterSave.includes("?") ? "&" : "?"}${undo}` : p.afterSave);
         router.refresh();
         return;
       }
@@ -175,9 +178,33 @@ export function OutcomeForm(p: Props) {
       )}
 
       <div className="mb-4">
-        <label htmlFor="note" className="mb-2 block text-[17px] font-bold tracking-[-0.02em]">
+        <label htmlFor="note" className="mb-1 block text-[17px] font-bold tracking-[-0.02em]">
           Observação <span className="text-base font-normal text-ink-3">(obrigatória)</span>
         </label>
+        <p className="mb-2.5 hidden items-center gap-1.5 text-[13px] text-ink-3 [@media(pointer:coarse)]:flex">
+          <svg aria-hidden viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+            <rect x="9" y="3" width="6" height="11" rx="3" />
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+          </svg>
+          Prefere falar? Toque no microfone do teclado para ditar.
+        </p>
+        {quick.length > 0 && (
+          <div className="-mx-4 mb-3 overflow-x-auto px-4 pb-1">
+            <ul className="flex w-max gap-2" aria-label="Respostas rápidas">
+              {quick.map((q) => (
+                <li key={q}>
+                  <button
+                    type="button"
+                    onClick={() => setNote((n) => appendNote(n, q))}
+                    className="press min-h-10 rounded-full border border-line-strong bg-surface px-3.5 text-[13px] font-medium whitespace-nowrap hover:border-ink-3"
+                  >
+                    + {q}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <textarea
           id="note"
           value={note}
@@ -243,7 +270,7 @@ export function OutcomeForm(p: Props) {
         <button
           type="submit"
           disabled={!ready || saving || save.kind === "conflict"}
-          className="mx-auto flex min-h-14 w-full max-w-md items-center justify-center gap-2 rounded-full bg-primary text-[16px] font-semibold text-white shadow-float transition active:scale-[0.98] disabled:opacity-40 md:mx-0 md:max-w-xs"
+          className="mx-auto flex min-h-14 w-full max-w-md items-center justify-center gap-2 rounded-full bg-primary text-[16px] font-semibold text-on-primary shadow-float transition active:scale-[0.98] disabled:opacity-40 md:mx-0 md:max-w-xs"
         >
           {save.kind === "saving" ? "Salvando…" : save.kind === "saved" ? "Salvo ✓" : save.kind === "error" ? "Tentar novamente" : p.isEdit ? "Salvar alteração" : "Salvar resultado"}
         </button>
@@ -258,7 +285,7 @@ function Choice({ name, value, checked, onChange, label, hint, compact }: { name
       className={cx(
         "relative flex cursor-pointer items-center gap-3.5 rounded-2xl border px-4 transition-[border,box-shadow,background]",
         compact ? "min-h-13 py-3" : "min-h-16 py-3.5",
-        checked ? "border-primary bg-primary text-white shadow-float" : "border-line bg-surface shadow-card hover:border-line-strong",
+        checked ? "border-primary bg-primary text-on-primary shadow-float" : "border-line bg-surface shadow-card hover:border-line-strong",
       )}
     >
       <input type="radio" name={name} value={value} checked={checked} onChange={onChange} className="peer sr-only" />
@@ -270,7 +297,7 @@ function Choice({ name, value, checked, onChange, label, hint, compact }: { name
       </span>
       <span className="min-w-0">
         <span className="block text-[15px] font-semibold">{label}</span>
-        {hint && <span className={cx("block text-[13px]", checked ? "text-white/65" : "text-ink-3")}>{hint}</span>}
+        {hint && <span className={cx("block text-[13px]", checked ? "text-on-primary/65" : "text-ink-3")}>{hint}</span>}
       </span>
       <span aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent" />
     </label>

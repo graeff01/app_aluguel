@@ -10,6 +10,7 @@ import { Alert, Badge, KeyValue, LinkButton, Panel, Section } from "@/components
 import { VisitStatusBadge } from "@/components/visit-badges";
 import { VisitAdminTools } from "./admin-tools";
 import { ContactButtons } from "@/components/contact-buttons";
+import { PropertyCard } from "@/components/property-preview";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Visita" };
@@ -68,6 +69,9 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
       <ContactButtons phone={visit.phoneNormalized} name={visit.clientName} className="-mt-3 mb-6" />
       {awaiting && <p className="-mt-3 mb-5 text-sm text-warn">O horário terminou, mas isso não confirma a visita. Registre o que aconteceu.</p>}
 
+      <div className="mb-6 max-w-xl">
+        <PropertyCard code={visit.propertyCode} photoUrl={visit.property?.photoUrl} title={visit.property?.title} template={settings.propertyUrlTemplate} />
+      </div>
       <div className="mb-10 grid gap-4 lg:grid-cols-2">
         <Panel>
           <h2 className="mb-3 font-semibold">Dados da visita</h2>

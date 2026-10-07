@@ -28,6 +28,7 @@ export const visitListSelect = {
   autoCanceled: true,
   version: true,
   consultant: { select: { id: true, name: true } },
+  property: { select: { photoUrl: true, title: true } },
 } satisfies Prisma.VisitSelect;
 
 export type VisitListItem = Prisma.VisitGetPayload<{ select: typeof visitListSelect }>;
@@ -168,6 +169,7 @@ export async function getVisitDetail(actor: AuthzActor, id: string, now = new Da
       negativeReason: true,
       concludedBy: { select: { name: true } },
       client: { select: { id: true, name: true, identityStatus: true } },
+      property: { select: { photoUrl: true, title: true } },
       opportunity: { include: { events: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true } } } }, responsible: { select: { name: true } }, lostReason: true } },
       history: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true } } } },
       sourceEvent: { select: { description: true, title: true, organizerEmail: true, attendees: true, attendeesOmitted: true, googleStatus: true } },

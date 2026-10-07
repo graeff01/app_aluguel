@@ -11,6 +11,9 @@ import { UserMenu } from "@/components/user-menu";
 import { ForcePasswordDialog } from "@/components/force-password";
 import { pushConfig } from "@/lib/push";
 import { RefreshOnFocus } from "@/components/refresh-on-focus";
+import { BrandSymbol } from "@/components/brand";
+import { UndoToast } from "@/components/undo-toast";
+import { Suspense } from "react";
 import { cx } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -95,9 +98,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-2.5">
             <Link href="/minhas" className="flex items-center gap-2">
-              <span aria-hidden className="grid size-8 place-items-center rounded-xl bg-primary text-sm font-extrabold text-white">
-                V
-              </span>
+              <BrandSymbol className="size-8" />
               <span className="text-[15px] font-bold tracking-[-0.02em]">{settings.productName}</span>
             </Link>
             <div className="flex items-center gap-2">
@@ -112,6 +113,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </header>
         <main className="mx-auto w-full max-w-xl flex-1 px-4 pt-6 pb-16">{children}</main>
+        <Suspense>
+          <UndoToast />
+        </Suspense>
       </div>
     );
   }
@@ -125,9 +129,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 md:px-8">
             <Link href="/" className="flex items-center gap-2 md:hidden">
-              <span aria-hidden className="grid size-8 place-items-center rounded-xl bg-primary text-sm font-extrabold text-white">
-                V
-              </span>
+              <BrandSymbol className="size-8" />
               <span className="text-[15px] font-bold tracking-[-0.02em]">{settings.productName}</span>
             </Link>
             <p className={cx("hidden min-w-0 items-center gap-2 truncate text-[13px] text-ink-3 md:flex", health.level !== "ok" && "text-ink-2")} title={health.message}>
@@ -152,6 +154,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-32 md:px-8 md:pt-9 md:pb-12">{children}</main>
       </div>
       <BottomNav items={global ? managerBottom : consultantNav} />
+      <Suspense>
+        <UndoToast />
+      </Suspense>
     </div>
   );
 }

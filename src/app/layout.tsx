@@ -13,7 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
     description: "Registro de visitas de locação",
     manifest: "/manifest.webmanifest",
     appleWebApp: { capable: true, title: s.productName, statusBarStyle: "default" },
-    icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
+    icons: { icon: [{ url: "/icons/favicon-32.png", sizes: "32x32" }, { url: "/icons/icon-192.png", sizes: "192x192" }], apple: "/icons/apple-touch-icon.png" },
     robots: { index: false, follow: false },
   };
 }
@@ -21,7 +21,10 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#f5f3ef",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f5f3ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#121416" },
+  ],
   viewportFit: "cover",
 };
 

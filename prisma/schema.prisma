@@ -116,6 +116,10 @@ model AppSettings {
   remindersEnabled         Boolean  @default(true)
   /// hora local (America/Sao_Paulo) do envio diário
   reminderHour             Int      @default(9)
+  /// link do imóvel no site; {codigo} é substituído pelo código
+  propertyUrlTemplate      String   @default("https://www.auxiliadorapredial.com.br/imovel/aluguel/{codigo}?tag=8086")
+  /// meta de cobertura de registro (%) exibida no painel
+  coverageGoal             Int      @default(90)
   updatedAt                DateTime @updatedAt
 }
 
@@ -337,6 +341,11 @@ model Property {
   /// texto para preservar zeros à esquerda
   code      String   @unique
   createdAt DateTime @default(now())
+  /// pré-visualização lida da página pública do imóvel (og:image / og:title)
+  photoUrl      String?
+  title         String?
+  pageStatus    String?
+  pageCheckedAt DateTime?
 
   visits        Visit[]
   opportunities Opportunity[]

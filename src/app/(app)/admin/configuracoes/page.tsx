@@ -38,6 +38,14 @@ export default async function SettingsPage() {
           <YesNo name="consultantCanCorrectData" value={s.consultantCanCorrectData} label="Podem corrigir dados (nome, telefone, código) das próprias visitas" />
           <YesNo name="consultantCanCreateVisit" value={s.consultantCanCreateVisit} label="Podem cadastrar visita manual" />
         </Section>
+        <Section title="Imóveis e metas">
+          <Field label="Link do imóvel no site" htmlFor="propertyUrlTemplate" hint="Use {codigo} onde entra o código do imóvel. A foto e o título do anúncio são lidos dessa página (só o código é enviado).">
+            <Input id="propertyUrlTemplate" name="propertyUrlTemplate" defaultValue={s.propertyUrlTemplate} maxLength={300} />
+          </Field>
+          <Field label="Meta de cobertura de registro (%)" htmlFor="coverageGoal" hint="Linha de referência no painel da gestão.">
+            <Input id="coverageGoal" name="coverageGoal" type="number" min={50} max={100} defaultValue={s.coverageGoal} />
+          </Field>
+        </Section>
         <Section title="Lembretes de pendências">
           <YesNo name="remindersEnabled" value={s.remindersEnabled} label="Enviar lembrete diário no celular" hint="Para quem ativou os lembretes no aparelho. Consultora: visitas dela há mais de 24 h sem registro. Gestora: resumo da equipe. Não envia aos domingos." />
           <Field label="Horário do envio (Brasília)" htmlFor="reminderHour">

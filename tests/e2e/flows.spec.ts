@@ -28,12 +28,12 @@ test("consultora registra resultado no celular (tela única)", async ({ page }, 
   // ligar / WhatsApp apenas abrem o contato
   await expect(card.getByRole("link", { name: "Ligar para Cliente Alfa" })).toHaveAttribute("href", "tel:+5551998760001");
   await expect(card.getByRole("link", { name: "Abrir WhatsApp para Cliente Alfa" })).toHaveAttribute("href", "https://wa.me/5551998760001");
-  await card.getByRole("link", { name: /^Registrar resultado/ }).click();
+  await card.getByRole("link", { name: /^Registrar resultado/ }).first().click();
   const save = page.getByRole("button", { name: "Salvar resultado" });
   await expect(save).toBeDisabled();
   await page.getByText("Sim, aconteceu").click();
   await page.getByText("Negativa", { exact: true }).click();
-  await page.getByText("Localização").click();
+  await page.getByText("Localização", { exact: true }).click();
   await page.getByLabel(/Observação/).fill("   ");
   await expect(save).toBeDisabled(); // só espaços não vale
   await page.getByLabel(/Observação/).fill("Achou longe do trabalho.");
@@ -54,7 +54,7 @@ test("sem conexão: não diz salvo e mantém o texto; ao voltar, salva", async (
   test.skip(info.project.name !== "mobile");
   await login(page, "a@e2e.test");
   await page.goto("/minhas");
-  await page.locator("li", { hasText: "Cliente Offline" }).getByRole("link", { name: /^Registrar resultado/ }).click();
+  await page.locator("li", { hasText: "Cliente Offline" }).getByRole("link", { name: /^Registrar resultado/ }).first().click();
   await page.getByText("Cliente não compareceu").click();
   await page.getByLabel(/Observação/).fill("Liguei duas vezes, sem resposta.");
   await context.setOffline(true);
@@ -72,7 +72,7 @@ test("consultora não acessa visita alheia por URL nem por API", async ({ page, 
   test.skip(info.project.name !== "mobile");
   await login(page, "b@e2e.test");
   await expect(page.getByText("Cliente Alfa")).toHaveCount(0);
-  const regHref = await page.locator("li", { hasText: "Cliente Da B" }).getByRole("link", { name: /^Registrar resultado/ }).getAttribute("href");
+  const regHref = await page.locator("li", { hasText: "Cliente Da B" }).getByRole("link", { name: /^Registrar resultado/ }).first().getAttribute("href");
   const href = regHref!.replace(/\/registrar$/, "");
   await page.getByLabel("Menu da conta").click();
   await page.getByRole("button", { name: "Sair" }).click();
@@ -162,4 +162,29 @@ test("senha provisória: troca obrigatória no primeiro acesso", async ({ page }
   await page.getByLabel("Senha").fill("provisoria-123");
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByText("E-mail ou senha incorretos.")).toBeVisible();
+});
+
+test("desfazer em 5 segundos após salvar e respostas rápidas", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await login(page, "b@e2e.test");
+  await page.locator("li", { hasText: "Cliente Da B" }).getByRole("link", { name: /^Registrar resultado/ }).first().click();
+  await page.getByText("Cliente não compareceu").click();
+  await page.getByRole("button", { name: "+ Não compareceu e não atendeu o telefone." }).click();
+  await expect(page.getByLabel(/Observação/)).toHaveValue(/Não compareceu e não atendeu o telefone\./);
+  await page.getByRole("button", { name: "Salvar resultado" }).click();
+  await expect(page).toHaveURL(/\/minhas/);
+  await page.getByRole("button", { name: /^Desfazer/ }).click();
+  await expect(page.getByText("Registro desfeito. A visita voltou a aguardar resultado.")).toBeVisible();
+  await page.goto("/minhas");
+  await expect(page.locator("li", { hasText: "Cliente Da B" }).getByRole("link", { name: /^Registrar resultado/ }).first()).toBeVisible();
+});
+
+test("modo escuro segue o aparelho", async ({ browser }, info) => {
+  test.skip(info.project.name !== "desktop");
+  const ctx = await browser.newContext({ colorScheme: "dark" });
+  const page = await ctx.newPage();
+  await page.goto("/login");
+  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  expect(bg).toBe("rgb(18, 20, 22)");
+  await ctx.close();
 });

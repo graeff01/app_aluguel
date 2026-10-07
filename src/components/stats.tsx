@@ -39,7 +39,7 @@ export function VsTeam({ mine, team, higherIsBetter = true }: { mine: Rate; team
   const diff = Math.round((mine.value - team.value) * 1000) / 10;
   const good = diff === 0 ? null : higherIsBetter ? diff > 0 : diff < 0;
   return (
-    <span className={cx("inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[12px] font-semibold", good === null ? "bg-black/[0.05] text-ink-2" : good ? "bg-good-soft text-good" : "bg-bad-soft text-bad")}>
+    <span className={cx("inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[12px] font-semibold", good === null ? "bg-tint text-ink-2" : good ? "bg-good-soft text-good" : "bg-bad-soft text-bad")}>
       <span aria-hidden>{diff > 0 ? "▲" : diff < 0 ? "▼" : "="}</span>
       {diff > 0 ? "+" : ""}
       {diff.toLocaleString("pt-BR")} p.p. vs equipe ({formatRate(team)})
@@ -65,7 +65,7 @@ export function BarList({ rows, total, empty = "Sem registros no período." }: {
                 {r.extra && <> · {r.extra}</>}
               </span>
             </div>
-            <div className="h-1.5 rounded-full bg-black/[0.05]" aria-hidden>
+            <div className="h-1.5 rounded-full bg-tint" aria-hidden>
               <div className="h-1.5 rounded-full bg-accent" style={{ width: `${(r.value / max) * 100}%`, minWidth: r.value ? 6 : 0 }} />
             </div>
           </>
@@ -73,7 +73,7 @@ export function BarList({ rows, total, empty = "Sem registros no período." }: {
         return (
           <li key={r.label} title={`${r.label}: ${r.value}${pct !== null ? ` (${pct}%)` : ""}`}>
             {r.href ? (
-              <Link href={r.href} className="-m-1.5 block rounded-xl p-1.5 hover:bg-black/[0.03]">
+              <Link href={r.href} className="-m-1.5 block rounded-xl p-1.5 hover:bg-tint">
                 {content}
               </Link>
             ) : (
