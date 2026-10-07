@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+/*
+ * Linguagem visual: grafite + off-white quente, com laranja apenas como destaque.
+ * --accent vem da configuração (Regras e app → Cor de destaque).
+ */
+:root {
+  --accent: #dc7519;
+  --accent-strong: color-mix(in srgb, var(--accent) 78%, #1a1a1a);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, white);
+  --primary: #26292c; /* grafite: botões e ações principais */
+  --bg: #f5f3ef;
+  --surface: #ffffff;
+  --surface-2: #faf9f6;
+  --ink: #1d2023;
+  --ink-2: #4d535a;
+  --ink-3: #7c828a;
+  --line: #e8e4dd;
+  --line-strong: #d9d3c9;
+  --good: #3f7a34;
+  --good-soft: #eaf3e5;
+  --bad: #a8402d;
+  --bad-soft: #f8e9e5;
+  --warn: #9a5a08;
+  --warn-soft: #fbf0df;
+  --shadow: 0 1px 2px rgb(29 32 35 / 0.04), 0 4px 16px -4px rgb(29 32 35 / 0.06);
+  --shadow-lg: 0 2px 4px rgb(29 32 35 / 0.04), 0 16px 40px -12px rgb(29 32 35 / 0.14);
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --shadow-card: var(--shadow);
+  --shadow-float: var(--shadow-lg);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 16px;
+  font-feature-settings: "tnum" 0;
+}
+::selection {
+  background: var(--accent-soft);
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.pb-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+}
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+details > summary {
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

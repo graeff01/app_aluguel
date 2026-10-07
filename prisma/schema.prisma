@@ -1,0 +1,547 @@
+// Visitas Locação — modelo de dados
+// Convenções: datas/horas em UTC (timestamptz); dia operacional calculado em America/Sao_Paulo.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────── Usuários e acesso ─────────────────────────────
+
+enum Role {
+  ADMIN
+  MANAGER
+  CONSULTANT
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  /// e-mail de login (minúsculo)
+  email         String    @unique
+  passwordHash  String?
+  role          Role
+  active        Boolean   @default(true)
+  deactivatedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  aliases          UserEmailAlias[]
+  sessions         Session[]
+  resetTokens      PasswordResetToken[]
+  visits           Visit[]                @relation("VisitConsultant")
+  realizedVisits   Visit[]                @relation("VisitRealizedBy")
+  concludedVisits  Visit[]                @relation("VisitConcludedBy")
+  outcomeHistory   VisitOutcomeHistory[]
+  opportunities    Opportunity[]          @relation("OppResponsible")
+  closedOpps       Opportunity[]          @relation("OppClosedResponsible")
+  oppEvents        OpportunityEvent[]
+  auditLogs        AuditLog[]
+  syncRuns         SyncRun[]
+  googleConnection GoogleConnection[]
+}
+
+/// E-mails usados para reconhecer a consultora entre os convidados do evento.
+model UserEmailAlias {
+  id        String   @id @default(cuid())
+  userId    String
+  /// sempre minúsculo, sem espaços
+  email     String   @unique
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Session {
+  /// SHA-256 do token do cookie (o token em si nunca é guardado)
+  id         String   @id
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  /// SHA-256 do token
+  id          String    @id
+  userId      String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  createdById String?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Limitação de tentativas (login, sync manual, reset).
+model RateLimit {
+  key     String   @id
+  count   Int
+  resetAt DateTime
+}
+
+// ───────────────────────────── Configuração ─────────────────────────────
+
+model AppSettings {
+  id                       Int      @id @default(1)
+  productName              String   @default("Visitas Locação")
+  primaryColor             String   @default("#dc7519")
+  timezone                 String   @default("America/Sao_Paulo")
+  syncIntervalMinutes      Int      @default(5)
+  syncPastDays             Int      @default(30)
+  syncFutureDays           Int      @default(90)
+  manualSyncMinSeconds     Int      @default(60)
+  /// Visitas anteriores a esta data (dia operacional) não geram cobrança de resultado.
+  resultsStartDate         DateTime @db.Date
+  /// Regras de permissão configuráveis (ver src/lib/authz.ts)
+  consultantCanUpdateOpp   Boolean  @default(true)
+  consultantCanCreateVisit Boolean  @default(true)
+  consultantCanCorrectData Boolean  @default(true)
+  noteMaxLength            Int      @default(2000)
+  updatedAt                DateTime @updatedAt
+}
+
+enum PatternKind {
+  /// prefixo do título que identifica visita comercial (ex.: "visita clt")
+  VISIT_PREFIX
+  /// termo que exclui o evento (ex.: "visita tecnica", "almoco")
+  EXCLUDE
+  /// termo que torna o evento ambíguo → revisão (ex.: "visita")
+  AMBIGUOUS
+}
+
+model EventPattern {
+  id        String      @id @default(cuid())
+  kind      PatternKind
+  /// texto já normalizado (minúsculo, sem acento, espaços simples)
+  pattern   String
+  label     String?
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+
+  @@unique([kind, pattern])
+}
+
+enum ReasonKind {
+  VISIT_NEGATIVE
+  OPPORTUNITY_LOST
+}
+
+model Reason {
+  id        String     @id @default(cuid())
+  kind      ReasonKind
+  label     String
+  active    Boolean    @default(true)
+  sortOrder Int        @default(0)
+  /// "outro" exige observação descritiva (a observação já é sempre obrigatória)
+  createdAt DateTime   @default(now())
+
+  visits        Visit[]
+  opportunities Opportunity[]
+
+  @@unique([kind, label])
+}
+
+// ───────────────────────────── Google ─────────────────────────────
+
+enum ConnectionStatus {
+  CONNECTED
+  NEEDS_RECONNECT
+  DISCONNECTED
+}
+
+model GoogleConnection {
+  id                   String           @id @default(cuid())
+  googleEmail          String
+  googleSub            String
+  /// AES-256-GCM (ver src/lib/crypto.ts). Nunca enviado ao navegador.
+  refreshTokenEnc      String?
+  accessTokenEnc       String?
+  accessTokenExpiresAt DateTime?
+  scopes               String
+  status               ConnectionStatus @default(CONNECTED)
+  statusDetail         String?
+  calendarId           String?
+  calendarSummary      String?
+  calendarAccessRole   String?
+  connectedById        String?
+  connectedBy          User?            @relation(fields: [connectedById], references: [id])
+  connectedAt          DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+}
+
+/// Batimento do worker (diagnóstico: worker ativo?)
+model WorkerHeartbeat {
+  id        String   @id
+  beatAt    DateTime
+  startedAt DateTime
+  version   String?
+}
+
+model SyncState {
+  calendarId          String    @id
+  syncToken           String?
+  windowStart         DateTime?
+  windowEnd           DateTime?
+  lastFullSyncAt      DateTime?
+  lastReconcileAt     DateTime?
+  lastSuccessAt       DateTime?
+  lastAttemptAt       DateTime?
+  consecutiveFailures Int       @default(0)
+  nextAttemptAt       DateTime?
+  lastErrorCode       String?
+  updatedAt           DateTime  @updatedAt
+}
+
+enum SyncTrigger {
+  SCHEDULED
+  MANUAL
+}
+
+enum SyncRunStatus {
+  QUEUED
+  RUNNING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+model SyncRun {
+  id            String        @id @default(cuid())
+  trigger       SyncTrigger
+  status        SyncRunStatus
+  mode          String?
+  requestedById String?
+  requestedBy   User?         @relation(fields: [requestedById], references: [id])
+  createdAt     DateTime      @default(now())
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  /// contagens apenas (sem dados pessoais)
+  stats         Json?
+  errorCode     String?
+  errorMessage  String?
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+enum EventClass {
+  VISIT
+  AMBIGUOUS
+  IRRELEVANT
+}
+
+enum ReviewDecision {
+  ACCEPTED_AS_VISIT
+  REJECTED
+}
+
+/// Espelho mínimo de eventos/ocorrências do Google.
+/// Eventos IRRELEVANT guardam apenas identificadores e status (sem título/descrição/convidados).
+model SourceEvent {
+  id                String          @id @default(cuid())
+  calendarId        String
+  /// id da ocorrência (para recorrências, é o id da instância, não o da série)
+  googleEventId     String
+  recurringEventId  String?
+  iCalUID           String?
+  originalStartTime DateTime?
+  googleStatus      String
+  googleUpdatedAt   DateTime?
+  etag              String?
+  classification    EventClass
+  reviewDecision    ReviewDecision?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  startAt           DateTime?
+  endAt             DateTime?
+  allDay            Boolean         @default(false)
+  title             String?
+  /// texto puro, sanitizado, sem bloco do Meet
+  description       String?
+  organizerEmail    String?
+  /// [{email, responseStatus}] apenas para eventos de visita/ambíguos
+  attendees         Json?
+  attendeesOmitted  Boolean         @default(false)
+  parsed            Json?
+  missingSince      DateTime?
+  firstSeenAt       DateTime        @default(now())
+  lastSeenAt        DateTime        @default(now())
+
+  visit Visit?
+
+  @@unique([calendarId, googleEventId])
+  @@index([classification, reviewDecision])
+  @@index([iCalUID])
+  @@index([startAt])
+}
+
+// ───────────────────────────── Clientes e imóveis ─────────────────────────────
+
+enum IdentityStatus {
+  /// telefone validado sem ambiguidade
+  CONFIRMED
+  /// sem telefone válido ou vínculo a confirmar
+  PENDING
+}
+
+model Client {
+  id             String         @id @default(cuid())
+  name           String
+  identityStatus IdentityStatus @default(PENDING)
+  mergedIntoId   String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  phones        ClientPhone[]
+  visits        Visit[]
+  opportunities Opportunity[]
+
+  @@index([identityStatus])
+}
+
+model ClientPhone {
+  id         String   @id @default(cuid())
+  clientId   String
+  raw        String
+  /// E.164 quando validado; null quando inválido
+  normalized String?
+  valid      Boolean
+  createdAt  DateTime @default(now())
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, raw])
+  @@index([normalized])
+}
+
+model Property {
+  id        String   @id @default(cuid())
+  /// texto para preservar zeros à esquerda
+  code      String   @unique
+  createdAt DateTime @default(now())
+
+  visits        Visit[]
+  opportunities Opportunity[]
+}
+
+// ───────────────────────────── Visitas ─────────────────────────────
+
+enum VisitOrigin {
+  GOOGLE
+  MANUAL
+}
+
+enum VisitStatus {
+  SCHEDULED
+  DONE
+  NO_SHOW
+  CANCELED
+  RESCHEDULED
+}
+
+enum Evaluation {
+  POSITIVE
+  NEGATIVE
+  UNDECIDED
+}
+
+enum AssignmentStatus {
+  AUTO
+  MANUAL
+  NEEDS_REVIEW
+}
+
+enum ClientMatch {
+  /// cliente novo criado com telefone válido
+  NEW_CONFIRMED
+  /// mesmo telefone + nome compatível
+  PHONE_MATCH
+  /// telefone compartilhado ou nome incompatível → revisão
+  SUGGESTED
+  /// sem telefone válido
+  NO_PHONE
+  /// vínculo confirmado por pessoa (sync não altera)
+  CONFIRMED_MANUAL
+}
+
+enum SyncConflict {
+  NONE
+  CANCELED_IN_GOOGLE
+  DELETED_IN_GOOGLE
+  NO_LONGER_VISIT
+  CHANGED_AFTER_CONCLUSION
+  POSSIBLE_RECREATION
+}
+
+model Visit {
+  id               String           @id @default(cuid())
+  origin           VisitOrigin
+  sourceEventId    String?          @unique
+  sourceEvent      SourceEvent?     @relation(fields: [sourceEventId], references: [id])
+  scheduledStart   DateTime
+  scheduledEnd     DateTime
+  clientName       String?
+  phoneRaw         String?
+  phoneNormalized  String?
+  propertyCode     String?
+  /// número isolado antes de "cod" — significado não confirmado
+  externalRef      String?
+  /// campos corrigidos no app; sync nunca sobrescreve estes
+  manualFields     String[]         @default([])
+  consultantId     String?
+  consultant       User?            @relation("VisitConsultant", fields: [consultantId], references: [id])
+  assignmentStatus AssignmentStatus
+  assignmentNote   String?
+  clientId         String?
+  client           Client?          @relation(fields: [clientId], references: [id])
+  clientMatch      ClientMatch      @default(NO_PHONE)
+  /// ids de clientes candidatos quando SUGGESTED
+  clientCandidates String[]         @default([])
+  propertyId       String?
+  property         Property?        @relation(fields: [propertyId], references: [id])
+  opportunityId    String?
+  opportunity      Opportunity?     @relation(fields: [opportunityId], references: [id])
+
+  status           VisitStatus      @default(SCHEDULED)
+  evaluation       Evaluation?
+  negativeReasonId String?
+  negativeReason   Reason?          @relation(fields: [negativeReasonId], references: [id])
+  note             String?
+  concludedAt      DateTime?
+  concludedById    String?
+  concludedBy      User?            @relation("VisitConcludedBy", fields: [concludedById], references: [id])
+  /// consultora responsável no momento da realização (atribuição de métricas)
+  realizedById     String?
+  realizedBy       User?            @relation("VisitRealizedBy", fields: [realizedById], references: [id])
+  /// cancelamento automático por cancelamento no Google (antes de conclusão)
+  autoCanceled     Boolean          @default(false)
+  /// excluída dos indicadores pela gestora/admin (ex.: não era visita)
+  excluded         Boolean          @default(false)
+  syncConflict     SyncConflict     @default(NONE)
+  conflictDetail   Json?
+  /// controle de concorrência otimista
+  version          Int              @default(1)
+  /// última chave de idempotência aceita na conclusão
+  lastRequestId    String?
+  /// chave de idempotência do cadastro manual
+  createRequestId  String?          @unique
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  history VisitOutcomeHistory[]
+
+  @@index([consultantId, scheduledStart])
+  @@index([status, scheduledEnd])
+  @@index([scheduledStart])
+  @@index([clientId])
+  @@index([propertyId])
+  @@index([opportunityId])
+  @@index([phoneNormalized])
+}
+
+/// Histórico de conclusões/alterações de resultado (observações anteriores).
+model VisitOutcomeHistory {
+  id               String       @id @default(cuid())
+  visitId          String
+  visit            Visit        @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  status           VisitStatus
+  evaluation       Evaluation?
+  negativeReasonId String?
+  note             String?
+  authorId         String?
+  author           User?        @relation(fields: [authorId], references: [id])
+  createdAt        DateTime     @default(now())
+
+  @@index([visitId, createdAt])
+}
+
+// ───────────────────────────── Oportunidades ─────────────────────────────
+
+enum OpportunityStatus {
+  FOLLOW_UP
+  DOCS_REVIEW
+  CLOSED_WON
+  LOST
+}
+
+enum LostOrigin {
+  /// encerrada por visita avaliada como negativa
+  VISIT_NEGATIVE
+  /// perda posterior registrada no andamento
+  LATER
+}
+
+model Opportunity {
+  id                   String            @id @default(cuid())
+  clientId             String
+  client               Client            @relation(fields: [clientId], references: [id])
+  propertyId           String
+  property             Property          @relation(fields: [propertyId], references: [id])
+  cycle                Int               @default(1)
+  status               OpportunityStatus @default(FOLLOW_UP)
+  responsibleId        String?
+  responsible          User?             @relation("OppResponsible", fields: [responsibleId], references: [id])
+  /// data da primeira visita realizada (coorte)
+  firstDoneVisitAt     DateTime
+  closedAt             DateTime?         @db.Date
+  closedResponsibleId  String?
+  closedResponsible    User?             @relation("OppClosedResponsible", fields: [closedResponsibleId], references: [id])
+  lostAt               DateTime?
+  lostOrigin           LostOrigin?
+  lostReasonId         String?
+  lostReason           Reason?           @relation(fields: [lostReasonId], references: [id])
+  lostNote             String?
+  version              Int               @default(1)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  visits Visit[]
+  events OpportunityEvent[]
+
+  @@unique([clientId, propertyId, cycle])
+  @@index([status])
+  @@index([responsibleId])
+  @@index([firstDoneVisitAt])
+  @@index([closedAt])
+  // índice único parcial (1 ativa por cliente+imóvel) criado na migração SQL
+}
+
+model OpportunityEvent {
+  id            String             @id @default(cuid())
+  opportunityId String
+  opportunity   Opportunity        @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  fromStatus    OpportunityStatus?
+  toStatus      OpportunityStatus
+  note          String?
+  authorId      String?
+  author        User?              @relation(fields: [authorId], references: [id])
+  createdAt     DateTime           @default(now())
+
+  @@index([opportunityId, createdAt])
+}
+
+// ───────────────────────────── Auditoria ─────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  changes    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
