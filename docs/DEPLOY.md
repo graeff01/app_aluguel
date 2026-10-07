@@ -82,6 +82,12 @@ Opção A (tela): acesse `https://SEU-DOMINIO/configuracao-inicial`, informe o `
 
 Opção B (terminal): `railway run --service web npm run admin:create -- --email pessoa@dominio --name "Nome"` (pede a senha; nunca há senha padrão).
 
+### Usuários com senha provisória
+
+Na tela **Usuários**, preencha “Senha provisória” ao criar (ou use “Definir senha provisória” no usuário). No primeiro acesso a pessoa é obrigada a criar a própria senha; até lá o app e as APIs ficam bloqueados para ela. Pelo terminal (com acesso ao banco): `TEMP_PASSWORD=... npx tsx scripts/create-user.ts --email x@y --name "Nome" --role MANAGER`.
+
+O Postgres de produção **não tem acesso público**. Para rodar scripts, abra um proxy TCP temporário no serviço Postgres (Railway → Settings → Networking) e remova logo após o uso.
+
 ### Configuração no app (como admin)
 
 1. **Usuários** → crie a gestora e as consultoras. Para cada consultora, cadastre em “E-mails convidados na agenda” **exatamente** o e-mail que aparece como convidado nos eventos. O app gera um link de senha (24 h, uso único) — envie por canal seguro.
