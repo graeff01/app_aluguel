@@ -21,6 +21,7 @@ export async function apiHandler(req: NextRequest, fn: (actor: Actor) => Promise
   if (opts.mutation && !checkOrigin(req)) return NextResponse.json({ error: "FORBIDDEN", message: "Origem inválida." }, { status: 403 });
   const actor = await getActor();
   if (!actor) return NextResponse.json({ error: "UNAUTHENTICATED", message: "Sessão expirada. Entre novamente." }, { status: 401 });
+  if (actor.mustChangePassword) return NextResponse.json({ error: "FORBIDDEN", message: "Defina sua senha pessoal antes de continuar." }, { status: 403 });
   try {
     const data = await fn(actor);
     return NextResponse.json(data ?? { ok: true }, { headers: { "Cache-Control": "no-store" } });

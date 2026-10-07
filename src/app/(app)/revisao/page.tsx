@@ -28,8 +28,23 @@ export default async function ReviewPage() {
   const total = q.assignment.length + q.conflicts.length + q.ambiguous.length + q.suggested.length + q.missing.length;
   return (
     <>
-      <PageHeader title="Revisão" subtitle={total ? `${total} itens aguardando decisão` : "Nada para revisar"} />
+      <PageHeader title="Revisão" subtitle={total ? `${total} ${total === 1 ? "item aguardando" : "itens aguardando"} decisão` : undefined} />
+      {total === 0 && (
+        <Empty title="Tudo em dia" icon="✓">
+          Nenhuma atribuição, conflito, evento ambíguo ou vínculo de cliente aguardando decisão.
+          {q.pendingClients > 0 && (
+            <>
+              {" "}
+              <Link href="/clientes?identidade=PENDING" className="font-semibold text-ink underline">
+                {q.pendingClients} cadastros com identificação pendente
+              </Link>
+              .
+            </>
+          )}
+        </Empty>
+      )}
 
+      {q.assignment.length > 0 && (
       <Section title={`Atribuição de consultora (${q.assignment.length})`} id="atribuicao">
         {q.assignment.length === 0 ? (
           <Empty title="Todas as visitas têm consultora" />
@@ -45,7 +60,9 @@ export default async function ReviewPage() {
           </ul>
         )}
       </Section>
+      )}
 
+      {q.conflicts.length > 0 && (
       <Section title={`Conflitos com a agenda (${q.conflicts.length})`} id="conflitos">
         {q.conflicts.length === 0 ? (
           <Empty title="Sem conflitos" />
@@ -81,7 +98,9 @@ export default async function ReviewPage() {
           </ul>
         )}
       </Section>
+      )}
 
+      {q.ambiguous.length > 0 && (
       <Section title={`Eventos possivelmente de visita (${q.ambiguous.length})`} id="ambiguos">
         {q.ambiguous.length === 0 ? (
           <Empty title="Nenhum evento ambíguo" />
@@ -98,7 +117,9 @@ export default async function ReviewPage() {
           </ul>
         )}
       </Section>
+      )}
 
+      {q.suggested.length > 0 && (
       <Section title={`Vínculo de clientes a confirmar (${q.suggested.length})`} id="clientes" action={<Link href="/clientes?identidade=PENDING" className="text-sm text-primary">{q.pendingClients} cadastros com identificação pendente →</Link>}>
         {q.suggested.length === 0 ? (
           <Empty title="Nenhum vínculo a confirmar" />
@@ -114,7 +135,9 @@ export default async function ReviewPage() {
           </ul>
         )}
       </Section>
+      )}
 
+      {q.missing.length > 0 && (
       <Section title={`Dados ausentes (${q.missing.length})`} id="dados">
         {q.missing.length === 0 ? (
           <Empty title="Sem dados ausentes" />
@@ -135,6 +158,7 @@ export default async function ReviewPage() {
           </ul>
         )}
       </Section>
+      )}
     </>
   );
 }

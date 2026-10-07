@@ -13,6 +13,7 @@ const hash = await hashPassword(PW);
 await db.user.create({ data: { name: "Gestora E2E", email: "gestora@e2e.test", role: "MANAGER", passwordHash: hash } });
 const a = await db.user.create({ data: { name: "Consultora A", email: "a@e2e.test", role: "CONSULTANT", passwordHash: hash } });
 const b = await db.user.create({ data: { name: "Consultora B", email: "b@e2e.test", role: "CONSULTANT", passwordHash: hash } });
+await db.user.create({ data: { name: "Nova Gestora", email: "nova@e2e.test", role: "MANAGER", passwordHash: await hashPassword("provisoria-123"), mustChangePassword: true } });
 const admin = await db.user.create({ data: { name: "Admin E2E", email: "admin@e2e.test", role: "ADMIN", passwordHash: hash } });
 
 const ago = (h: number) => toLocalInput(new Date(Date.now() - h * 3600_000));

@@ -11,6 +11,7 @@ export const initialState: ActionState = { ok: false };
 export async function runAction(fn: (actor: Actor) => Promise<string | void>): Promise<ActionState> {
   const actor = await getActor();
   if (!actor) return { ok: false, message: "Sua sessão expirou. Entre novamente.", at: Date.now() };
+  if (actor.mustChangePassword) return { ok: false, message: "Defina sua senha pessoal antes de continuar.", at: Date.now() };
   try {
     const message = await fn(actor);
     return { ok: true, message: message || "Salvo.", at: Date.now() };

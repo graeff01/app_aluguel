@@ -8,6 +8,7 @@ import { DETAIL_ROLES, type GCalendar } from "@/server/sync/types";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Alert, Badge, KeyValue, PageHeader, Panel, Section } from "@/components/ui";
 import { disconnectGoogleAction, selectCalendarAction } from "@/app/actions/admin";
+import { GoogleSetupGuide } from "./setup-guide";
 
 export const metadata = { title: "Agenda Google" };
 
@@ -42,7 +43,11 @@ export default async function GooglePage({ searchParams }: { searchParams: Promi
       <PageHeader title="Agenda Google" subtitle="Acesso somente leitura. A conexão do Google é separada do login do app." />
       {sp.ok && <Alert tone="good" title="Conta conectada. Agora selecione o calendário central." />}
       {sp.erro && <Alert tone="bad" title="Não foi possível conectar">{ERRORS[sp.erro] ?? "Erro desconhecido."}</Alert>}
-      {!googleConfigured() && <Alert tone="warn" title="Integração não configurada no servidor">{ERRORS.nao_configurado}</Alert>}
+      {!(conn?.status === "CONNECTED" && conn.calendarId) && (
+        <Section title="Configuração passo a passo">
+          <GoogleSetupGuide configured={googleConfigured()} connected={conn?.status === "CONNECTED"} calendarSelected={!!conn?.calendarId} />
+        </Section>
+      )}
       {conn?.status === "NEEDS_RECONNECT" && <Alert tone="bad" title="Reconexão necessária">{conn.statusDetail ?? "A autorização expirou ou foi revogada."} O app e os registros continuam funcionando; apenas a importação está parada.</Alert>}
       {conn?.statusDetail && conn.status === "CONNECTED" && <Alert tone="warn" title="Atenção">{conn.statusDetail}</Alert>}
 
@@ -65,9 +70,13 @@ export default async function GooglePage({ searchParams }: { searchParams: Promi
             A conta conectada precisa ter acesso aos <strong>detalhes</strong> do calendário central (dona do calendário ou compartilhado com “Ver todos os detalhes do evento”). Estar logado no navegador com outra conta não altera quem é a dona do calendário.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <a href="/api/google/connect" className="inline-flex min-h-12 items-center rounded-full bg-primary px-6 font-semibold text-white shadow-float">
-              {conn ? "Reconectar / trocar conta" : "Conectar conta Google"}
-            </a>
+            {googleConfigured() ? (
+              <a href="/api/google/connect" className="inline-flex min-h-12 items-center rounded-full bg-primary px-6 font-semibold text-white shadow-float">
+                {conn ? "Reconectar / trocar conta" : "Conectar conta Google"}
+              </a>
+            ) : (
+              <span className="inline-flex min-h-12 items-center rounded-full bg-black/[0.05] px-6 font-semibold text-ink-3">Conectar conta Google (aguardando credenciais)</span>
+            )}
             {conn && (
               <ActionForm action={disconnectGoogleAction} confirm="Desconectar a conta Google? A importação para; registros são mantidos.">
                 <SubmitButton variant="danger">Desconectar</SubmitButton>

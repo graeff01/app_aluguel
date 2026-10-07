@@ -7,6 +7,7 @@ import { AppError } from "@/lib/errors";
 import { audit } from "@/lib/audit";
 import { normalizeEmail, normalizeText } from "@/lib/text";
 import { randomToken, sha256 } from "@/lib/crypto";
+import { hashPassword, passwordProblem } from "@/lib/password";
 import { env } from "@/lib/env";
 import { dateOnlyFromKey, isDayKey } from "@/lib/time";
 import type { PatternKind, ReasonKind, Role } from "@/generated/prisma/enums";
@@ -48,11 +49,25 @@ export async function createUserAction(_: ActionState, fd: FormData) {
       for (const a of aliases) if (!EMAIL_RE.test(a)) throw new AppError("VALIDATION", `E-mail da agenda inválido: ${a}`);
       const clash = await db.userEmailAlias.findFirst({ where: { email: { in: aliases } } });
       if (clash) throw new AppError("VALIDATION", `O e-mail ${clash.email} já está vinculado a outro usuário.`);
+      const temp = str(fd, "tempPassword");
+      if (temp) {
+        const problem = passwordProblem(temp);
+        if (problem) throw new AppError("VALIDATION", problem, { tempPassword: problem });
+      }
       const user = await db.$transaction(async (tx) => {
-        const u = await tx.user.create({ data: { name, email, role, aliases: { create: aliases.map((e) => ({ email: e })) } } });
+        const u = await tx.user.create({
+          data: {
+            name,
+            email,
+            role,
+            ...(temp ? { passwordHash: await hashPassword(temp), mustChangePassword: true } : {}),
+            aliases: { create: aliases.map((e) => ({ email: e })) },
+          },
+        });
         await audit(tx, { actorId: actor.id, action: "user.created", entityType: "User", entityId: u.id, changes: { role, aliases } });
         return u;
       });
+      if (temp) return "Usuário criado com senha provisória. No primeiro acesso será obrigatório definir uma senha pessoal.";
       const link = await issueResetLink(user.id, actor.id);
       return `Usuário criado. Envie este link para a pessoa definir a senha (vale 24 h, uso único): ${link}`;
     }),
@@ -303,5 +318,23 @@ export async function fullSyncAction(_: ActionState, _fd: FormData) {
     await db.syncState.updateMany({ where: { calendarId: conn.calendarId }, data: { syncToken: null } });
     const r = await requestManualSync(actor.id);
     return r.created ? "Sincronização completa solicitada." : "Já há uma sincronização pendente; a próxima será completa.";
+  });
+}
+
+export async function tempPasswordAction(_: ActionState, fd: FormData) {
+  return runAction(async (actor) => {
+    const target = await db.user.findUnique({ where: { id: str(fd, "userId") } });
+    if (!target) throw new AppError("NOT_FOUND", "Usuário não encontrado.");
+    assert(canManageUser(actor, target.role));
+    if (target.id === actor.id) throw new AppError("VALIDATION", "Use “Perfil e senha” para alterar a sua própria senha.");
+    const temp = str(fd, "tempPassword");
+    const problem = passwordProblem(temp);
+    if (problem) throw new AppError("VALIDATION", problem, { tempPassword: problem });
+    await db.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: target.id }, data: { passwordHash: await hashPassword(temp), mustChangePassword: true } });
+      await tx.session.deleteMany({ where: { userId: target.id } });
+      await audit(tx, { actorId: actor.id, action: "user.temp_password_set", entityType: "User", entityId: target.id });
+    });
+    return "Senha provisória definida. A pessoa vai criar a própria senha no próximo acesso.";
   });
 }

@@ -14,7 +14,7 @@ export function sessionCookieName() {
   return env.secureCookies ? "__Host-vl_session" : "vl_session";
 }
 
-export type Actor = { id: string; name: string; email: string; role: Role };
+export type Actor = { id: string; name: string; email: string; role: Role; mustChangePassword: boolean };
 
 export async function createSession(userId: string) {
   const token = randomToken(32);
@@ -56,7 +56,7 @@ export const getActor = cache(async (): Promise<Actor | null> => {
     });
   }
   const u = session.user;
-  return { id: u.id, name: u.name, email: u.email, role: u.role };
+  return { id: u.id, name: u.name, email: u.email, role: u.role, mustChangePassword: u.mustChangePassword };
 });
 
 /** IP do cliente (atrás do proxy do Railway) — usado só para limitação de tentativas. */

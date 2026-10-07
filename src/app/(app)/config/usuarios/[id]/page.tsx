@@ -8,7 +8,7 @@ import { ROLE_LABEL } from "@/lib/labels";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { InlineAction } from "@/components/inline-action";
 import { Field, Input, PageHeader, Section, Select } from "@/components/ui";
-import { addAliasAction, removeAliasAction, resetLinkAction, updateUserAction } from "@/app/actions/admin";
+import { addAliasAction, removeAliasAction, resetLinkAction, tempPasswordAction, updateUserAction } from "@/app/actions/admin";
 
 export const metadata = { title: "Usuário" };
 
@@ -78,6 +78,14 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
               <ActionForm action={resetLinkAction}>
                 <input type="hidden" name="userId" value={u.id} />
                 <SubmitButton variant="secondary">Gerar link de redefinição</SubmitButton>
+              </ActionForm>
+              <div className="my-5 border-t border-line" />
+              <ActionForm action={tempPasswordAction} resetOnSuccess>
+                <input type="hidden" name="userId" value={u.id} />
+                <Field label="Ou definir senha provisória" htmlFor="tempPassword" hint="A pessoa entra com ela e cria a própria senha no primeiro acesso.">
+                  <Input id="tempPassword" name="tempPassword" type="text" autoComplete="off" required minLength={10} />
+                </Field>
+                <SubmitButton variant="secondary">Definir senha provisória</SubmitButton>
               </ActionForm>
             </div>
           </Section>

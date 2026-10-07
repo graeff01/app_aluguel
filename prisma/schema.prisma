@@ -24,6 +24,8 @@ model User {
   /// e-mail de login (minúsculo)
   email         String    @unique
   passwordHash  String?
+  /// senha provisória definida pela gestão: troca obrigatória no próximo login
+  mustChangePassword Boolean @default(false)
   role          Role
   active        Boolean   @default(true)
   deactivatedAt DateTime?

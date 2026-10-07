@@ -31,6 +31,7 @@ export default async function UsersPage() {
                   <Badge>{ROLE_LABEL[u.role]}</Badge>
                   {!u.active && <Badge tone="bad">Desativado</Badge>}
                   {!u.passwordHash && u.active && <Badge tone="warn">Sem senha</Badge>}
+                  {u.mustChangePassword && u.active && <Badge tone="accent">Senha provisória</Badge>}
                 </span>
               </Link>
             </li>
@@ -55,7 +56,10 @@ export default async function UsersPage() {
           <Field label="E-mails convidados na agenda (consultoras)" htmlFor="aliases" hint="Separe por vírgula. Use exatamente o e-mail que aparece como convidado nos eventos.">
             <Input id="aliases" name="aliases" />
           </Field>
-          <SubmitButton>Criar e gerar link de senha</SubmitButton>
+          <Field label="Senha provisória (opcional)" htmlFor="tempPassword" hint="Com senha provisória, a pessoa entra com ela e é obrigada a criar a própria no primeiro acesso. Sem ela, o app gera um link de uso único.">
+            <Input id="tempPassword" name="tempPassword" type="text" autoComplete="off" minLength={10} />
+          </Field>
+          <SubmitButton>Criar usuário</SubmitButton>
         </ActionForm>
       </Section>
     </>

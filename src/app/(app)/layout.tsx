@@ -8,12 +8,15 @@ import { syncHealth } from "@/server/sync-status";
 import { BottomNav, SideNav, type NavItem } from "@/components/nav";
 import { OfflineBanner } from "@/components/online-status";
 import { UserMenu } from "@/components/user-menu";
+import { ForcePasswordDialog } from "@/components/force-password";
 import { cx } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const actor = await requireActor();
+  // senha provisória: nada do app é exibido até a troca
+  if (actor.mustChangePassword) return <div className="min-h-dvh bg-bg"><ForcePasswordDialog name={actor.name} /></div>;
   const settings = await getSettings();
   const now = new Date();
   const global = hasGlobalView(actor);
@@ -78,6 +81,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     : [{ items: [...consultantNav, { href: "/visitas/nova", label: "Visita manual", icon: "plus" } as NavItem] }];
 
   const dot = { ok: "bg-good", stale: "bg-accent", error: "bg-bad", off: "bg-ink-3/50" }[health.level];
+  // consultora só vê o status da agenda quando há problema que a afeta
+  const showHealth = global || health.level === "stale" || health.level === "error";
 
   return (
     <div className="flex min-h-dvh">
@@ -93,12 +98,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <span className="text-[15px] font-bold tracking-[-0.02em]">{settings.productName}</span>
             </Link>
             <p className={cx("hidden min-w-0 items-center gap-2 truncate text-[13px] text-ink-3 md:flex", health.level !== "ok" && "text-ink-2")} title={health.message}>
-              <span aria-hidden className={cx("size-2 shrink-0 rounded-full", dot)} />
-              {health.message}
+              {showHealth && (
+                <>
+                  <span aria-hidden className={cx("size-2 shrink-0 rounded-full", dot)} />
+                  {health.message}
+                </>
+              )}
             </p>
             <div className="flex items-center gap-2">
-              <span aria-hidden className={cx("size-2 rounded-full md:hidden", dot)} title={health.message} />
-              <span className="sr-only md:hidden">{health.message}</span>
+              {showHealth && (
+                <>
+                  <span aria-hidden className={cx("size-2 rounded-full md:hidden", dot)} title={health.message} />
+                  <span className="sr-only md:hidden">{health.message}</span>
+                </>
+              )}
               <UserMenu name={actor.name} email={actor.email} role={actor.role} showProfile={global} />
             </div>
           </div>

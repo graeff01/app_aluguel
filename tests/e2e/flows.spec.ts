@@ -118,3 +118,29 @@ test("PWA: manifest, ícones locais, service worker e página offline", async ({
   });
   expect(registered).toBe(true);
 });
+
+test("senha provisória: troca obrigatória no primeiro acesso", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  await page.goto("/login");
+  await page.getByLabel("E-mail").fill("nova@e2e.test");
+  await page.getByLabel("Senha").fill("provisoria-123");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("Crie sua senha.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Painel da equipe" })).toHaveCount(0); // app bloqueado
+  await dialog.getByLabel("Nova senha", { exact: true }).fill("provisoria-123");
+  await dialog.getByLabel("Confirme a nova senha").fill("provisoria-123");
+  await dialog.getByRole("button", { name: "Salvar e continuar" }).click();
+  await expect(dialog.getByText("Escolha uma senha diferente da provisória.")).toBeVisible();
+  await dialog.getByLabel("Nova senha", { exact: true }).fill("minha-senha-nova-42");
+  await dialog.getByLabel("Confirme a nova senha").fill("minha-senha-nova-42");
+  await dialog.getByRole("button", { name: "Salvar e continuar" }).click();
+  await expect(page.getByRole("heading", { name: "Painel da equipe" })).toBeVisible();
+  // a provisória deixou de valer
+  await page.getByLabel("Menu da conta").click();
+  await page.getByRole("button", { name: "Sair" }).click();
+  await page.getByLabel("E-mail").fill("nova@e2e.test");
+  await page.getByLabel("Senha").fill("provisoria-123");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page.getByText("E-mail ou senha incorretos.")).toBeVisible();
+});

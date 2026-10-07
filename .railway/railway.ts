@@ -1,6 +1,6 @@
 /**
  * Infraestrutura do Railway (IaC). Aplicar com:  railway config plan && railway config apply
- * Segredos (TOKEN_ENCRYPTION_KEY, GOOGLE_*, SETUP_TOKEN) NÃO ficam aqui: são definidos no Railway
+ * Segredos (TOKEN_ENCRYPTION_KEY, GOOGLE_*; SETUP_TOKEN só temporariamente) NÃO ficam aqui: são definidos no Railway
  * (railway variables --set ...) e marcados com preserve() para o IaC nunca sobrescrevê-los.
  */
 import { defineRailway, github, postgres, preserve, project, service } from "railway/iac";
@@ -28,7 +28,6 @@ export default defineRailway(() => {
     env: {
       ...shared,
       APP_URL: "https://${{RAILWAY_PUBLIC_DOMAIN}}",
-      SETUP_TOKEN: preserve(),
     },
   });
 

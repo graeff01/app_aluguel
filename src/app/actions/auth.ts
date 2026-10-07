@@ -54,7 +54,7 @@ export async function resetPasswordAction(_: ActionState, fd: FormData): Promise
     // uso único: marca usado de forma condicional
     const used = await tx.passwordResetToken.updateMany({ where: { id, usedAt: null }, data: { usedAt: new Date() } });
     if (used.count !== 1) return false;
-    await tx.user.update({ where: { id: t.userId }, data: { passwordHash: await hashPassword(password) } });
+    await tx.user.update({ where: { id: t.userId }, data: { passwordHash: await hashPassword(password), mustChangePassword: false } });
     await tx.session.deleteMany({ where: { userId: t.userId } });
     await audit(tx, { actorId: t.userId, action: "user.password_reset", entityType: "User", entityId: t.userId });
     return true;
@@ -100,10 +100,30 @@ export async function changePasswordAction(_: ActionState, fd: FormData): Promis
   const problem = passwordProblem(password);
   if (problem) return { ok: false, fieldErrors: { password: problem } };
   await db.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: actor.id }, data: { passwordHash: await hashPassword(password) } });
+    await tx.user.update({ where: { id: actor.id }, data: { passwordHash: await hashPassword(password), mustChangePassword: false } });
     await tx.session.deleteMany({ where: { userId: actor.id } });
     await audit(tx, { actorId: actor.id, action: "user.password_changed", entityType: "User", entityId: actor.id });
   });
   await createSession(actor.id);
   return { ok: true, message: "Senha alterada. Outras sessões foram encerradas." };
+}
+
+/** Primeiro acesso com senha provisória: define a senha definitiva (obrigatório para continuar). */
+export async function setInitialPasswordAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, message: "Sessão expirada. Entre novamente." };
+  const user = await db.user.findUniqueOrThrow({ where: { id: actor.id } });
+  if (!user.mustChangePassword) return { ok: true, message: "Senha já definida." };
+  const password = str(fd, "password");
+  if (password !== str(fd, "confirm")) return { ok: false, fieldErrors: { confirm: "As senhas não conferem." } };
+  const problem = passwordProblem(password);
+  if (problem) return { ok: false, fieldErrors: { password: problem } };
+  if (await verifyPassword(user.passwordHash, password)) return { ok: false, fieldErrors: { password: "Escolha uma senha diferente da provisória." } };
+  await db.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: actor.id }, data: { passwordHash: await hashPassword(password), mustChangePassword: false } });
+    await tx.session.deleteMany({ where: { userId: actor.id } });
+    await audit(tx, { actorId: actor.id, action: "user.initial_password_set", entityType: "User", entityId: actor.id });
+  });
+  await createSession(actor.id);
+  redirect("/");
 }

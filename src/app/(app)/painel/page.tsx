@@ -140,15 +140,33 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         />
       </div>
 
-      <Section title="Visitas" hint="Situação operacional de cada compromisso do período">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-          <StatTile label="Agendadas" value={m.totals.scheduled} detail={<Delta now={m.totals.scheduled} before={d.previous.totals.scheduled} />} href={hist({})} />
-          <StatTile label="Realizadas" value={m.totals.done} href={hist({ situacao: "DONE" })} />
-          <StatTile label="Não compareceu" value={m.totals.noShow} href={hist({ situacao: "NO_SHOW" })} />
-          <StatTile label="Canceladas" value={m.totals.canceled} href={hist({ situacao: "CANCELED" })} />
-          <StatTile label="Remarcadas" value={m.totals.rescheduled} href={hist({ situacao: "RESCHEDULED" })} />
-          <StatTile label="Futuras" value={m.totals.upcoming} detail="ainda não começaram" />
-        </div>
+      <Section title="Visitas no período">
+        <dl className="grid grid-cols-3 divide-line overflow-hidden rounded-3xl border border-line bg-surface shadow-card max-lg:divide-y lg:grid-cols-6 lg:divide-x">
+          {[
+            { k: "Agendadas", v: m.totals.scheduled, href: hist({}), sub: <Delta now={m.totals.scheduled} before={d.previous.totals.scheduled} /> },
+            { k: "Realizadas", v: m.totals.done, href: hist({ situacao: "DONE" }) },
+            { k: "Não compareceu", v: m.totals.noShow, href: hist({ situacao: "NO_SHOW" }) },
+            { k: "Canceladas", v: m.totals.canceled, href: hist({ situacao: "CANCELED" }) },
+            { k: "Remarcadas", v: m.totals.rescheduled, href: hist({ situacao: "RESCHEDULED" }) },
+            { k: "Futuras", v: m.totals.upcoming },
+          ].map((it) => {
+            const body = (
+              <>
+                <dt className="text-[12px] font-semibold text-ink-3">{it.k}</dt>
+                <dd className="num mt-1 text-[26px] leading-none font-bold">{it.v}</dd>
+              </>
+            );
+            return it.href ? (
+              <Link key={it.k} href={it.href} className="block px-4 py-4 transition-colors hover:bg-surface-2">
+                {body}
+              </Link>
+            ) : (
+              <div key={it.k} className="px-4 py-4">
+                {body}
+              </div>
+            );
+          })}
+        </dl>
       </Section>
 
       <Section title="Qualidade do registro e resultados">
