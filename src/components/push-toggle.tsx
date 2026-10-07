@@ -105,7 +105,8 @@ export function PushPrompt({ publicKey }: { publicKey: string | null }) {
       setDismissed(false);
     }
   }, []);
-  if (dismissed || !publicKey || !["off", "ios-install", "busy", "error"].includes(state)) return null;
+  // no iPhone sem instalar, o aviso de instalação já cobre o passo; o convite aparece depois de instalado
+  if (dismissed || !publicKey || !["off", "busy", "error"].includes(state)) return null;
   return (
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-line bg-surface p-4 shadow-card">
       <div className="min-w-0 flex-1">
