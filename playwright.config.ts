@@ -12,13 +12,13 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     // macOS 12 não tem Chromium do Playwright; usa o Chrome instalado. Em CI Linux, remova "channel".
-    channel: process.env.PW_CHANNEL ?? "chrome",
+    channel: process.env.PW_CHANNEL === undefined ? "chrome" : process.env.PW_CHANNEL || undefined,
     locale: "pt-BR",
     timezoneId: "America/Sao_Paulo",
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "mobile", use: { ...devices["Pixel 7"], channel: process.env.PW_CHANNEL ?? "chrome" } },
+    { name: "mobile", use: { ...devices["Pixel 7"], channel: process.env.PW_CHANNEL === undefined ? "chrome" : process.env.PW_CHANNEL || undefined } },
     { name: "desktop", use: { viewport: { width: 1366, height: 900 } } },
   ],
   webServer: {
