@@ -3,7 +3,7 @@ import { useEffect } from "react";
 
 export function reportClientError(message: string, stack?: string) {
   try {
-    if (/ResizeObserver|Failed to execute 'measure'|Load failed|NetworkError|Failed to fetch/i.test(message)) return; // ruído conhecido
+    if (/^Script error\.?$|ResizeObserver|Failed to execute .measure.|Load failed|NetworkError|Failed to fetch/i.test(message)) return; // ruído conhecido
     fetch("/api/errors", {
       method: "POST",
       headers: { "content-type": "application/json", "x-requested-with": "visitas" },
