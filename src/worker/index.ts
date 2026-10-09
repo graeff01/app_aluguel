@@ -10,7 +10,7 @@ import { db } from "@/lib/db";
 import { log, errorCode } from "@/lib/log";
 import { getSettings } from "@/lib/settings";
 import { executeRun } from "@/server/sync/runner";
-import { sendDailyReminders, sendMonthlyReportNotice, sendUpcomingVisitReminders, sendWeeklySummary } from "@/server/reminders";
+import { sendDailyReminders, sendMonthlyReportNotice, sendResultReminders, sendUpcomingVisitReminders, sendWeeklySummary } from "@/server/reminders";
 import { refreshPropertyPreviews } from "@/server/property-preview";
 import { recordError } from "@/lib/error-tracking";
 import { runRetention } from "@/server/privacy";
@@ -69,6 +69,7 @@ async function main() {
       if (Date.now() - lastUpcomingCheck > 60_000) {
         lastUpcomingCheck = Date.now();
         await sendUpcomingVisitReminders().catch((e) => log.error("upcoming_reminders.failed", { code: errorCode(e) }));
+        await sendResultReminders().catch((e) => log.error("result_reminders.failed", { code: errorCode(e) }));
       }
       if (Date.now() - lastPreviewCheck > 2 * 60_000) {
         lastPreviewCheck = Date.now();

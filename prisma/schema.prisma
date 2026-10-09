@@ -123,6 +123,12 @@ model AppSettings {
   reminderHour             Int      @default(9)
   /// lembrete antes da visita (minutos de antecedência; 0 = desligado)
   upcomingReminderMinutes  Int      @default(60)
+  /// "Como foi a visita?" logo após o término (com atalhos de resultado)
+  resultPromptEnabled      Boolean  @default(true)
+  /// novo lembrete à consultora N horas após o término sem resultado (0 = desligado)
+  resultReminderHours      Int      @default(2)
+  /// alerta à gestão quando a visita passa N horas sem resultado (0 = desligado)
+  managerAlertHours        Int      @default(24)
   /// LGPD: anonimizar clientes sem atividade há N meses (0 = desligado)
   retentionMonths          Int      @default(24)
   /// LGPD: contato para pedidos de titulares (exibido no aviso de privacidade)
@@ -362,6 +368,19 @@ model Property {
   title         String?
   pageStatus    String?
   pageCheckedAt DateTime?
+  /// dados públicos do anúncio (JSON-LD da página): tipo, bairro, cidade, valores em R$, área em m²
+  category      String?
+  neighborhood  String?
+  city          String?
+  rent          Int?
+  totalPrice    Int?
+  area          Int?
+  bedrooms      Int?
+  /// endereço para a rota do dia (não é dado pessoal: é o endereço do imóvel)
+  address       String?
+  /// AGENDA = campo "local" do evento; MANUAL = digitado no app (a agenda não sobrescreve)
+  addressSource String?
+  addressUpdatedAt DateTime?
 
   visits        Visit[]
   opportunities Opportunity[]

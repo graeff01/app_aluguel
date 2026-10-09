@@ -17,6 +17,7 @@ import { BrandSymbol } from "@/components/brand";
 import { UndoToast } from "@/components/undo-toast";
 import { Suspense } from "react";
 import { cx } from "@/components/ui";
+import { AppBadge } from "@/components/app-badge";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const global = hasGlobalView(actor);
   const [pending, health, reviewCount] = await Promise.all([
     db.visit.count({
-      where: { ...visitScope(actor), excluded: false, status: "SCHEDULED", scheduledEnd: { lte: now }, scheduledStart: { gte: startOfDayInTz(dateOnlyKey(settings.resultsStartDate)) } },
+      // "para registrar": já terminou ou já começou (em andamento)
+      where: { ...visitScope(actor), excluded: false, status: "SCHEDULED", scheduledStart: { gte: startOfDayInTz(dateOnlyKey(settings.resultsStartDate)), lte: now } },
     }),
     syncHealth(now),
     global
@@ -48,7 +50,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ];
   const managerBottom: NavItem[] = [
     { href: "/painel", label: "Painel", icon: "dashboard" },
-    { href: "/hoje", label: "Visitas", icon: "today", badge: pending },
+    { href: "/ao-vivo", label: "Ao vivo", icon: "live", badge: pending },
     { href: "/revisao", label: "Revisão", icon: "review", badge: reviewCount },
     { href: "/oportunidades", label: "Andamento", icon: "pipeline" },
     { href: "/mais", label: "Mais", icon: "more" },
@@ -59,6 +61,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           title: "Operação",
           items: [
             { href: "/painel", label: "Painel", icon: "dashboard" },
+            { href: "/ao-vivo", label: "Ao vivo", icon: "live" },
+            { href: "/rota", label: "Rotas", icon: "route" },
             { href: "/relatorios", label: "Relatórios", icon: "audit" },
             { href: "/hoje", label: "Hoje", icon: "today" },
             { href: "/pendencias", label: "Pendências", icon: "pending", badge: pending },
@@ -102,6 +106,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-h-dvh flex-col">
         <OfflineBanner />
         <RefreshOnFocus />
+        <AppBadge count={pending} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-2.5">
             <Link href="/minhas" className="flex items-center gap-2">
@@ -133,6 +138,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0 flex-1 flex-col">
         <OfflineBanner />
         <RefreshOnFocus />
+        <AppBadge count={pending} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 md:px-8">
             <Link href="/" className="flex items-center gap-2 md:hidden">

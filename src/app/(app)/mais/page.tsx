@@ -13,6 +13,9 @@ export default async function MorePage() {
     ["/visitas/nova", "Visita manual", "Cadastro de contingência"],
     ...(hasGlobalView(a)
       ? ([
+          ["/ao-vivo", "Ao vivo", "O dia de cada consultora, agora"],
+          ["/hoje", "Visitas de hoje", "Lista completa do dia"],
+          ["/rota", "Rotas do dia", "Paradas de cada consultora no mapa"],
           ["/relatorios", "Relatórios", "Relatório mensal em PDF para a direção"],
           ["/imoveis", "Imóveis", "Desempenho e motivos por imóvel"],
           ["/clientes", "Clientes", "Cadastros e identificação"],

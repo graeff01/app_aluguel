@@ -23,6 +23,7 @@ import { normalizeEmail } from "@/lib/text";
 import { audit } from "@/lib/audit";
 import { resolveClient, cleanupOrphanClient } from "../clients";
 import { ensureProperty } from "../visits";
+import { cleanAddress } from "@/lib/address";
 import { htmlToText } from "./sanitize";
 import { DETAIL_ROLES, GoogleApiError, type CalendarApi, type GEvent } from "./types";
 
@@ -207,6 +208,17 @@ async function processEvent(ctx: Ctx, ev: GEvent, opts: { inWindowOnly: boolean;
     if (!start || !end || !parsed) return;
     const wasCancelled = existing?.googleStatus === "cancelled";
     await upsertVisit(tx, ctx, source.id, ev, parsed, { start, end, wasCancelled });
+    await applyEventLocation(tx, parsed.propertyCode, ev.location);
+  });
+}
+
+/** Campo "Local" do evento vira o endereço do imóvel (rota do dia), salvo se foi digitado no app. */
+async function applyEventLocation(tx: Tx, code: string | null, location: string | null | undefined) {
+  const address = cleanAddress(location);
+  if (!code || !address) return;
+  await tx.property.updateMany({
+    where: { code, OR: [{ addressSource: null }, { addressSource: "AGENDA", address: { not: address } }] },
+    data: { address, addressSource: "AGENDA", addressUpdatedAt: new Date() },
   });
 }
 

@@ -14,7 +14,7 @@ import { notFound } from "next/navigation";
 
 export const metadata = { title: "Registrar resultado" };
 
-export default async function RegisterPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ anterior?: string; restantes?: string; desfeito?: string }> }) {
+export default async function RegisterPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ anterior?: string; restantes?: string; desfeito?: string; r?: string }> }) {
   const sp = await searchParams;
   const actor = await requireActor();
   const { id } = await params;
@@ -29,6 +29,11 @@ export default async function RegisterPage({ params, searchParams }: { params: P
   const isEdit = visit.status !== "SCHEDULED" && !visit.autoCanceled;
   const now = new Date();
   const global = hasGlobalView(actor);
+  const future = visit.scheduledStart.getTime() > now.getTime() + 15 * 60_000;
+  // atalho da notificação ("Gostou", "Não gostou", "Não veio"): já vem marcado; a observação continua obrigatória
+  const preset = !isEdit && !future && visit.status === "SCHEDULED" ? sp.r : undefined;
+  const presetStatus = preset === "NO_SHOW" ? ("NO_SHOW" as const) : preset === "POSITIVE" || preset === "NEGATIVE" || preset === "UNDECIDED" ? ("DONE" as const) : null;
+  const presetEval = presetStatus === "DONE" ? (preset as "POSITIVE" | "NEGATIVE" | "UNDECIDED") : null;
   return (
     <>
       <Link href={global ? `/visitas/${visit.id}` : "/minhas"} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
@@ -88,7 +93,8 @@ export default async function RegisterPage({ params, searchParams }: { params: P
         isEdit={isEdit}
         afterSave={global ? `/visitas/${visit.id}?salvo=1` : "/minhas?salvo=1"}
         unlockLabel={fmt.time(new Date(visit.scheduledStart.getTime() - 15 * 60_000))}
-        future={visit.scheduledStart.getTime() > now.getTime() + 15 * 60_000}
+        future={future}
+        preset={presetStatus ? { status: presetStatus, evaluation: presetEval } : undefined}
         initial={{
           status: isEdit ? (visit.status as "DONE") : null,
           evaluation: isEdit ? visit.evaluation : null,

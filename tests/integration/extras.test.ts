@@ -63,7 +63,7 @@ describe("pré-visualização do imóvel", () => {
       "https://a.test/3": { status: 200, body: "<html></html>" },
       "https://a.test/4": { status: 500, body: "" },
     });
-    expect(await fetchPreview("https://a.test/1", f)).toEqual({ status: "OK", photoUrl: "https://img.test/1.jpg", title: "Apto 2 quartos & vaga" });
+    expect(await fetchPreview("https://a.test/1", f)).toMatchObject({ status: "OK", photoUrl: "https://img.test/1.jpg", title: "Apto 2 quartos & vaga" });
     expect((await fetchPreview("https://a.test/2", f)).photoUrl).toBeNull();
     expect((await fetchPreview("https://a.test/3", f)).status).toBe("NOT_FOUND");
     expect((await fetchPreview("https://a.test/4", f)).status).toBe("ERROR");

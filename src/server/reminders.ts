@@ -258,3 +258,133 @@ export async function sendMonthlyReportNotice(now = new Date(), opts: { send?: S
   }
   return { sent };
 }
+
+// ─────────────── Resultado da visita: logo após o término, novo aviso e alerta à gestão ───────────────
+
+const RESULT_SHORTCUTS = (visitId: string) => [
+  { action: "positiva", title: "Gostou", url: `/visitas/${visitId}/registrar?r=POSITIVE` },
+  { action: "negativa", title: "Não gostou", url: `/visitas/${visitId}/registrar?r=NEGATIVE` },
+  { action: "faltou", title: "Não veio", url: `/visitas/${visitId}/registrar?r=NO_SHOW` },
+];
+
+/** Silêncio à noite para avisos que podem esperar (o "como foi?" imediato não entra aqui). */
+function quietHours(now: Date) {
+  const h = localHour(now);
+  return h >= 21 || h < 8;
+}
+
+/**
+ * 1) "Como foi a visita das 14:00?" até 1 h depois do término, com atalhos de resultado.
+ * 2) Sem resultado após N h (resultReminderHours): novo aviso à consultora (uma vez).
+ * 3) Sem resultado após N h (managerAlertHours): um aviso agrupado à gestão.
+ * Uma vez por visita (ReminderLog). Conteúdo: horário e código do imóvel — sem dados do cliente.
+ */
+export async function sendResultReminders(now = new Date(), opts: { send?: Sender; email?: EmailSender | null } = {}) {
+  const send = opts.send ?? sendPush;
+  const email = opts.email !== undefined ? opts.email : emailConfig() ? sendEmail : null;
+  const pushOn = !!opts.send || !!pushConfig();
+  if (!pushOn && !email) return { skipped: "NO_CHANNEL" as const };
+  const settings = await getSettings();
+  if (!settings.remindersEnabled) return { skipped: "DISABLED" as const };
+  const chargeStart = startOfDayInTz(dateOnlyKey(settings.resultsStartDate));
+  const timeFmt = new Intl.DateTimeFormat("pt-BR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+  const H = 3600_000;
+  const select = {
+    id: true,
+    scheduledStart: true,
+    scheduledEnd: true,
+    propertyCode: true,
+    consultantId: true,
+    consultant: { select: { id: true, name: true, email: true, _count: { select: { pushSubscriptions: true } } } },
+  } as const;
+  const base = { status: "SCHEDULED" as const, excluded: false, consultantId: { not: null }, consultant: { active: true }, scheduledStart: { gte: chargeStart } };
+  const pendingFor = async (userId: string) =>
+    db.visit.count({ where: { ...base, consultantId: userId, scheduledStart: { gte: chargeStart, lte: now } } });
+  let sent = 0;
+
+  // 1) logo após o término
+  if (settings.resultPromptEnabled) {
+    const just = await db.visit.findMany({ where: { ...base, scheduledEnd: { lte: now, gt: new Date(now.getTime() - H) } }, select });
+    for (const v of just) {
+      const c = v.consultant!;
+      const id = await claim(c.id, dayKey(v.scheduledStart), `result_prompt:${v.id}`, 1);
+      if (!id) continue;
+      const delivered = await notify(
+        { id: c.id, email: c.email, subs: pushOn ? c._count.pushSubscriptions : 0 },
+        {
+          title: `Como foi a visita das ${timeFmt.format(v.scheduledStart)}?`,
+          body: `${v.propertyCode ? `Imóvel ${v.propertyCode}. ` : ""}Toque para registrar o resultado.`,
+          url: `/visitas/${v.id}/registrar`,
+          tag: `resultado-${v.id}`,
+          actions: RESULT_SHORTCUTS(v.id),
+          badge: await pendingFor(c.id),
+        },
+        send,
+        email,
+      );
+      await db.reminderLog.update({ where: { id }, data: { delivered } });
+      sent += delivered;
+    }
+  }
+
+  if (quietHours(now)) return { sent };
+
+  // 2) novo aviso à consultora
+  if (settings.resultReminderHours > 0) {
+    const late = await db.visit.findMany({
+      where: { ...base, scheduledEnd: { lte: new Date(now.getTime() - settings.resultReminderHours * H), gt: new Date(now.getTime() - 20 * H) } },
+      select,
+    });
+    for (const v of late) {
+      const c = v.consultant!;
+      const id = await claim(c.id, dayKey(v.scheduledStart), `result_reminder:${v.id}`, 1);
+      if (!id) continue;
+      const delivered = await notify(
+        { id: c.id, email: c.email, subs: pushOn ? c._count.pushSubscriptions : 0 },
+        {
+          title: `Falta registrar a visita das ${timeFmt.format(v.scheduledStart)}`,
+          body: `${v.propertyCode ? `Imóvel ${v.propertyCode}. ` : ""}Leva menos de um minuto — toque para registrar.`,
+          url: `/visitas/${v.id}/registrar`,
+          tag: `resultado-${v.id}`,
+          actions: RESULT_SHORTCUTS(v.id),
+          badge: await pendingFor(c.id),
+        },
+        send,
+        email,
+      );
+      await db.reminderLog.update({ where: { id }, data: { delivered } });
+      sent += delivered;
+    }
+  }
+
+  // 3) alerta agrupado à gestão
+  if (settings.managerAlertHours > 0) {
+    const limit = settings.managerAlertHours * H;
+    // janela larga o bastante para atravessar a noite silenciosa sem perder ninguém
+    const stale = await db.visit.findMany({ where: { ...base, scheduledEnd: { lte: new Date(now.getTime() - limit), gt: new Date(now.getTime() - limit - 16 * H) } }, select });
+    if (stale.length) {
+      const managers = await db.user.findMany({ where: { role: "MANAGER", active: true }, select: { id: true, email: true, _count: { select: { pushSubscriptions: true } } } });
+      for (const m of managers) {
+        const fresh: typeof stale = [];
+        for (const v of stale) if (await claim(m.id, dayKey(v.scheduledStart), `manager_late:${v.id}`, 1)) fresh.push(v);
+        if (!fresh.length) continue;
+        const per = new Map<string, number>();
+        for (const v of fresh) per.set(v.consultant!.name.split(" ")[0], (per.get(v.consultant!.name.split(" ")[0]) ?? 0) + 1);
+        const delivered = await notify(
+          { id: m.id, email: m.email, subs: pushOn ? m._count.pushSubscriptions : 0 },
+          {
+            title: `${fresh.length === 1 ? "1 visita" : `${fresh.length} visitas`} sem resultado há mais de ${settings.managerAlertHours} h`,
+            body: [...per.entries()].map(([n, k]) => `${n} ${k}`).join(" · "),
+            url: "/ao-vivo",
+            tag: `atrasadas-${dayKey(now)}`,
+          },
+          send,
+          email,
+        );
+        sent += delivered;
+      }
+    }
+  }
+  if (sent) log.info("result_reminders.sent", { notifications: sent });
+  return { sent };
+}

@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["@node-rs/argon2", "pg", "@prisma/adapter-pg", "@react-pdf/renderer"],
   // arquivos lidos em tempo de execução pelo PDF (fontes e logotipo)
-  outputFileTracingIncludes: { "/api/relatorios/mensal": ["./assets/**/*"] },
+  outputFileTracingIncludes: { "/api/relatorios/mensal": ["./assets/**/*"], "/api/imoveis/[code]/relatorio": ["./assets/**/*"] },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

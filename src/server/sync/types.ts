@@ -4,6 +4,8 @@ export type GEvent = {
   status?: "confirmed" | "tentative" | "cancelled" | string | null;
   summary?: string | null;
   description?: string | null;
+  /** campo "Local" do evento (endereço do imóvel, quando preenchido) */
+  location?: string | null;
   updated?: string | null;
   etag?: string | null;
   iCalUID?: string | null;

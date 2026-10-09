@@ -23,7 +23,7 @@ export async function listProperties(actor: AuthzActor, q?: string) {
   const props = await db.property.findMany({
     where: {
       visits: { some: {} },
-      ...(term ? { OR: [{ code: { contains: term } }, { title: { contains: term, mode: "insensitive" } }] } : {}),
+      ...(term ? { OR: [{ code: { contains: term } }, { title: { contains: term, mode: "insensitive" } }, { neighborhood: { contains: term, mode: "insensitive" } }] } : {}),
     },
     include: { visits: { where: { excluded: false }, select: { status: true, evaluation: true, scheduledStart: true } }, opportunities: { select: { status: true } } },
     take: 300,

@@ -23,6 +23,8 @@ type Props = {
   future: boolean;
   afterSave: string;
   unlockLabel?: string;
+  /** escolha vinda do atalho da notificação (não conta como "alteração não salva" até a pessoa mexer) */
+  preset?: { status: Status; evaluation: Evaluation | null };
 };
 
 const STATUS_OPTIONS: { value: Status; label: string; hint?: string }[] = [
@@ -47,8 +49,8 @@ type SaveState =
 export function OutcomeForm(p: Props) {
   const router = useRouter();
   const online = useOnline();
-  const [status, setStatus] = useState<Status | null>(p.initial.status);
-  const [evaluation, setEvaluation] = useState<Evaluation | null>(p.initial.evaluation);
+  const [status, setStatus] = useState<Status | null>(p.preset?.status ?? p.initial.status);
+  const [evaluation, setEvaluation] = useState<Evaluation | null>(p.preset?.evaluation ?? p.initial.evaluation);
   const [reasonId, setReasonId] = useState<string>(p.initial.negativeReasonId ?? "");
   const [note, setNote] = useState(p.initial.note);
   const [version, setVersion] = useState(p.version);
@@ -56,7 +58,7 @@ export function OutcomeForm(p: Props) {
   // chave de idempotência estável enquanto a tela estiver aberta (retry não duplica)
   const requestId = useMemo(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`), []);
   const inFlight = useRef(false);
-  const dirty = note.trim() !== p.initial.note.trim() || status !== p.initial.status || evaluation !== p.initial.evaluation;
+  const dirty = note.trim() !== p.initial.note.trim() || status !== (p.preset?.status ?? p.initial.status) || evaluation !== (p.preset?.evaluation ?? p.initial.evaluation);
 
   useEffect(() => {
     const h = (e: BeforeUnloadEvent) => {

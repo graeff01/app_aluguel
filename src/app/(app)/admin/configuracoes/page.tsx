@@ -65,6 +65,15 @@ export default async function SettingsPage() {
           <Field label="Lembrete antes da visita (minutos)" htmlFor="upcomingReminderMinutes" hint="A consultora recebe “Visita às 19:00 · imóvel 12345” com esta antecedência. 0 desliga.">
             <Input id="upcomingReminderMinutes" name="upcomingReminderMinutes" type="number" min={0} max={240} defaultValue={s.upcomingReminderMinutes} />
           </Field>
+          <YesNo name="resultPromptEnabled" value={s.resultPromptEnabled} label="Perguntar “Como foi a visita?” ao terminar" hint="Notificação logo após o horário de término. No Android vem com atalhos (Gostou / Não gostou / Não veio) que abrem o registro já marcado." />
+          <div className="grid gap-x-3 sm:grid-cols-2">
+            <Field label="Novo aviso à consultora após (horas)" htmlFor="resultReminderHours" hint="Se ainda estiver sem resultado. 0 desliga. Não envia das 21h às 8h.">
+              <Input id="resultReminderHours" name="resultReminderHours" type="number" min={0} max={12} defaultValue={s.resultReminderHours} />
+            </Field>
+            <Field label="Alerta à gestão após (horas)" htmlFor="managerAlertHours" hint="Visitas sem resultado há esse tempo, agrupadas por consultora. 0 desliga.">
+              <Input id="managerAlertHours" name="managerAlertHours" type="number" min={0} max={72} defaultValue={s.managerAlertHours} />
+            </Field>
+          </div>
         </Section>
         <Section title="Sincronização">
           <div className="grid gap-x-3 sm:grid-cols-2">

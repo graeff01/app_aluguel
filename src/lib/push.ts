@@ -10,7 +10,9 @@ export function pushConfig() {
   return { publicKey, privateKey, subject };
 }
 
-export type PushPayload = { title: string; body: string; url: string; tag: string };
+export type PushAction = { action: string; title: string; url: string };
+/** actions: atalhos na notificação (Android/Chrome; no iPhone a notificação só abre o link principal). badge: número no ícone do app. */
+export type PushPayload = { title: string; body: string; url: string; tag: string; actions?: PushAction[]; badge?: number };
 
 export type PushTarget = { endpoint: string; p256dh: string; auth: string };
 

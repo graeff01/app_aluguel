@@ -279,3 +279,44 @@ test("gestora: relatório mensal com prévia e PDF", async ({ page }, info) => {
   expect(res.headers()["content-type"]).toBe("application/pdf");
   expect((await res.body()).subarray(0, 5).toString()).toBe("%PDF-");
 });
+
+test("consultora: rota do dia abre no Maps com o endereço do imóvel", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await login(page, "c@e2e.test");
+  await page.goto("/rota");
+  await expect(page.getByRole("heading", { name: /^Rota de/ })).toBeVisible();
+  if (!(await page.getByText("Cliente Rota").isVisible())) await page.getByRole("link", { name: "Amanhã" }).click();
+  await expect(page.getByText("Cliente Rota")).toBeVisible();
+  const maps = page.getByRole("link", { name: /Abrir rota no Google Maps/ });
+  await expect(maps).toBeVisible();
+  const href = new URL((await maps.getAttribute("href"))!);
+  expect(href.searchParams.get("destination")).toBe("Rua Teste, 322, Canoas - RS");
+  await expect(page.getByRole("link", { name: "Waze" }).first()).toBeVisible();
+});
+
+test("atalho da notificação abre o registro já marcado", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await login(page, "c@e2e.test");
+  const link = page.getByRole("link", { name: /Registrar resultado: Cliente Atalho/ }).first();
+  const href = await link.getAttribute("href");
+  await page.goto(`${href}?r=NEGATIVE`);
+  await expect(page.getByRole("radio", { name: /Sim, aconteceu/ })).toBeChecked();
+  await expect(page.getByRole("radio", { name: /Negativa/ })).toBeChecked();
+});
+
+test("gestora: ao vivo, termômetro e relatório do proprietário", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  await login(page, "gestora@e2e.test");
+  await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Ao vivo" }).click();
+  await expect(page.getByRole("heading", { name: "Hoje ao vivo" })).toBeVisible();
+  await expect(page.getByText("Consultora A", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Atualiza sozinho/)).toBeVisible();
+  await page.goto("/imoveis");
+  await expect(page.getByRole("heading", { name: "Termômetro" })).toBeVisible();
+  await page.goto("/imoveis/00444");
+  const pdf = page.getByRole("link", { name: "Relatório para o proprietário (PDF)" });
+  const res = await page.request.get((await pdf.getAttribute("href"))!);
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-type"]).toBe("application/pdf");
+  expect((await res.body()).subarray(0, 5).toString()).toBe("%PDF-");
+});
