@@ -8,6 +8,7 @@ import { getSettings } from "@/lib/settings";
 import { addDays, dateOnlyKey, dayKey, endOfDayInTz, startOfDayInTz } from "@/lib/time";
 import { computeMetrics, rate, type MetricOpportunity, type MetricVisit, type Rate } from "@/lib/metrics";
 import { opportunityFunnel } from "./insights";
+import { notDemo } from "./demo";
 
 export const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -79,7 +80,7 @@ export async function buildMonthlyReport(actor: AuthzActor, month: string, now =
   const partial = cur.to >= today && cur.from <= today;
 
   const visitsRaw = await db.visit.findMany({
-    where: { scheduledStart: { gte: startOfDayInTz(seriesFrom), lt: endOfDayInTz(cur.to) } },
+    where: { ...notDemo, scheduledStart: { gte: startOfDayInTz(seriesFrom), lt: endOfDayInTz(cur.to) } },
     select: {
       id: true, status: true, evaluation: true, scheduledStart: true, scheduledEnd: true, consultantId: true, realizedById: true,
       propertyCode: true, clientId: true, clientMatch: true, negativeReasonId: true, excluded: true, origin: true, phoneNormalized: true,

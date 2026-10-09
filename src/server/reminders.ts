@@ -14,6 +14,7 @@ export type Sender = (target: PushTarget, payload: PushPayload) => Promise<"ok" 
 import { log } from "@/lib/log";
 import { computeMetrics } from "@/lib/metrics";
 import { appLink, emailConfig, sendEmail, type EmailSender } from "@/lib/email";
+import { notDemo } from "./demo";
 
 const DAY = 86400_000;
 
@@ -72,7 +73,7 @@ export async function sendDailyReminders(now = new Date(), opts: { force?: boole
   const chargeStart = startOfDayInTz(dateOnlyKey(settings.resultsStartDate));
   const overdue = await db.visit.groupBy({
     by: ["consultantId"],
-    where: { excluded: false, status: "SCHEDULED", consultantId: { not: null }, scheduledEnd: { lte: new Date(now.getTime() - DAY) }, scheduledStart: { gte: chargeStart } },
+    where: { ...notDemo, excluded: false, status: "SCHEDULED", consultantId: { not: null }, scheduledEnd: { lte: new Date(now.getTime() - DAY) }, scheduledStart: { gte: chargeStart } },
     _count: { _all: true },
   });
   const counts = new Map(overdue.map((o) => [o.consultantId!, o._count._all]));
@@ -146,7 +147,7 @@ export async function sendWeeklySummary(now = new Date(), opts: { force?: boolea
   if (managers.length === 0) return { sent: 0 };
 
   const visits = await db.visit.findMany({
-    where: { scheduledStart: { gte: startOfDayInTz(from), lt: startOfDayInTz(today) } },
+    where: { ...notDemo, scheduledStart: { gte: startOfDayInTz(from), lt: startOfDayInTz(today) } },
     select: { id: true, status: true, evaluation: true, scheduledStart: true, scheduledEnd: true, consultantId: true, realizedById: true, propertyCode: true, clientId: true, clientMatch: true, negativeReasonId: true, excluded: true },
   });
   const opps = await db.opportunity.findMany({
@@ -199,6 +200,7 @@ export async function sendUpcomingVisitReminders(now = new Date(), opts: { send?
 
   const visits = await db.visit.findMany({
     where: {
+      ...notDemo,
       status: "SCHEDULED",
       excluded: false,
       consultantId: { not: null },
@@ -297,7 +299,7 @@ export async function sendResultReminders(now = new Date(), opts: { send?: Sende
     consultantId: true,
     consultant: { select: { id: true, name: true, email: true, _count: { select: { pushSubscriptions: true } } } },
   } as const;
-  const base = { status: "SCHEDULED" as const, excluded: false, consultantId: { not: null }, consultant: { active: true }, scheduledStart: { gte: chargeStart } };
+  const base = { ...notDemo, status: "SCHEDULED" as const, excluded: false, consultantId: { not: null }, consultant: { active: true }, scheduledStart: { gte: chargeStart } };
   const pendingFor = async (userId: string) =>
     db.visit.count({ where: { ...base, consultantId: userId, scheduledStart: { gte: chargeStart, lte: now } } });
   let sent = 0;

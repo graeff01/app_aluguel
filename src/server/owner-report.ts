@@ -11,6 +11,7 @@ import { propertyUrl } from "./property-preview";
 import { propertyHealth, THERMO_LABEL, type PropertyHealth } from "./thermometer";
 import { dayKey } from "@/lib/time";
 import type { Rate } from "@/lib/metrics";
+import { notDemo } from "./demo";
 
 export const OWNER_PERIODS = { "90": 90, "180": 180, "365": 365, tudo: null } as const;
 export type OwnerPeriod = keyof typeof OWNER_PERIODS;
@@ -69,7 +70,7 @@ export async function buildOwnerReport(actor: AuthzActor, code: string, period: 
 
   // visitas por mês no período (no máximo 12 colunas)
   const visits = await db.visit.findMany({
-    where: { propertyCode: code, excluded: false, status: { in: ["DONE", "NO_SHOW"] }, scheduledStart: { ...(days ? { gte: new Date(now.getTime() - days * 86400_000) } : {}), lte: now } },
+    where: { ...notDemo, propertyCode: code, excluded: false, status: { in: ["DONE", "NO_SHOW"] }, scheduledStart: { ...(days ? { gte: new Date(now.getTime() - days * 86400_000) } : {}), lte: now } },
     select: { scheduledStart: true, evaluation: true, status: true },
     orderBy: { scheduledStart: "asc" },
   });

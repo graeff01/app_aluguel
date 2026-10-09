@@ -2,9 +2,9 @@ import { requireAdmin } from "@/lib/require";
 import { db } from "@/lib/db";
 import { fmt } from "@/lib/time";
 import { ActionForm, SubmitButton } from "@/components/action-form";
-import { Alert, Badge, KeyValue, PageHeader, Panel, Section } from "@/components/ui";
+import { Alert, Badge, Field, KeyValue, PageHeader, Panel, Section, Select } from "@/components/ui";
 import { SyncButton } from "@/components/sync-button";
-import { fullSyncAction, removeDemoDataAction } from "@/app/actions/admin";
+import { createDemoDataAction, fullSyncAction, removeDemoDataAction } from "@/app/actions/admin";
 import { countDemoVisits } from "@/server/demo";
 
 export const metadata = { title: "Diagnóstico" };
@@ -23,6 +23,7 @@ export default async function DiagnosticsPage() {
     Promise.all([db.sourceEvent.count(), db.sourceEvent.count({ where: { classification: "AMBIGUOUS", reviewDecision: null } }), db.visit.count({ where: { origin: "GOOGLE" } }), db.visit.count({ where: { origin: "MANUAL" } })]),
   ]);
   const demoVisits = await countDemoVisits();
+  const consultants = await db.user.findMany({ where: { role: "CONSULTANT", active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
   const workerAlive = beats[0] && Date.now() - beats[0].beatAt.getTime() < 2 * 60_000;
   return (
     <>
@@ -102,18 +103,44 @@ export default async function DiagnosticsPage() {
           {runs.length === 0 && <li className="px-4 py-3 text-ink-3">Nenhuma execução ainda.</li>}
         </ul>
       </Section>
-      {demoVisits > 0 && (
-        <Section title="Dados de demonstração">
-          <Panel>
-            <p className="text-ink-2">
-              Há <strong className="text-ink">{demoVisits}</strong> visita{demoVisits === 1 ? "" : "s"} fictícia{demoVisits === 1 ? "" : "s"} (clientes “[DEMO] …”) criadas para testar as telas. Remova antes de começar a usar com dados reais.
-            </p>
-            <ActionForm action={removeDemoDataAction} confirm="Remover todas as visitas de demonstração? Isso não afeta visitas reais." className="mt-4">
-              <SubmitButton variant="secondary">Remover dados de demonstração</SubmitButton>
+      <Section title="Dados de demonstração" hint="Visitas fictícias com imóveis reais do site (fotos e bairros de verdade) para mostrar as telas.">
+        <Panel>
+          <p className="text-ink-2">
+            Cria 10 visitas para a consultora escolhida — ontem, hoje (registradas, aguardando, em andamento e próximas) e amanhã. Nomes de clientes fictícios, sem telefone.{" "}
+            <strong className="text-ink">Não geram notificações</strong> e ficam fora do termômetro, do relatório do proprietário e do relatório mensal. Aparecem no painel e no Ao vivo até serem removidas.
+          </p>
+          {consultants.length > 0 && (
+            <ActionForm action={createDemoDataAction} className="mt-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="sm:w-72">
+                  <Field label="Consultora" htmlFor="demo-consultant">
+                    <Select id="demo-consultant" name="consultantId" defaultValue={consultants[0].id}>
+                      {consultants.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+                <SubmitButton variant="secondary" className="mb-4 sm:mb-5">
+                  Criar visitas de demonstração
+                </SubmitButton>
+              </div>
             </ActionForm>
-          </Panel>
-        </Section>
-      )}
+          )}
+          {demoVisits > 0 && (
+            <div className="mt-2 border-t border-line pt-4">
+              <p className="text-ink-2">
+                Há <strong className="text-ink">{demoVisits}</strong> visita{demoVisits === 1 ? "" : "s"} de demonstração no sistema. Remova antes de começar a usar com dados reais.
+              </p>
+              <ActionForm action={removeDemoDataAction} confirm="Remover todas as visitas de demonstração? Isso não afeta visitas reais." className="mt-3">
+                <SubmitButton variant="secondary">Remover dados de demonstração</SubmitButton>
+              </ActionForm>
+            </div>
+          )}
+        </Panel>
+      </Section>
     </>
   );
 }

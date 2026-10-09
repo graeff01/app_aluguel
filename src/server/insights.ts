@@ -11,6 +11,7 @@ import { hitRateLimit } from "@/lib/ratelimit";
 import { dateOnlyKey, dayKey, endOfDayInTz, startOfDayInTz } from "@/lib/time";
 import { computeMetrics, rate } from "@/lib/metrics";
 import { pushConfig, sendPush } from "@/lib/push";
+import { notDemo } from "./demo";
 
 const DAY = 86400_000;
 const ACTIVE = ["FOLLOW_UP", "DOCS_REVIEW"] as const;
@@ -143,7 +144,7 @@ export async function nudgeConsultant(actor: AuthzActor, consultantId: string, n
   if (!consultant || consultant.role !== "CONSULTANT" || !consultant.active) throw new AppError("VALIDATION", "Consultora inválida.");
   const settings = await getSettings();
   const pending = await db.visit.count({
-    where: { consultantId, excluded: false, status: "SCHEDULED", scheduledEnd: { lte: now }, scheduledStart: { gte: startOfDayInTz(dateOnlyKey(settings.resultsStartDate)) } },
+    where: { ...notDemo, consultantId, excluded: false, status: "SCHEDULED", scheduledEnd: { lte: now }, scheduledStart: { gte: startOfDayInTz(dateOnlyKey(settings.resultsStartDate)) } },
   });
   if (pending === 0) return `${consultant.name.split(" ")[0]} não tem pendências agora.`;
   if (!pushConfig() || consultant.pushSubscriptions.length === 0) {

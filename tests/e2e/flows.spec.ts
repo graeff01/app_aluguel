@@ -283,10 +283,12 @@ test("gestora: relatório mensal com prévia e PDF", async ({ page }, info) => {
 test("consultora: rota do dia abre no Maps com o endereço do imóvel", async ({ page }, info) => {
   test.skip(info.project.name !== "mobile");
   await login(page, "c@e2e.test");
-  await page.goto("/rota");
+  // a visita do seed é daqui a 3 h: pode cair amanhã (fuso de São Paulo)
+  const sp = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d);
+  const day = sp(new Date(Date.now() + 3 * 3600_000));
+  await page.goto(day === sp(new Date()) ? "/rota" : `/rota?dia=${day}`);
   await expect(page.getByRole("heading", { name: /^Rota de/ })).toBeVisible();
-  if (!(await page.getByText("Cliente Rota").first().isVisible())) await page.getByRole("link", { name: "Amanhã" }).click();
-  await expect(page.getByText("Cliente Rota").first()).toBeVisible();
+  await expect(page.locator("article", { hasText: "Cliente Rota" })).toBeVisible();
   const maps = page.getByRole("link", { name: /Abrir rota no Google Maps/ });
   await expect(maps).toBeVisible();
   const href = new URL((await maps.getAttribute("href"))!);

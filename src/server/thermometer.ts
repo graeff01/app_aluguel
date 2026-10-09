@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { assert, hasGlobalView, type AuthzActor } from "@/lib/authz";
 import { rate, type Rate } from "@/lib/metrics";
 import { normalizeText } from "@/lib/text";
+import { notDemo } from "./demo";
 
 const DAY = 86400_000;
 export const THERMO_DAYS = 90;
@@ -93,7 +94,7 @@ export async function propertyHealth(actor: AuthzActor, opts: { days?: number | 
   const now = opts.now ?? new Date();
   const days = opts.days === undefined ? THERMO_DAYS : opts.days;
   const since = days ? new Date(now.getTime() - days * DAY) : null;
-  const visitWhere = { excluded: false, scheduledStart: { ...(since ? { gte: since } : {}), lte: now } };
+  const visitWhere = { ...notDemo, excluded: false, scheduledStart: { ...(since ? { gte: since } : {}), lte: now } };
   const [props, reasons] = await Promise.all([
     db.property.findMany({
       where: { visits: { some: visitWhere } },

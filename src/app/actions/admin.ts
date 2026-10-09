@@ -14,7 +14,7 @@ import type { PatternKind, ReasonKind, Role } from "@/generated/prisma/enums";
 import { authorizedClient, realCalendarApi, revokeToken } from "@/server/sync/google";
 import { DETAIL_ROLES } from "@/server/sync/types";
 import { requestManualSync } from "@/server/sync/runner";
-import { removeDemoData } from "@/server/demo";
+import { createDemoData, removeDemoData } from "@/server/demo";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const ROLES: Role[] = ["ADMIN", "MANAGER", "CONSULTANT"];
@@ -356,6 +356,13 @@ export async function tempPasswordAction(_: ActionState, fd: FormData) {
     });
     return "Senha provisória definida. A pessoa vai criar a própria senha no próximo acesso.";
   });
+}
+
+export async function createDemoDataAction(_: ActionState, fd: FormData) {
+  return done(await runAction(async (actor) => {
+    const n = await createDemoData(actor, str(fd, "consultantId"));
+    return `Criadas ${n} visitas de demonstração. Fotos, bairros e mapa completam em alguns minutos.`;
+  }));
 }
 
 export async function removeDemoDataAction(_: ActionState, _fd: FormData) {
