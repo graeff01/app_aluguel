@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { assignVisit, concludeVisit, correctVisitData, createManualVisit, setVisitExcluded } from "@/server/visits";
 import { linkVisitToClient, mergeClients } from "@/server/clients";
 import { updateOpportunity } from "@/server/opportunities";
-import { getVisitDetail, listHistory, listPending, listToday } from "@/server/queries";
+import { getVisitDetail, listHistory, listMine, listPending, listToday } from "@/server/queries";
 import { makeUsers, reason, resetDb } from "../helpers/db";
 
 const NOW = new Date("2026-10-06T18:00:00Z");
@@ -270,6 +270,18 @@ describe("revisita e quem agendou", () => {
 
     const today = await listToday(u.a, NOW);
     expect(today.visits.find((v) => v.id === second.id)?.revisit?.previous).toBe(1);
+  });
+
+  it("cliente compartilhado: revisita da consultora só considera as visitas dela; gestão vê a equipe", async () => {
+    const withB = await manual(u.b, { name: "Cliente Comum", phone: "(51) 99222-3333", start: "2026-10-01T10:00", code: "X1" });
+    await concludeVisit(u.b, withB.id, { requestId: rid(), expectedVersion: 1, status: "DONE", evaluation: "POSITIVE", note: "visita com a B" }, NOW);
+    const withA = await manual(u.a, { name: "Cliente Comum", phone: "(51) 99222-3333", start: "2026-10-05T10:00", code: "X2" });
+    expect(withA.clientId).toBe(withB.clientId);
+    // a consultora A não pode descobrir a visita feita com a B
+    expect((await getVisitDetail(u.a, withA.id, NOW)).visit.revisit).toBeNull();
+    expect((await listMine(u.a, NOW)).awaiting.find((v) => v.id === withA.id)?.revisit ?? null).toBeNull();
+    // a gestão vê a revisita
+    expect((await getVisitDetail(u.manager, withA.id, NOW)).visit.revisit).toMatchObject({ previous: 1 });
   });
 
   it("visita anterior não realizada não conta como revisita", async () => {

@@ -1,8 +1,10 @@
 /**
  * Revisita: o cliente já tinha visita realizada antes desta (com a mesma ou outra consultora).
  * Calculado na leitura para refletir resultados registrados depois do agendamento.
- * Só expõe contagem/data — as visitas anteriores continuam sujeitas ao escopo de cada usuária.
+ * Privacidade: as visitas anteriores consideradas respeitam o escopo de quem consulta
+ * (consultora: só as próprias; gestão: equipe toda) — cliente compartilhado não revela histórico alheio.
  */
+import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 
 export type Revisit = {
@@ -32,13 +34,15 @@ export function computeRevisit(v: Item, done: DoneVisit[]): Revisit | null {
   };
 }
 
-export async function withRevisits<T extends Item>(items: T[]): Promise<(T & { revisit: Revisit | null })[]> {
+/** `scope`: filtro de autorização de quem está vendo (use visitScope(actor)). */
+export async function withRevisits<T extends Item>(items: T[], scope: Prisma.VisitWhereInput): Promise<(T & { revisit: Revisit | null })[]> {
   const clientIds = [...new Set(items.map((v) => v.clientId).filter((x): x is string => !!x))];
   const phones = [...new Set(items.map((v) => v.phoneNormalized).filter((x): x is string => !!x))];
   if (!clientIds.length && !phones.length) return items.map((v) => ({ ...v, revisit: null }));
   const latest = new Date(Math.max(...items.map((v) => v.scheduledStart.getTime())));
   const done = await db.visit.findMany({
     where: {
+      ...scope,
       status: "DONE",
       excluded: false,
       scheduledStart: { lt: latest },

@@ -53,7 +53,7 @@ export async function listToday(actor: AuthzActor, now = new Date()) {
     db.visit.count({ where: await awaitingWhere(actor, now, startOfDayInTz(key)) }),
     db.visit.findFirst({ where: await awaitingWhere(actor, now, startOfDayInTz(key)), orderBy: { scheduledStart: "asc" }, select: { scheduledStart: true } }),
   ]);
-  return { dayKey: key, visits: await withRevisits(visits), previousPending: pendingCount, oldestPending: oldestPending?.scheduledStart ?? null };
+  return { dayKey: key, visits: await withRevisits(visits, visitScope(actor)), previousPending: pendingCount, oldestPending: oldestPending?.scheduledStart ?? null };
 }
 
 async function awaitingWhere(actor: AuthzActor, now: Date, before?: Date): Promise<Prisma.VisitWhereInput> {
@@ -87,7 +87,7 @@ export async function listMine(actor: AuthzActor, now = new Date()) {
       take: 30,
     }),
   ]);
-  const [a, u, d] = await Promise.all([withRevisits(awaiting), withRevisits(upcoming), withRevisits(done)]);
+  const [a, u, d] = await Promise.all([withRevisits(awaiting, visitScope(actor)), withRevisits(upcoming, visitScope(actor)), withRevisits(done, visitScope(actor))]);
   return { awaiting: a, upcoming: u, done: d, today };
 }
 
@@ -116,7 +116,7 @@ export async function listPending(actor: AuthzActor, now = new Date()) {
     orderBy: { scheduledStart: "desc" },
     take: 100,
   });
-  return { awaiting: await withRevisits(awaiting), dataIssues: await withRevisits(dataIssues) };
+  return { awaiting: await withRevisits(awaiting, visitScope(actor)), dataIssues: await withRevisits(dataIssues, visitScope(actor)) };
 }
 
 export type HistoryFilter = {
@@ -162,7 +162,7 @@ export async function listHistory(actor: AuthzActor, f: HistoryFilter) {
     db.visit.findMany({ where, select: visitListSelect, orderBy: { scheduledStart: "desc" }, skip: (page - 1) * take, take }),
     db.visit.count({ where }),
   ]);
-  return { items: await withRevisits(items), total, page, pages: Math.max(1, Math.ceil(total / take)) };
+  return { items: await withRevisits(items, visitScope(actor)), total, page, pages: Math.max(1, Math.ceil(total / take)) };
 }
 
 /** Detalhe com histórico; visitas relacionadas do cliente restritas ao escopo da usuária. */
@@ -182,7 +182,7 @@ export async function getVisitDetail(actor: AuthzActor, id: string, now = new Da
     },
   });
   if (!visit || !canViewVisit(actor, visit)) throw notFound();
-  const [{ revisit }] = await withRevisits([visit]);
+  const [{ revisit }] = await withRevisits([visit], visitScope(actor));
   const relatedVisits = visit.clientId
     ? await db.visit.findMany({
         where: { ...visitScope(actor), clientId: visit.clientId, id: { not: visit.id } },
@@ -353,7 +353,7 @@ export async function getOpportunity(actor: AuthzActor, id: string) {
     },
   });
   if (!opp) throw notFound();
-  return { ...opp, visits: await withRevisits(opp.visits) };
+  return { ...opp, visits: await withRevisits(opp.visits, visitScope(actor)) };
 }
 
 export async function listClients(f: { q?: string; identity?: string }) {
@@ -382,5 +382,5 @@ export async function getClient(id: string) {
     },
   });
   if (!client) throw notFound();
-  return { ...client, visits: await withRevisits(client.visits) };
+  return { ...client, visits: await withRevisits(client.visits, {}) }; // tela só da gestão
 }

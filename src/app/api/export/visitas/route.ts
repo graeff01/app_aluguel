@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       opportunity: { select: { status: true } },
       scheduledBy: { select: { name: true, role: true } },
     },
-  }));
+  }), {}); // exportação só da gestão (visão global)
   await db.$transaction((tx) =>
     audit(tx, { actorId: actor.id, action: "export.visits_csv", entityType: "Visit", entityId: "-", changes: { linhas: rows.length, filtros: filter } }),
   );

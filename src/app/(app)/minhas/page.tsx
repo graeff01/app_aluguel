@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireActor } from "@/lib/require";
-import { hasGlobalView } from "@/lib/authz";
+import { hasGlobalView, visitScope } from "@/lib/authz";
 import { listMine, visitListSelect, type VisitListItem } from "@/server/queries";
 import { dayKey, fmt } from "@/lib/time";
 import { pushConfig } from "@/lib/push";
@@ -114,7 +114,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
   const busca = sp.busca?.trim().slice(0, 80) ?? "";
   const { awaiting, upcoming, done, today } = await listMine(actor, now);
   const results = busca
-    ? await withRevisits(await db.visit.findMany({ where: historyWhere(actor, { q: busca }), select: { ...visitListSelect, note: true }, orderBy: { scheduledStart: "desc" }, take: 40 }))
+    ? await withRevisits(await db.visit.findMany({ where: historyWhere(actor, { q: busca }), select: { ...visitListSelect, note: true }, orderBy: { scheduledStart: "desc" }, take: 40 }), visitScope(actor))
     : [];
   const isToday = (d: Date) => dayKey(d) === today;
   const todayDone = done.filter((v) => isToday(v.scheduledStart)).length;
