@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { concludeVisit, createManualVisit, undoConclusion } from "@/server/visits";
 import { fetchPreview, propertyUrl, refreshPropertyPreviews } from "@/server/property-preview";
 import { appendNote, quickNotesFor } from "@/lib/quick-notes";
+import { removeDemoData } from "@/server/demo";
 import { makeUsers, resetDb } from "../helpers/db";
 
 const NOW = new Date("2026-10-06T18:00:00Z");
@@ -91,5 +92,21 @@ describe("respostas rápidas", () => {
     n = appendNote(n, "Vai pensar e dar retorno.");
     expect(n.trim()).toBe("Vai pensar e dar retorno.");
     expect(appendNote("Gostou", "Quer fazer uma proposta.").trim()).toBe("Gostou. Quer fazer uma proposta.");
+  });
+});
+
+describe("dados de demonstração", () => {
+  it("admin remove só as visitas [DEMO] (com oportunidade e cliente) e mantém as reais", async () => {
+    const real = await visit(u.a.id);
+    const demo = await createManualVisit(u.admin, { requestId: "demo-req-1", scheduledStart: "2026-10-06T09:00", clientName: "[DEMO] Mariana Alves", phoneRaw: "(51) 98888-7777", propertyCode: "761739", consultantId: u.b.id });
+    await concludeVisit(u.b, demo.id, { requestId: "demo-done-1", expectedVersion: 1, status: "DONE", evaluation: "POSITIVE", note: "ok" }, NOW);
+    expect(await db.opportunity.count()).toBe(1);
+
+    await expect(removeDemoData(u.a)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await removeDemoData(u.admin)).toBe(1);
+
+    expect(await db.visit.findMany({ select: { id: true } })).toEqual([{ id: real.id }]);
+    expect(await db.opportunity.count()).toBe(0);
+    expect(await db.client.count({ where: { name: { startsWith: "[DEMO]" } } })).toBe(0);
   });
 });

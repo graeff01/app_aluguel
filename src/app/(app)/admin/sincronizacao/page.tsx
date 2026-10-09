@@ -4,7 +4,8 @@ import { fmt } from "@/lib/time";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Alert, Badge, KeyValue, PageHeader, Panel, Section } from "@/components/ui";
 import { SyncButton } from "@/components/sync-button";
-import { fullSyncAction } from "@/app/actions/admin";
+import { fullSyncAction, removeDemoDataAction } from "@/app/actions/admin";
+import { countDemoVisits } from "@/server/demo";
 
 export const metadata = { title: "Diagnóstico" };
 
@@ -21,6 +22,7 @@ export default async function DiagnosticsPage() {
     db.workerHeartbeat.findMany({ orderBy: { beatAt: "desc" }, take: 5 }),
     Promise.all([db.sourceEvent.count(), db.sourceEvent.count({ where: { classification: "AMBIGUOUS", reviewDecision: null } }), db.visit.count({ where: { origin: "GOOGLE" } }), db.visit.count({ where: { origin: "MANUAL" } })]),
   ]);
+  const demoVisits = await countDemoVisits();
   const workerAlive = beats[0] && Date.now() - beats[0].beatAt.getTime() < 2 * 60_000;
   return (
     <>
@@ -100,6 +102,18 @@ export default async function DiagnosticsPage() {
           {runs.length === 0 && <li className="px-4 py-3 text-ink-3">Nenhuma execução ainda.</li>}
         </ul>
       </Section>
+      {demoVisits > 0 && (
+        <Section title="Dados de demonstração">
+          <Panel>
+            <p className="text-ink-2">
+              Há <strong className="text-ink">{demoVisits}</strong> visita{demoVisits === 1 ? "" : "s"} fictícia{demoVisits === 1 ? "" : "s"} (clientes “[DEMO] …”) criadas para testar as telas. Remova antes de começar a usar com dados reais.
+            </p>
+            <ActionForm action={removeDemoDataAction} confirm="Remover todas as visitas de demonstração? Isso não afeta visitas reais." className="mt-4">
+              <SubmitButton variant="secondary">Remover dados de demonstração</SubmitButton>
+            </ActionForm>
+          </Panel>
+        </Section>
+      )}
     </>
   );
 }

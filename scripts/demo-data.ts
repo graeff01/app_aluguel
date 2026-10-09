@@ -9,6 +9,7 @@ import { getSettings } from "../src/lib/settings";
 import { concludeVisit, createManualVisit } from "../src/server/visits";
 import { refreshPropertyPreviews } from "../src/server/property-preview";
 import { toLocalInput } from "../src/lib/time";
+import { removeDemoData } from "../src/server/demo";
 
 const arg = (n: string) => {
   const i = process.argv.indexOf(`--${n}`);
@@ -20,19 +21,8 @@ const admin = await db.user.findFirstOrThrow({ where: { role: "ADMIN", active: t
 const actor = { id: admin.id, role: admin.role };
 
 if (process.argv.includes("--remover")) {
-  const visits = await db.visit.findMany({ where: { consultantId: consultant.id, clientName: { startsWith: "[DEMO]" } }, select: { id: true, clientId: true, opportunityId: true } });
-  const ids = visits.map((v) => v.id);
-  const opps = [...new Set(visits.map((v) => v.opportunityId).filter(Boolean))] as string[];
-  const clients = [...new Set(visits.map((v) => v.clientId).filter(Boolean))] as string[];
-  await db.$transaction(async (tx) => {
-    await tx.visit.updateMany({ where: { id: { in: ids } }, data: { opportunityId: null } });
-    await tx.opportunity.deleteMany({ where: { id: { in: opps } } });
-    await tx.visitOutcomeHistory.deleteMany({ where: { visitId: { in: ids } } });
-    await tx.visit.deleteMany({ where: { id: { in: ids } } });
-    await tx.client.deleteMany({ where: { id: { in: clients }, visits: { none: {} } } });
-    await tx.auditLog.deleteMany({ where: { entityId: { in: ids } } });
-  });
-  console.log(`Removidas ${ids.length} visitas de demonstração.`);
+  const n = await removeDemoData(null, consultant.id);
+  console.log(`Removidas ${n} visitas de demonstração.`);
   process.exit(0);
 }
 
