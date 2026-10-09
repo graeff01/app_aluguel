@@ -381,6 +381,14 @@ model Property {
   /// AGENDA = campo "local" do evento; MANUAL = digitado no app (a agenda não sobrescreve)
   addressSource String?
   addressUpdatedAt DateTime?
+  /// coordenadas para o mapa (geocodificação do endereço ou do bairro; cache)
+  lat           Float?
+  lng           Float?
+  /// texto que gerou as coordenadas (mudou o endereço → geocodifica de novo)
+  geoQuery      String?
+  /// ADDRESS = endereço; AREA = só bairro; NONE = não encontrado
+  geoPrecision  String?
+  geocodedAt    DateTime?
 
   visits        Visit[]
   opportunities Opportunity[]

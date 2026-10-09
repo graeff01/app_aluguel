@@ -224,3 +224,27 @@ body::after {
     display: none;
   }
 }
+
+/* ── Mapa da rota (Leaflet) ── */
+.rm-tiles { filter: grayscale(0.85) contrast(0.92) brightness(1.04) saturate(0.9); }
+@media (prefers-color-scheme: dark) {
+  .rm-tiles { filter: invert(1) hue-rotate(180deg) grayscale(0.85) brightness(0.82) contrast(0.95); }
+}
+.leaflet-container { font-family: inherit; background: var(--tint); }
+.leaflet-control-attribution { font-size: 10px; background: rgb(255 255 255 / 0.75) !important; border-radius: 8px 0 0 0; }
+.rm-pin-wrap { background: none; border: 0; }
+.rm-pin {
+  width: 36px; height: 44px; display: grid; place-items: start center; padding-top: 4px;
+  background: var(--c);
+  clip-path: path("M18 43C18 43 33 28.5 33 17.5A15 15 0 1 0 3 17.5C3 28.5 18 43 18 43Z");
+  color: #fff; font-weight: 800; font-size: 14px; line-height: 26px;
+  filter: drop-shadow(0 3px 4px rgb(0 0 0 / 0.25));
+  transition: transform 0.2s ease;
+  transform-origin: 50% 100%;
+}
+.rm-pin span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 999px; background: rgb(255 255 255 / 0.16); }
+.rm-pin.is-sel { transform: scale(1.22); }
+.rm-pin.is-approx span { outline: 2px dashed rgb(255 255 255 / 0.85); outline-offset: -3px; }
+.rm-me { width: 22px; height: 22px; border-radius: 999px; background: #2f6fde; border: 3px solid #fff; box-shadow: 0 0 0 6px rgb(47 111 222 / 0.25); }
+.rm-strip { scrollbar-width: none; }
+.rm-strip::-webkit-scrollbar { display: none; }

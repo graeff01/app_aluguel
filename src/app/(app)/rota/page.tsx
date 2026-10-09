@@ -11,6 +11,12 @@ import { cx, Segmented } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { PropertyThumb } from "@/components/property-preview";
 import { AddressEditor } from "@/components/address-editor";
+import { RouteMapLazy } from "@/components/route-map-lazy";
+import type { MapStop } from "@/components/route-map";
+import { ensurePropertyCoords } from "@/server/geo";
+import { db } from "@/lib/db";
+import { endOfDayInTz, startOfDayInTz } from "@/lib/time";
+import { log } from "@/lib/log";
 
 export const metadata = { title: "Rota do dia" };
 
@@ -31,6 +37,12 @@ export default async function RoutePage({ searchParams }: { searchParams: Promis
   const today = dayKey(now);
   const tomorrow = addDays(today, 1);
   const day = isDayKey(sp.dia) ? sp.dia : today;
+  // coordenadas que faltarem (poucas por vez; o worker adianta as próximas visitas)
+  const codes = await db.visit.findMany({
+    where: { ...(global ? (sp.consultora ? { consultantId: sp.consultora } : {}) : { consultantId: actor.id }), excluded: false, propertyCode: { not: null }, scheduledStart: { gte: startOfDayInTz(day), lt: endOfDayInTz(day) } },
+    select: { propertyCode: true },
+  });
+  await ensurePropertyCoords(codes.map((c) => c.propertyCode!), { maxCalls: 3, now }).catch(() => log.warn("geo.inline_failed"));
   const r = await dayRoute(actor, { day, consultantId: sp.consultora ?? null }, now);
   const editable = new Map<string, boolean>();
   for (const s of r.stops) if (s.propertyCode && !editable.has(s.propertyCode)) editable.set(s.propertyCode, await canEditPropertyAddress(actor, s.propertyCode));
@@ -45,6 +57,34 @@ export default async function RoutePage({ searchParams }: { searchParams: Promis
   };
   const consultantName = r.consultants.find((c) => c.id === r.consultantId)?.name;
   const isToday = day === today;
+  const firstNext = r.stops.find((x) => x.pending && x.scheduledStart > now)?.id;
+  const mapStops: MapStop[] = r.stops.map((x, i) => {
+    const tone = visitTone(x, now);
+    return {
+      id: x.id,
+      n: i + 1,
+      time: fmt.time(x.scheduledStart),
+      end: fmt.time(x.scheduledEnd),
+      status: x.status === "SCHEDULED" ? (TONE_LABEL[tone] ?? "Agendada") : x.evaluation ? EVALUATION_LABEL[x.evaluation] : STATUS_LABEL[x.status],
+      tone: x.status !== "SCHEDULED" ? "done" : tone === "live" ? "live" : tone === "awaiting" || tone === "overdue" ? "late" : x.id === firstNext ? "next" : "later",
+      client: x.clientName ?? "Cliente sem nome",
+      code: x.propertyCode,
+      area: x.property?.neighborhood ?? null,
+      address: x.property?.address ?? null,
+      approximate: x.property?.geoPrecision === "AREA",
+      lat: x.property?.lat ?? null,
+      lng: x.property?.lng ?? null,
+      photoUrl: x.property?.photoUrl ?? null,
+      href: x.status === "SCHEDULED" ? `/visitas/${x.id}/registrar` : null,
+      mapsUrl: x.loc ? mapsPlaceUrl(x.loc.query) : null,
+      wazeUrl: x.loc ? wazeUrl(x.loc.query) : null,
+      driveMin: x.drive?.minutes ?? null,
+      driveKm: x.drive?.km ?? null,
+      gapMin: x.gapMin,
+      tight: x.tight,
+    };
+  });
+  const listOpen = r.stops.some((x) => x.pending && (!x.loc || x.loc.approximate)) || !r.stops.some((x) => x.property?.lat != null);
 
   return (
     <div className="mx-auto max-w-xl">
@@ -72,6 +112,8 @@ export default async function RoutePage({ searchParams }: { searchParams: Promis
         )}
       </div>
 
+      {r.stops.length > 0 && <RouteMapLazy stops={mapStops} line={r.line} totalDriveMin={r.totalDriveMin} />}
+
       {r.routeUrl ? (
         <a
           href={r.routeUrl}
@@ -97,6 +139,12 @@ export default async function RoutePage({ searchParams }: { searchParams: Promis
         </p>
       )}
 
+      {r.stops.length > 0 && (
+      <details className="group" open={listOpen}>
+        <summary className="mb-3 flex min-h-11 cursor-pointer list-none items-center justify-between text-[13px] font-bold tracking-[0.1em] text-ink-3 uppercase">
+          Lista e endereços ({r.stops.length})
+          <span aria-hidden className="text-lg transition-transform group-open:rotate-45">+</span>
+        </summary>
       <ol className="relative">
         {r.stops.map((s, i) => {
           const tone = visitTone(s, now);
@@ -118,10 +166,12 @@ export default async function RoutePage({ searchParams }: { searchParams: Promis
                       : s.sameProperty
                         ? `Mesmo imóvel · ${gapText(s.gapMin)} de intervalo`
                         : s.tight
-                          ? `Só ${gapText(s.gapMin)} para chegar${s.property?.neighborhood ? ` em ${s.property.neighborhood}` : ""}`
+                          ? s.drive
+                            ? `Apertado: ${gapText(s.gapMin)} de intervalo e ~${s.drive.minutes} min de carro`
+                            : `Só ${gapText(s.gapMin)} para chegar${s.property?.neighborhood ? ` em ${s.property.neighborhood}` : ""}`
                           : s.gapMin === 0
                             ? "Em seguida"
-                            : `${gapText(s.gapMin)} livre${s.sameArea ? " · mesmo bairro" : ""}`}
+                            : `${gapText(s.gapMin)} livre${s.drive ? ` · ~${s.drive.minutes} min de carro` : s.sameArea ? " · mesmo bairro" : ""}`}
                   </span>
                 </div>
               )}
@@ -186,6 +236,8 @@ export default async function RoutePage({ searchParams }: { searchParams: Promis
           );
         })}
       </ol>
+      </details>
+      )}
       <p className="pt-6 pb-6 text-center text-[12px] text-ink-3">
         O endereço vem do campo “Local” do evento na agenda ou do que for informado aqui. Sem endereço, a rota usa o bairro do anúncio.
       </p>

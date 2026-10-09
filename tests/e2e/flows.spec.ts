@@ -285,13 +285,17 @@ test("consultora: rota do dia abre no Maps com o endereço do imóvel", async ({
   await login(page, "c@e2e.test");
   await page.goto("/rota");
   await expect(page.getByRole("heading", { name: /^Rota de/ })).toBeVisible();
-  if (!(await page.getByText("Cliente Rota").isVisible())) await page.getByRole("link", { name: "Amanhã" }).click();
-  await expect(page.getByText("Cliente Rota")).toBeVisible();
+  if (!(await page.getByText("Cliente Rota").first().isVisible())) await page.getByRole("link", { name: "Amanhã" }).click();
+  await expect(page.getByText("Cliente Rota").first()).toBeVisible();
   const maps = page.getByRole("link", { name: /Abrir rota no Google Maps/ });
   await expect(maps).toBeVisible();
   const href = new URL((await maps.getAttribute("href"))!);
   expect(href.searchParams.get("destination")).toBe("Rua Teste, 322, Canoas - RS");
   await expect(page.getByRole("link", { name: "Waze" }).first()).toBeVisible();
+  // mapa com marcadores numerados e mini-cards
+  await expect(page.getByRole("region", { name: "Mapa da rota" })).toBeVisible();
+  await expect(page.locator(".rm-pin")).not.toHaveCount(0);
+  await expect(page.getByText(/paradas? no mapa/)).toBeVisible();
 });
 
 test("atalho da notificação abre o registro já marcado", async ({ page }, info) => {

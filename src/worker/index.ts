@@ -12,6 +12,7 @@ import { getSettings } from "@/lib/settings";
 import { executeRun } from "@/server/sync/runner";
 import { sendDailyReminders, sendMonthlyReportNotice, sendResultReminders, sendUpcomingVisitReminders, sendWeeklySummary } from "@/server/reminders";
 import { refreshPropertyPreviews } from "@/server/property-preview";
+import { refreshGeocodes } from "@/server/geo";
 import { recordError } from "@/lib/error-tracking";
 import { runRetention } from "@/server/privacy";
 
@@ -74,6 +75,7 @@ async function main() {
       if (Date.now() - lastPreviewCheck > 2 * 60_000) {
         lastPreviewCheck = Date.now();
         await refreshPropertyPreviews().catch((e) => log.error("property_preview.failed", { code: errorCode(e) }));
+        await refreshGeocodes().catch((e) => log.error("geo.refresh_failed", { code: errorCode(e) }));
       }
       if (Date.now() - lastReminderCheck > 10 * 60_000) {
         lastReminderCheck = Date.now();

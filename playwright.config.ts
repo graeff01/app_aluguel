@@ -30,6 +30,7 @@ export default defineConfig({
       APP_URL: `http://localhost:${PORT}`,
       TOKEN_ENCRYPTION_KEY: "ZTJlLWtleS1lMmUta2V5LWUyZS1rZXktMTIzNDU2Nzg=",
       LOG_SILENT: "1",
+      MAP_SERVICES: "off",
     },
   },
 });

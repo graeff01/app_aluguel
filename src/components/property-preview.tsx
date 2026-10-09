@@ -3,18 +3,7 @@ import { propertyUrl } from "@/server/property-preview";
 import { Icon } from "./icons";
 import { cx } from "./ui";
 
-/** Miniatura do imóvel (foto do site) com fallback neutro. */
-export function PropertyThumb({ photoUrl, className }: { photoUrl?: string | null; className?: string }) {
-  return (
-    <span className={cx("relative grid shrink-0 place-items-center overflow-hidden rounded-2xl bg-tint", className)}>
-      {photoUrl ? (
-        <img src={photoUrl} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="absolute inset-0 size-full object-cover" />
-      ) : (
-        <Icon name="home" className="size-6 text-ink-3" />
-      )}
-    </span>
-  );
-}
+export { PropertyThumb } from "./property-thumb";
 
 /** Bloco do imóvel: foto ampla, título do anúncio e link para o site. */
 export function PropertyCard({ code, photoUrl, title, template, statsHref }: { code: string | null; photoUrl?: string | null; title?: string | null; template: string; statsHref?: string }) {

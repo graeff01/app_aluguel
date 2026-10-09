@@ -10,11 +10,15 @@ import { assert, hasGlobalView, type AuthzActor } from "@/lib/authz";
 import { getSettings } from "@/lib/settings";
 import { cleanAddress, mapsRouteUrl, routeQuery } from "@/lib/address";
 import { dayKey, endOfDayInTz, startOfDayInTz } from "@/lib/time";
+import { drivingRoute, type DrivingRoute } from "./geo";
 
 /** Abaixo disso, entre bairros diferentes, o intervalo é marcado como apertado. */
 export const TIGHT_GAP_MIN = 20;
 
-export async function dayRoute(actor: AuthzActor, opts: { day?: string; consultantId?: string | null } = {}, now = new Date()) {
+/** Folga mínima além do trajeto de carro (estacionar, chegar à porta). */
+export const ARRIVAL_BUFFER_MIN = 5;
+
+export async function dayRoute(actor: AuthzActor, opts: { day?: string; consultantId?: string | null; fetchImpl?: typeof fetch; driving?: boolean } = {}, now = new Date()) {
   const global = hasGlobalView(actor);
   const day = opts.day ?? dayKey(now);
   const consultants = global
@@ -31,7 +35,7 @@ export async function dayRoute(actor: AuthzActor, opts: { day?: string; consulta
     });
     consultantId = first?.consultantId ?? consultants[0]?.id ?? null;
   }
-  if (!consultantId) return { day, consultantId: null, consultants, stops: [], routeUrl: null, remaining: 0, missing: 0 };
+  if (!consultantId) return { day, consultantId: null, consultants, stops: [], routeUrl: null, remaining: 0, missing: 0, line: null as DrivingRoute["line"] | null, totalDriveMin: null as number | null };
 
   const visits = await db.visit.findMany({
     where: {
@@ -50,9 +54,15 @@ export async function dayRoute(actor: AuthzActor, opts: { day?: string; consulta
       propertyCode: true,
       status: true,
       evaluation: true,
-      property: { select: { code: true, address: true, addressSource: true, neighborhood: true, city: true, category: true, photoUrl: true, title: true } },
+      property: { select: { code: true, address: true, addressSource: true, neighborhood: true, city: true, category: true, photoUrl: true, title: true, lat: true, lng: true, geoPrecision: true } },
     },
   });
+
+  // trajeto de carro entre as paradas com coordenadas (na ordem do dia)
+  const located = visits.filter((v) => v.property?.lat != null && v.property?.lng != null);
+  const drive = opts.driving === false ? null : await drivingRoute(located.map((v) => ({ lat: v.property!.lat!, lng: v.property!.lng! })), opts.fetchImpl);
+  const driveTo = new Map<string, { minutes: number; km: number }>();
+  if (drive) located.forEach((v, i) => i > 0 && drive.legs[i - 1] && driveTo.set(v.id, drive.legs[i - 1]));
 
   const stops = visits.map((v, i) => {
     const prev = visits[i - 1];
@@ -61,13 +71,16 @@ export async function dayRoute(actor: AuthzActor, opts: { day?: string; consulta
     const sameProperty = !!prev && !!v.propertyCode && prev.propertyCode === v.propertyCode;
     const sameArea = !!prev && !!v.property?.neighborhood && prev.property?.neighborhood === v.property.neighborhood;
     const pending = v.status === "SCHEDULED" && v.scheduledEnd > now;
+    // trajeto só vale quando a parada anterior também está no mapa (perna consecutiva)
+    const leg = prev && located.includes(prev) ? (driveTo.get(v.id) ?? null) : null;
     return {
       ...v,
       loc,
       gapMin,
       sameProperty,
       sameArea,
-      tight: gapMin !== null && !sameProperty && !sameArea && gapMin < TIGHT_GAP_MIN,
+      drive: leg,
+      tight: gapMin !== null && !sameProperty && (leg ? gapMin < leg.minutes + ARRIVAL_BUFFER_MIN : !sameArea && gapMin < TIGHT_GAP_MIN),
       overlap: gapMin !== null && gapMin < 0,
       pending,
     };
@@ -83,6 +96,8 @@ export async function dayRoute(actor: AuthzActor, opts: { day?: string; consulta
     routeUrl: mapsRouteUrl(queries.map((query) => ({ query }))),
     remaining: next.length,
     missing: stops.filter((s) => s.pending && !s.loc).length,
+    line: drive?.line ?? null,
+    totalDriveMin: drive ? drive.legs.reduce((a, l) => a + l.minutes, 0) : null,
   };
 }
 
