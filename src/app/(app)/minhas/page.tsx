@@ -33,7 +33,7 @@ function when(v: VisitListItem, today: string) {
 const TONE_LABEL = { overdue: "Atrasada", awaiting: "Aguardando resultado", live: "Em andamento", upcoming: "Agendada" } as const;
 
 /** Card da tela única: barra de status colorida + texto; foto do imóvel; ações na base. */
-function MineCard({ v, today, now, mode, index, team }: { v: VisitListItem & { note?: string | null }; today: string; now: Date; mode: "awaiting" | "upcoming" | "done"; index: number; team?: boolean }) {
+function MineCard({ v, today, now, mode, index, team }: { v: VisitListItem & { note?: string | null }; today: string; now: Date; mode: "awaiting" | "live" | "upcoming" | "done"; index: number; team?: boolean }) {
   const tone = visitTone(v, now);
   const startsSoon = v.scheduledStart.getTime() <= now.getTime() + 15 * 60_000;
   const tappable = true; // futuras também abrem (cancelar/remarcar já disponíveis)
@@ -78,7 +78,7 @@ function MineCard({ v, today, now, mode, index, team }: { v: VisitListItem & { n
     </div>
   );
   const action =
-    mode === "awaiting" ? (
+    mode === "awaiting" || mode === "live" ? (
       <Link href={href} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-[15px] font-semibold text-on-primary shadow-[0_6px_16px_-8px_rgb(29_32_35/0.6)] dark:shadow-none">
         Registrar resultado <Icon name="arrow" className="size-4" />
       </Link>
@@ -119,6 +119,11 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
   const isToday = (d: Date) => dayKey(d) === today;
   const todayDone = done.filter((v) => isToday(v.scheduledStart)).length;
   const todayTotal = todayDone + awaiting.filter((v) => isToday(v.scheduledStart)).length + upcoming.filter((v) => isToday(v.scheduledStart)).length;
+  // já começou: conta como "para registrar" (o resultado já pode ser lançado)
+  const live = upcoming.filter((v) => v.scheduledStart <= now);
+  const future = upcoming.filter((v) => v.scheduledStart > now);
+  const toRegister = awaiting.length + live.length;
+  const nextToday = future.find((v) => isToday(v.scheduledStart));
 
   return (
     <div className="mx-auto max-w-xl">
@@ -127,11 +132,13 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         {team ? "Visitas da equipe" : `${greeting(now)}, ${actor.name.split(" ")[0]}`}
       </h1>
       <p className="mt-1.5 text-[15px] text-ink-2">
-        {awaiting.length === 0
-          ? "Nada esperando o seu registro."
-          : awaiting.length === 1
+        {toRegister === 0
+          ? nextToday
+            ? `Nada para registrar agora. Próxima às ${fmt.time(nextToday.scheduledStart)}.`
+            : "Nada esperando o seu registro."
+          : toRegister === 1
             ? "1 visita esperando o seu registro."
-            : `${awaiting.length} visitas esperando o seu registro.`}
+            : `${toRegister} visitas esperando o seu registro.`}
       </p>
 
       {todayTotal > 0 && (
@@ -156,13 +163,15 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         </div>
       )}
 
-      {awaiting.length === 0 && !busca && (
+      {toRegister === 0 && !busca && (
         <div className="animate-rise mb-9 rounded-[26px] border border-good/15 bg-good-soft px-6 py-8 text-center">
           <span aria-hidden className="animate-pop mx-auto mb-3 grid size-12 place-items-center rounded-full bg-good text-xl text-bg shadow-[0_8px_20px_-8px_var(--good)]">
             ✓
           </span>
           <p className="text-[17px] font-bold text-good">Tudo em dia</p>
-          <p className="mt-1 text-sm text-good/80">Nenhuma visita esperando resultado.</p>
+          <p className="mt-1 text-sm text-good/80">
+            {nextToday ? `Nenhum resultado pendente. Próxima visita às ${fmt.time(nextToday.scheduledStart)}.` : "Nenhuma visita esperando resultado."}
+          </p>
         </div>
       )}
 
@@ -208,7 +217,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
                   now={now}
                   index={i}
                   team={team}
-                  mode={v.status !== "SCHEDULED" ? "done" : v.scheduledEnd <= now ? "awaiting" : "upcoming"}
+                  mode={v.status !== "SCHEDULED" ? "done" : v.scheduledEnd <= now ? "awaiting" : v.scheduledStart <= now ? "live" : "upcoming"}
                 />
               ))}
             </ul>
@@ -219,7 +228,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
       <InstallHint />
       <PushPrompt publicKey={pushConfig()?.publicKey ?? null} />
 
-      {awaiting.length > 0 && (
+      {toRegister > 0 && (
         <section aria-labelledby="t-aw" className="mb-9">
           <h2 id="t-aw" className="mb-3 text-[12px] font-bold tracking-[0.12em] text-ink-3 uppercase">
             Para registrar
@@ -227,6 +236,9 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
           <ul className="space-y-3">
             {awaiting.map((v, i) => (
               <MineCard key={v.id} v={v} today={today} now={now} mode="awaiting" index={i} team={team} />
+            ))}
+            {live.map((v, i) => (
+              <MineCard key={v.id} v={v} today={today} now={now} mode="live" index={awaiting.length + i} team={team} />
             ))}
           </ul>
         </section>
@@ -236,12 +248,12 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         <h2 id="t-up" className="mb-3 text-[12px] font-bold tracking-[0.12em] text-ink-3 uppercase">
           Próximas
         </h2>
-        {upcoming.length === 0 ? (
+        {future.length === 0 ? (
           <p className="rounded-3xl border border-dashed border-line-strong px-5 py-6 text-center text-sm text-ink-3">Nenhuma visita hoje ou amanhã.</p>
         ) : (
           <ul className="space-y-3">
-            {upcoming.map((v, i) => (
-              <MineCard key={v.id} v={v} today={today} now={now} mode="upcoming" index={awaiting.length + i} team={team} />
+            {future.map((v, i) => (
+              <MineCard key={v.id} v={v} today={today} now={now} mode="upcoming" index={toRegister + i} team={team} />
             ))}
           </ul>
         )}
