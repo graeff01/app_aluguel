@@ -9,6 +9,7 @@ import { getSettings } from "@/lib/settings";
 import { runSync, type SyncStats } from "./engine";
 import { authorizedClient, realCalendarApi } from "./google";
 import { GoogleApiError, type CalendarApi } from "./types";
+import { refreshPropertyPreviews } from "../property-preview";
 
 export const SYNC_LOCK_KEY = 74_210_626;
 
@@ -46,6 +47,8 @@ export async function executeRun(runId: string, apiFactory: ApiFactory = default
       const stats: SyncStats = await runSync({ api, full: opts.full, now: opts.now });
       await db.syncRun.update({ where: { id: runId }, data: { status: "SUCCESS", finishedAt: new Date(), stats, mode: stats.mode } });
       log.info("sync.success", { runId, mode: stats.mode, received: stats.received, created: stats.created, updated: stats.updated, conflicts: stats.conflicts });
+      // visita nova: busca a foto do imóvel na hora (não espera o ciclo periódico)
+      if (stats.created > 0 || stats.updated > 0) await refreshPropertyPreviews({ limit: 10, pauseMs: 300 }).catch(() => undefined);
       return stats;
     } catch (e) {
       const code = errorCode(e);

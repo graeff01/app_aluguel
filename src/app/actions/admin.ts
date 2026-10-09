@@ -261,6 +261,7 @@ export async function settingsAction(_: ActionState, fd: FormData) {
         consultantCanCorrectData: str(fd, "consultantCanCorrectData") === "1",
         remindersEnabled: str(fd, "remindersEnabled") === "1",
         reminderHour: int("reminderHour", 6, 20),
+        upcomingReminderMinutes: int("upcomingReminderMinutes", 0, 240),
         coverageGoal: int("coverageGoal", 50, 100),
         staleOpportunityDays: int("staleOpportunityDays", 2, 60),
         propertyUrlTemplate: (() => {

@@ -181,3 +181,53 @@ function addDaysKey(key: string, n: number) {
   const [y, mo, d] = key.split("-").map(Number);
   return new Date(Date.UTC(y, mo - 1, d + n)).toISOString().slice(0, 10);
 }
+
+// ─────────────── Lembrete antes da visita (consultora) ───────────────
+
+/**
+ * Avisa a consultora N minutos antes de cada visita agendada (uma vez por visita).
+ * Conteúdo: horário e código do imóvel — sem nome do cliente (aparece na tela bloqueada).
+ */
+export async function sendUpcomingVisitReminders(now = new Date(), opts: { send?: Sender; email?: EmailSender | null } = {}) {
+  const send = opts.send ?? sendPush;
+  const email = opts.email !== undefined ? opts.email : emailConfig() ? sendEmail : null;
+  const pushOn = !!opts.send || !!pushConfig();
+  if (!pushOn && !email) return { skipped: "NO_CHANNEL" as const };
+  const settings = await getSettings();
+  const minutes = settings.upcomingReminderMinutes;
+  if (!settings.remindersEnabled || minutes <= 0) return { skipped: "DISABLED" as const };
+
+  const visits = await db.visit.findMany({
+    where: {
+      status: "SCHEDULED",
+      excluded: false,
+      consultantId: { not: null },
+      consultant: { active: true },
+      scheduledStart: { gt: now, lte: new Date(now.getTime() + minutes * 60_000) },
+    },
+    select: { id: true, scheduledStart: true, propertyCode: true, consultant: { select: { id: true, email: true, _count: { select: { pushSubscriptions: true } } } } },
+  });
+  const timeFmt = new Intl.DateTimeFormat("pt-BR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+  let sent = 0;
+  for (const v of visits) {
+    const c = v.consultant!;
+    const id = await claim(c.id, dayKey(v.scheduledStart), `upcoming:${v.id}`, 1);
+    if (!id) continue; // já lembrado
+    const mins = Math.max(1, Math.round((v.scheduledStart.getTime() - now.getTime()) / 60_000));
+    const delivered = await notify(
+      { id: c.id, email: c.email, subs: pushOn ? c._count.pushSubscriptions : 0 },
+      {
+        title: `Visita às ${timeFmt.format(v.scheduledStart)}${v.propertyCode ? ` · imóvel ${v.propertyCode}` : ""}`,
+        body: mins >= 60 ? `Começa em ${Math.round(mins / 60)} h. Toque para ver os detalhes.` : `Começa em ${mins} min. Toque para ver os detalhes.`,
+        url: "/minhas",
+        tag: `visita-${v.id}`,
+      },
+      send,
+      email,
+    );
+    await db.reminderLog.update({ where: { id }, data: { delivered } });
+    sent += delivered;
+  }
+  if (sent) log.info("upcoming_reminders.sent", { notifications: sent });
+  return { sent };
+}

@@ -12,6 +12,7 @@ import { ContactButtons } from "@/components/contact-buttons";
 import { relativeTime, TONE_BAR, TONE_TEXT, visitTone } from "@/lib/visit-tone";
 import { PushPrompt } from "@/components/push-toggle";
 import { PropertyThumb } from "@/components/property-preview";
+import { LockedRegisterButton } from "@/components/locked-register";
 import { InstallHint } from "@/components/install-hint";
 import { historyWhere } from "@/server/queries";
 import { db } from "@/lib/db";
@@ -35,11 +36,11 @@ const TONE_LABEL = { overdue: "Atrasada", awaiting: "Aguardando resultado", live
 function MineCard({ v, today, now, mode, index, team }: { v: VisitListItem & { note?: string | null }; today: string; now: Date; mode: "awaiting" | "upcoming" | "done"; index: number; team?: boolean }) {
   const tone = visitTone(v, now);
   const startsSoon = v.scheduledStart.getTime() <= now.getTime() + 15 * 60_000;
-  const tappable = mode !== "upcoming" || startsSoon;
+  const tappable = true; // futuras também abrem (cancelar/remarcar já disponíveis)
   const rel = mode === "done" ? null : relativeTime(mode === "awaiting" ? v.scheduledEnd : v.scheduledStart, now);
   const hasPhone = !!v.phoneNormalized && mode !== "done";
   const href = `/visitas/${v.id}/registrar`;
-  const label = `${mode === "done" ? "Alterar resultado" : "Registrar resultado"}: ${v.clientName ?? "cliente sem nome"}, ${when(v, today)}`;
+  const label = `${mode === "done" ? "Alterar resultado" : mode === "upcoming" && !startsSoon ? "Abrir visita" : "Registrar resultado"}: ${v.clientName ?? "cliente sem nome"}, ${when(v, today)}`;
   const info = (
     <div className="flex gap-4">
       <PropertyThumb photoUrl={v.property?.photoUrl} className="size-[72px]" />
@@ -81,10 +82,9 @@ function MineCard({ v, today, now, mode, index, team }: { v: VisitListItem & { n
       <Link href={href} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-[15px] font-semibold text-on-primary shadow-[0_6px_16px_-8px_rgb(29_32_35/0.6)] dark:shadow-none">
         Registrar resultado <Icon name="arrow" className="size-4" />
       </Link>
-    ) : mode === "upcoming" && startsSoon ? (
-      <Link href={href} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[#e8f0fe] text-[15px] font-semibold text-[#1a56c4] dark:bg-[#1b2a45] dark:text-[#93b8ff]">
-        Em andamento · registrar <Icon name="arrow" className="size-4" />
-      </Link>
+    ) : mode === "upcoming" ? (
+      // antes do horário: visível, travado, libera sozinho 15 min antes
+      <LockedRegisterButton href={href} unlockAt={new Date(v.scheduledStart.getTime() - 15 * 60_000).toISOString()} unlockLabel={fmt.time(new Date(v.scheduledStart.getTime() - 15 * 60_000))} />
     ) : null;
   return (
     <li className="animate-rise relative overflow-hidden rounded-[26px] border border-line bg-surface shadow-card" style={{ animationDelay: `${Math.min(index, 8) * 55}ms` }}>

@@ -21,6 +21,7 @@ type Props = {
   isEdit: boolean;
   future: boolean;
   afterSave: string;
+  unlockLabel?: string;
 };
 
 const STATUS_OPTIONS: { value: Status; label: string; hint?: string }[] = [
@@ -136,9 +137,21 @@ export function OutcomeForm(p: Props) {
       <fieldset className="mb-6">
         <legend className="mb-3 text-[17px] font-bold tracking-[-0.02em]">A visita aconteceu?</legend>
         <div className="grid gap-2 sm:grid-cols-2">
-          {STATUS_OPTIONS.map((o) => (
-            <Choice key={o.value} name="status" value={o.value} checked={status === o.value} onChange={() => setStatus(o.value)} label={o.label} hint={o.hint} />
-          ))}
+          {STATUS_OPTIONS.map((o) => {
+            const locked = p.future && (o.value === "DONE" || o.value === "NO_SHOW");
+            return (
+              <Choice
+                key={o.value}
+                name="status"
+                value={o.value}
+                checked={status === o.value}
+                onChange={() => setStatus(o.value)}
+                label={o.label}
+                hint={locked ? `Disponível a partir das ${p.unlockLabel ?? "início da visita"}` : o.hint}
+                disabled={locked}
+              />
+            );
+          })}
         </div>
       </fieldset>
 
@@ -279,22 +292,29 @@ export function OutcomeForm(p: Props) {
   );
 }
 
-function Choice({ name, value, checked, onChange, label, hint, compact }: { name: string; value: string; checked: boolean; onChange: () => void; label: string; hint?: string; compact?: boolean }) {
+function Choice({ name, value, checked, onChange, label, hint, compact, disabled }: { name: string; value: string; checked: boolean; onChange: () => void; label: string; hint?: string; compact?: boolean; disabled?: boolean }) {
   return (
     <label
       className={cx(
-        "relative flex cursor-pointer items-center gap-3.5 rounded-2xl border px-4 transition-[border,box-shadow,background]",
+        "relative flex items-center gap-3.5 rounded-2xl border px-4 transition-[border,box-shadow,background]",
+        disabled ? "cursor-not-allowed border-dashed border-line-strong bg-tint opacity-70" : "cursor-pointer",
         compact ? "min-h-13 py-3" : "min-h-16 py-3.5",
-        checked ? "border-primary bg-primary text-on-primary shadow-float" : "border-line bg-surface shadow-card hover:border-line-strong",
+        !disabled && (checked ? "border-primary bg-primary text-on-primary shadow-float" : "border-line bg-surface shadow-card hover:border-line-strong"),
       )}
     >
-      <input type="radio" name={name} value={value} checked={checked} onChange={onChange} className="peer sr-only" />
+      <input type="radio" name={name} value={value} checked={checked} onChange={onChange} disabled={disabled} className="peer sr-only" />
       <span
         aria-hidden
         className={cx("grid size-5 shrink-0 place-items-center rounded-full border-2", checked ? "border-accent bg-accent" : "border-line-strong")}
       >
         {checked && <span className="size-1.5 rounded-full bg-white" />}
       </span>
+      {disabled && (
+        <svg aria-hidden viewBox="0 0 24 24" className="absolute top-1/2 right-4 size-4 -translate-y-1/2 text-ink-3" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <rect x="5" y="11" width="14" height="9" rx="2" />
+          <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+        </svg>
+      )}
       <span className="min-w-0">
         <span className="block text-[15px] font-semibold">{label}</span>
         {hint && <span className={cx("block text-[13px]", checked ? "text-on-primary/65" : "text-ink-3")}>{hint}</span>}

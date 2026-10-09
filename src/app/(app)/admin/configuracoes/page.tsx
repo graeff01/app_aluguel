@@ -54,6 +54,9 @@ export default async function SettingsPage() {
           <Field label="Horário do envio (Brasília)" htmlFor="reminderHour">
             <Input id="reminderHour" name="reminderHour" type="number" min={6} max={20} defaultValue={s.reminderHour} />
           </Field>
+          <Field label="Lembrete antes da visita (minutos)" htmlFor="upcomingReminderMinutes" hint="A consultora recebe “Visita às 19:00 · imóvel 12345” com esta antecedência. 0 desliga.">
+            <Input id="upcomingReminderMinutes" name="upcomingReminderMinutes" type="number" min={0} max={240} defaultValue={s.upcomingReminderMinutes} />
+          </Field>
         </Section>
         <Section title="Sincronização">
           <div className="grid gap-x-3 sm:grid-cols-2">

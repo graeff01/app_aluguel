@@ -5,6 +5,7 @@ import { Icon } from "./icons";
 import { VisitStatusBadge } from "./visit-badges";
 import { ContactButtons } from "./contact-buttons";
 import { TONE_BAR, visitTone } from "@/lib/visit-tone";
+import { LockedRegisterButton } from "./locked-register";
 import type { VisitListItem } from "@/server/queries";
 import { revisitLabel, scheduledByConsultant } from "@/lib/labels";
 
@@ -52,8 +53,16 @@ export function VisitCard({ v, now = new Date(), showConsultant, showDate }: { v
               {v.assignmentStatus === "NEEDS_REVIEW" && <Badge tone="warn">Atribuição em revisão</Badge>}
             </div>
           )}
-          {(canRegister && started) || v.phoneNormalized ? (
+          {canRegister || v.phoneNormalized ? (
             <div className="mt-4 flex items-center gap-2">
+              {canRegister && !started && (
+                <LockedRegisterButton
+                  href={`/visitas/${v.id}/registrar`}
+                  unlockAt={new Date(v.scheduledStart.getTime() - 15 * 60_000).toISOString()}
+                  unlockLabel={fmt.time(new Date(v.scheduledStart.getTime() - 15 * 60_000))}
+                  className="relative z-[1] sm:flex-none sm:min-w-64"
+                />
+              )}
               {canRegister && started && (
                 <LinkButton href={`/visitas/${v.id}/registrar`} className="relative z-[1] flex-1 sm:flex-none">
                   Registrar resultado

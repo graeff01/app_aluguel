@@ -87,6 +87,7 @@ export default async function RegisterPage({ params, searchParams }: { params: P
         reasons={reasons}
         isEdit={isEdit}
         afterSave={global ? `/visitas/${visit.id}?salvo=1` : "/minhas?salvo=1"}
+        unlockLabel={fmt.time(new Date(visit.scheduledStart.getTime() - 15 * 60_000))}
         future={visit.scheduledStart.getTime() > now.getTime() + 15 * 60_000}
         initial={{
           status: isEdit ? (visit.status as "DONE") : null,

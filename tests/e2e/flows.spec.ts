@@ -221,3 +221,23 @@ test("consultora busca visita antiga e acessa alterar senha", async ({ page }, i
   await page.getByRole("link", { name: "Alterar senha" }).click();
   await expect(page.getByRole("heading", { name: "Alterar senha" })).toBeVisible();
 });
+
+test("visita futura: resultado travado até o horário, cancelar liberado", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await login(page, "a@e2e.test");
+  const card = page.locator("li", { hasText: "Cliente Futuro" });
+  const locked = card.getByRole("link", { name: /Resultado a partir das/ });
+  await expect(locked).toBeVisible();
+  await locked.click();
+  await expect(page.getByRole("heading", { name: "Registrar resultado" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: /Sim, aconteceu/ })).toBeDisabled();
+  await expect(page.getByRole("radio", { name: /Cliente não compareceu/ })).toBeDisabled();
+  await expect(page.getByText(/Disponível a partir das/).first()).toBeVisible();
+  await page.getByText("Cancelada", { exact: true }).click();
+  await page.getByRole("button", { name: "+ Cliente cancelou a visita." }).click();
+  await page.getByRole("button", { name: "Salvar resultado" }).click();
+  await expect(page).toHaveURL(/minhas|registrar/);
+  await page.goto("/minhas");
+  await page.getByText(/Registradas nos últimos 7 dias/).click();
+  await expect(page.locator("li", { hasText: "Cliente Futuro" }).getByText("Cancelada")).toBeVisible();
+});

@@ -119,6 +119,8 @@ model AppSettings {
   remindersEnabled         Boolean  @default(true)
   /// hora local (America/Sao_Paulo) do envio diário
   reminderHour             Int      @default(9)
+  /// lembrete antes da visita (minutos de antecedência; 0 = desligado)
+  upcomingReminderMinutes  Int      @default(60)
   /// link do imóvel no site; {codigo} é substituído pelo código
   propertyUrlTemplate      String   @default("https://www.auxiliadorapredial.com.br/imovel/aluguel/{codigo}?tag=8086")
   /// meta de cobertura de registro (%) exibida no painel
