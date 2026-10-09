@@ -6,6 +6,7 @@ import { useOnline } from "@/components/online-status";
 import { cx } from "@/components/ui";
 import { EVALUATION_LABEL, STATUS_LABEL } from "@/lib/labels";
 import { appendNote, quickNotesFor } from "@/lib/quick-notes";
+import { looksLikeDocument } from "@/lib/sensitive";
 
 type Status = "DONE" | "NO_SHOW" | "CANCELED" | "RESCHEDULED";
 type Evaluation = "POSITIVE" | "NEGATIVE" | "UNDECIDED";
@@ -229,6 +230,11 @@ export function OutcomeForm(p: Props) {
           placeholder="O que o cliente disse? Ex.: gostou da localização, achou o condomínio alto."
           className="block min-h-36 w-full rounded-2xl border border-line-strong bg-surface px-4 py-3.5 text-[15px] shadow-card transition focus:border-ink focus:shadow-[0_0_0_4px_rgb(29_32_35/0.06)] focus:outline-none aria-[invalid=true]:border-bad"
         />
+        {looksLikeDocument(note) && (
+          <p role="status" className="mt-2 rounded-xl bg-warn-soft px-3 py-2 text-[13px] font-semibold text-warn">
+            Parece um documento (CPF/RG). Por privacidade, não registre documentos na observação.
+          </p>
+        )}
         <p id="note-help" className={cx("num mt-1.5 text-right text-[13px]", note.length > p.noteMax ? "font-semibold text-bad" : "text-ink-3")}>
           {note.length}/{p.noteMax}
         </p>

@@ -38,6 +38,9 @@ export function UserMenu({ name, email, role, showProfile, pushKey, simpleMobile
             </button>
           </form>
         )}
+        <Link href="/privacidade" className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium hover:bg-tint">
+          <Icon name="audit" className="size-[18px] text-ink-3" /> Privacidade
+        </Link>
         <form action={logoutAction}>
           <button className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-bad hover:bg-bad-soft">
             <Icon name="logout" className="size-[18px]" /> Sair

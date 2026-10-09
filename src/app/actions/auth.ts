@@ -1,7 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { createSession, destroySession, clientIp, getActor } from "@/lib/session";
+import { createSession, destroySession, clientIp, getActor, readActor } from "@/lib/session";
 import { hashPassword, passwordProblem, verifyPassword } from "@/lib/password";
 import { hitRateLimit, clearRateLimit } from "@/lib/ratelimit";
 import { safeEqual, sha256 } from "@/lib/crypto";
@@ -130,8 +130,19 @@ export async function setInitialPasswordAction(_: ActionState, fd: FormData): Pr
 
 /** Gestão: alterna a tela única no celular. */
 export async function toggleSimpleMobileAction() {
-  const actor = await getActor();
+  const actor = await readActor();
   if (!actor) redirect("/login");
   await db.user.update({ where: { id: actor.id }, data: { simpleMobile: !actor.simpleMobile } });
   redirect(actor.simpleMobile ? "/painel" : "/minhas");
+}
+
+/** Registra a ciência do aviso de privacidade (a tela recarrega em seguida). */
+export async function acceptPrivacyAction(): Promise<{ ok: boolean }> {
+  const actor = await readActor();
+  if (!actor) return { ok: false };
+  await db.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: actor.id }, data: { privacyAcceptedAt: new Date() } });
+    await audit(tx, { actorId: actor.id, action: "user.privacy_accepted", entityType: "User", entityId: actor.id });
+  });
+  return { ok: true };
 }

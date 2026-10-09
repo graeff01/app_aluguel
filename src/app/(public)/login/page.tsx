@@ -18,7 +18,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <p className="mt-2 mb-8 text-[15px] text-ink-2">Entre com seu e-mail e senha.</p>
       <LoginForm />
       <p className="mt-10 border-t border-line pt-6 text-[13px] leading-relaxed text-ink-3">
-        Esqueceu a senha? Peça à gestora ou ao administrador um link de redefinição. Não há cadastro público.
+        Esqueceu a senha? Peça à gestora ou ao administrador um link de redefinição. Não há cadastro público.{" "}
+        <a href="/privacidade" className="underline underline-offset-4">
+          Aviso de privacidade
+        </a>
+        .
       </p>
     </>
   );

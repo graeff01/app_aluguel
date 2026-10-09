@@ -106,7 +106,7 @@ async function processEvent(ctx: Ctx, ev: GEvent, opts: { inWindowOnly: boolean;
   ctx.stats.received++;
   ctx.seen.add(ev.id);
   const key = { calendarId_googleEventId: { calendarId: ctx.calendarId, googleEventId: ev.id } };
-  const existing = await db.sourceEvent.findUnique({ where: key, include: { visit: true } });
+  const existing = await db.sourceEvent.findUnique({ where: key, include: { visit: { include: { client: { select: { anonymizedAt: true } } } } } });
 
   if (ev.status === "cancelled") {
     if (!existing) {
@@ -126,6 +126,13 @@ async function processEvent(ctx: Ctx, ev: GEvent, opts: { inWindowOnly: boolean;
       ctx.stats.ignored++;
       return;
     }
+  }
+
+  // LGPD: cliente anonimizado — só horários/status; nenhum conteúdo do evento volta a ser gravado
+  if (existing?.visit?.client?.anonymizedAt) {
+    ctx.stats.ignored++;
+    await db.sourceEvent.update({ where: { id: existing.id }, data: { googleStatus: ev.status ?? "confirmed", lastSeenAt: ctx.now, startAt: start, endAt: end } });
+    return;
   }
 
   const classification = classifyTitle(ev.summary, ctx.patterns);

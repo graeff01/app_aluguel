@@ -231,3 +231,30 @@ export async function sendUpcomingVisitReminders(now = new Date(), opts: { send?
   if (sent) log.info("upcoming_reminders.sent", { notifications: sent });
   return { sent };
 }
+
+// ─────────────── Aviso do relatório mensal (gestão) ───────────────
+
+/** Dia 1, a partir da hora configurada: avisa a gestão que o relatório do mês anterior está pronto. */
+export async function sendMonthlyReportNotice(now = new Date(), opts: { send?: Sender; email?: EmailSender | null; force?: boolean } = {}) {
+  const send = opts.send ?? sendPush;
+  const email = opts.email !== undefined ? opts.email : emailConfig() ? sendEmail : null;
+  const pushOn = !!opts.send || !!pushConfig();
+  if (!pushOn && !email) return { skipped: "NO_CHANNEL" as const };
+  const settings = await getSettings();
+  const today = dayKey(now);
+  if (!opts.force && (today.slice(8) !== "01" || localHour(now) < settings.reminderHour)) return { skipped: "NOT_TIME" as const };
+  const [y, m] = today.split("-").map(Number);
+  const prev = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+  const names = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+  const label = names[Number(prev.slice(5)) - 1];
+  const managers = await db.user.findMany({ where: { role: "MANAGER", active: true }, select: { id: true, email: true, _count: { select: { pushSubscriptions: true } } } });
+  let sent = 0;
+  for (const u of managers) {
+    const id = await claim(u.id, today, `monthly_report:${prev}`, 1);
+    if (!id) continue;
+    const delivered = await notify({ id: u.id, email: u.email, subs: pushOn ? u._count.pushSubscriptions : 0 }, { title: `Relatório de ${label} pronto`, body: "Números da equipe, comparação entre consultoras e PDF para a direção.", url: `/relatorios?mes=${prev}`, tag: `relatorio-${prev}` }, send, email);
+    await db.reminderLog.update({ where: { id }, data: { delivered } });
+    sent += delivered;
+  }
+  return { sent };
+}

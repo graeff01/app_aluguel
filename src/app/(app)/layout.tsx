@@ -10,6 +10,7 @@ import { BottomNav, SideNav, type NavItem } from "@/components/nav";
 import { OfflineBanner } from "@/components/online-status";
 import { UserMenu } from "@/components/user-menu";
 import { ForcePasswordDialog } from "@/components/force-password";
+import { PrivacyDialog } from "@/components/privacy-dialog";
 import { pushConfig } from "@/lib/push";
 import { RefreshOnFocus } from "@/components/refresh-on-focus";
 import { BrandSymbol } from "@/components/brand";
@@ -23,6 +24,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const actor = await requireActor();
   // senha provisória: nada do app é exibido até a troca
   if (actor.mustChangePassword) return <div className="min-h-dvh bg-bg"><ForcePasswordDialog name={actor.name} /></div>;
+  // LGPD: ciência do aviso de privacidade no primeiro acesso
+  if (!actor.privacyAcceptedAt) return <div className="min-h-dvh"><PrivacyDialog name={actor.name} /></div>;
   const settings = await getSettings();
   const now = new Date();
   const global = hasGlobalView(actor);
@@ -56,6 +59,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           title: "Operação",
           items: [
             { href: "/painel", label: "Painel", icon: "dashboard" },
+            { href: "/relatorios", label: "Relatórios", icon: "audit" },
             { href: "/hoje", label: "Hoje", icon: "today" },
             { href: "/pendencias", label: "Pendências", icon: "pending", badge: pending },
             { href: "/revisao", label: "Revisão", icon: "review", badge: reviewCount },

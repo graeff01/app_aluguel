@@ -14,7 +14,7 @@ export function sessionCookieName() {
   return env.secureCookies ? "__Host-vl_session" : "vl_session";
 }
 
-export type Actor = { id: string; name: string; email: string; role: Role; mustChangePassword: boolean; simpleMobile: boolean };
+export type Actor = { id: string; name: string; email: string; role: Role; mustChangePassword: boolean; simpleMobile: boolean; privacyAcceptedAt: Date | null };
 
 export async function createSession(userId: string) {
   const token = randomToken(32);
@@ -37,8 +37,8 @@ export async function destroySession() {
   jar.delete(sessionCookieName());
 }
 
-/** Usuário autenticado e ativo da requisição atual (ou null). */
-export const getActor = cache(async (): Promise<Actor | null> => {
+/** Leitura sem cache — use em ações que alteram o próprio usuário antes de redirecionar. */
+export async function readActor(): Promise<Actor | null> {
   const jar = await cookies();
   const token = jar.get(sessionCookieName())?.value;
   if (!token) return null;
@@ -56,8 +56,11 @@ export const getActor = cache(async (): Promise<Actor | null> => {
     });
   }
   const u = session.user;
-  return { id: u.id, name: u.name, email: u.email, role: u.role, mustChangePassword: u.mustChangePassword, simpleMobile: u.simpleMobile };
-});
+  return { id: u.id, name: u.name, email: u.email, role: u.role, mustChangePassword: u.mustChangePassword, simpleMobile: u.simpleMobile, privacyAcceptedAt: u.privacyAcceptedAt };
+}
+
+/** Usuário autenticado e ativo da requisição atual (ou null). Memoizado por requisição. */
+export const getActor = cache(readActor);
 
 /** IP do cliente (atrás do proxy do Railway) — usado só para limitação de tentativas. */
 export async function clientIp(): Promise<string> {

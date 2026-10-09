@@ -9,7 +9,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  serverExternalPackages: ["@node-rs/argon2", "pg", "@prisma/adapter-pg"],
+  serverExternalPackages: ["@node-rs/argon2", "pg", "@prisma/adapter-pg", "@react-pdf/renderer"],
+  // arquivos lidos em tempo de execução pelo PDF (fontes e logotipo)
+  outputFileTracingIncludes: { "/api/relatorios/mensal": ["./assets/**/*"] },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

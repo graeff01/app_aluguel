@@ -1,0 +1,3 @@
+Manrope — Copyright 2018 The Manrope Project Authors (https://github.com/sharanda/manrope)
+Licenciada sob a SIL Open Font License, Version 1.1 — https://openfontlicense.org
+Arquivos .woff (subconjunto latino) obtidos de @fontsource/manrope.

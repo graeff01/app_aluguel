@@ -49,6 +49,14 @@ export default async function SettingsPage() {
             <Input id="staleOpportunityDays" name="staleOpportunityDays" type="number" min={2} max={60} defaultValue={s.staleOpportunityDays} />
           </Field>
         </Section>
+        <Section title="Privacidade (LGPD)">
+          <Field label="Anonimizar clientes sem atividade há (meses)" htmlFor="retentionMonths" hint="Remove nome, telefone e observações; indicadores preservados. 0 desliga. Roda uma vez por dia.">
+            <Input id="retentionMonths" name="retentionMonths" type="number" min={0} max={120} defaultValue={s.retentionMonths} />
+          </Field>
+          <Field label="Contato para pedidos de titulares" htmlFor="privacyContact" hint="Aparece no aviso de privacidade. Ex.: privacidade@imobiliaria.com.br">
+            <Input id="privacyContact" name="privacyContact" defaultValue={s.privacyContact} maxLength={120} />
+          </Field>
+        </Section>
         <Section title="Lembretes de pendências">
           <YesNo name="remindersEnabled" value={s.remindersEnabled} label="Enviar lembrete diário no celular" hint="Para quem ativou os lembretes no aparelho. Consultora: visitas dela há mais de 24 h sem registro. Gestora: resumo da equipe. Não envia aos domingos." />
           <Field label="Horário do envio (Brasília)" htmlFor="reminderHour">

@@ -104,3 +104,8 @@ function done(s: ActionState) {
   if (s.ok) revalidatePath("/", "layout");
   return s;
 }
+
+export async function anonymizeClientAction(_: ActionState, fd: FormData) {
+  const { anonymizeClient } = await import("@/server/privacy");
+  return done(await runAction((a) => anonymizeClient(a, str(fd, "clientId"), str(fd, "reason")).then((ok) => (ok ? "Dados pessoais removidos. Os indicadores foram preservados." : "Este cliente já estava anonimizado."))));
+}

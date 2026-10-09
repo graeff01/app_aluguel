@@ -7,6 +7,7 @@ import { OPP_STATUS_LABEL } from "@/lib/labels";
 import { Badge, KeyValue, PageHeader, Panel, Section } from "@/components/ui";
 import { VisitCard } from "@/components/visit-card";
 import { MergeForm } from "./merge-form";
+import { AnonymizeForm } from "./anonymize-form";
 
 export const metadata = { title: "Cliente" };
 
@@ -52,6 +53,13 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
             <VisitCard key={v.id} v={v} showDate showConsultant />
           ))}
         </ul>
+      </Section>
+      <Section title="Privacidade (LGPD)">
+        {c.anonymizedAt ? (
+          <p className="rounded-3xl border border-line bg-surface-2 p-5 text-sm text-ink-3">Dados pessoais removidos em {c.anonymizedAt.toLocaleDateString("pt-BR")}. Indicadores preservados.</p>
+        ) : (
+          <AnonymizeForm clientId={c.id} />
+        )}
       </Section>
     </>
   );

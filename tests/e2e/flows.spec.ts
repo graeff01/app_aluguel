@@ -251,3 +251,31 @@ test("celular: campos com 16px (sem zoom automático do iPhone)", async ({ page 
   const viewport = await page.locator('meta[name="viewport"]').getAttribute("content");
   expect(viewport).not.toContain("user-scalable=no"); // pinça continua liberada
 });
+
+test("LGPD: aviso de privacidade no primeiro acesso", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await page.goto("/login");
+  await page.getByLabel("E-mail").fill("privacidade@e2e.test");
+  await page.getByLabel("Senha").fill(PW);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText(/Não registre documentos/)).toBeVisible();
+  await expect(page.getByText(/esperando o seu registro|Nada esperando/)).toHaveCount(0); // app bloqueado até a ciência
+  await dialog.getByRole("button", { name: "Li e estou de acordo" }).click();
+  await expect(page.getByText(/esperando o seu registro|Nada esperando/).first()).toBeVisible();
+  await page.goto("/privacidade");
+  await expect(page.getByRole("heading", { name: "Aviso de privacidade" })).toBeVisible();
+});
+
+test("gestora: relatório mensal com prévia e PDF", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  await login(page, "gestora@e2e.test");
+  await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Relatórios" }).click();
+  await expect(page.getByRole("heading", { name: /^Visitas — / })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Destaques" })).toBeVisible();
+  const href = await page.getByRole("link", { name: /Baixar PDF/ }).first().getAttribute("href");
+  const res = await page.request.get(href!);
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-type"]).toBe("application/pdf");
+  expect((await res.body()).subarray(0, 5).toString()).toBe("%PDF-");
+});

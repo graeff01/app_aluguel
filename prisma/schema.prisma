@@ -28,6 +28,8 @@ model User {
   mustChangePassword Boolean @default(false)
   /// gestão: preferir a tela única (Minhas visitas) no celular
   simpleMobile       Boolean @default(false)
+  /// ciência do aviso de privacidade (LGPD)
+  privacyAcceptedAt  DateTime?
   role          Role
   active        Boolean   @default(true)
   deactivatedAt DateTime?
@@ -121,6 +123,11 @@ model AppSettings {
   reminderHour             Int      @default(9)
   /// lembrete antes da visita (minutos de antecedência; 0 = desligado)
   upcomingReminderMinutes  Int      @default(60)
+  /// LGPD: anonimizar clientes sem atividade há N meses (0 = desligado)
+  retentionMonths          Int      @default(24)
+  /// LGPD: contato para pedidos de titulares (exibido no aviso de privacidade)
+  privacyContact           String   @default("")
+  retentionLastRunAt       DateTime?
   /// link do imóvel no site; {codigo} é substituído pelo código
   propertyUrlTemplate      String   @default("https://www.auxiliadorapredial.com.br/imovel/aluguel/{codigo}?tag=8086")
   /// meta de cobertura de registro (%) exibida no painel
@@ -319,6 +326,8 @@ model Client {
   name           String
   identityStatus IdentityStatus @default(PENDING)
   mergedIntoId   String?
+  /// LGPD: dados pessoais removidos (retenção ou pedido do titular); métricas preservadas
+  anonymizedAt   DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 

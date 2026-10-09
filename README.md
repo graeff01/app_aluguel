@@ -30,6 +30,8 @@ Web responsivo + PWA instalável, interface em português, fuso `America/Sao_Pau
 - **Lembretes por e-mail** para quem não ativou notificações (opcional, via Resend: `RESEND_API_KEY` e `EMAIL_FROM`).
 - **Registro de erros próprio** (navegador, servidor e worker), sem dados pessoais, no Diagnóstico; admin é avisado no celular quando surge um erro novo.
 - **CI:** GitHub Actions roda typecheck, testes (Postgres real), build e E2E; o Railway só publica quando a verificação passa.
+- **Relatório mensal em PDF** (gestão → Relatórios): resumo executivo com comparação ao mês anterior e destaques automáticos, comparação entre consultoras (tabela + gráficos com média da equipe e meta), evolução de 6 meses, funil, motivos, imóveis, qualidade dos dados, metodologia e uma ficha por consultora. Gerado no servidor com `@react-pdf/renderer` (fonte Manrope e logotipo em `assets/`). Aviso à gestão no dia 1.
+- **LGPD:** aviso de privacidade (`/privacidade`) com ciência registrada no primeiro acesso; exclusão a pedido do titular (página do cliente) e retenção automática (padrão 24 meses) por **anonimização** — remove nome, telefones e observações, preservando os indicadores; a sincronização não regrava dados de cliente anonimizado; aviso ao digitar documentos (CPF/RG) na observação.
 - **Exportar CSV** (gestão) com os filtros do Histórico; separador `;`, compatível com Excel, proteção contra fórmulas e registro na auditoria.
 
 ## Stack
