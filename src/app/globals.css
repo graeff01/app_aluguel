@@ -159,3 +159,20 @@ details > summary::-webkit-details-marker {
 .press:active {
   transform: scale(0.985);
 }
+
+/*
+ * iPhone amplia a página ao focar campos com fonte < 16px. Em telas de toque, todos os campos usam 16px
+ * (sem bloquear o zoom por pinça, que é necessário para acessibilidade).
+ */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+/* sem zoom por toque duplo nem atraso de toque; pinça continua funcionando */
+html,
+body {
+  touch-action: manipulation;
+}

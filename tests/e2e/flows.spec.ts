@@ -242,3 +242,12 @@ test("visita futura: resultado travado até o horário, cancelar liberado", asyn
   await page.getByText(/Registradas nos últimos 7 dias/).click();
   await expect(page.locator("li", { hasText: "Cliente Futuro" }).getByText("Cancelada")).toBeVisible();
 });
+
+test("celular: campos com 16px (sem zoom automático do iPhone)", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await page.goto("/login");
+  const size = await page.getByLabel("E-mail").evaluate((el) => getComputedStyle(el).fontSize);
+  expect(size).toBe("16px");
+  const viewport = await page.locator('meta[name="viewport"]').getAttribute("content");
+  expect(viewport).not.toContain("user-scalable=no"); // pinça continua liberada
+});
