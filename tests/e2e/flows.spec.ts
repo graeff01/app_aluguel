@@ -236,7 +236,8 @@ test("visita futura: resultado travado até o horário, cancelar liberado", asyn
   await page.getByText("Cancelada", { exact: true }).click();
   await page.getByRole("button", { name: "+ Cliente cancelou a visita." }).click();
   await page.getByRole("button", { name: "Salvar resultado" }).click();
-  await expect(page).toHaveURL(/minhas|registrar/);
+  // espera a confirmação do servidor antes de sair da tela
+  await expect(page.getByText(/Resultado (anterior )?salvo/).first()).toBeVisible();
   await page.goto("/minhas");
   await page.getByText(/Registradas nos últimos 7 dias/).click();
   await expect(page.locator("li", { hasText: "Cliente Futuro" }).getByText("Cancelada")).toBeVisible();
