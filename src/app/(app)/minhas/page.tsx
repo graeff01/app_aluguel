@@ -4,7 +4,8 @@ import { hasGlobalView } from "@/lib/authz";
 import { listMine, visitListSelect, type VisitListItem } from "@/server/queries";
 import { dayKey, fmt } from "@/lib/time";
 import { pushConfig } from "@/lib/push";
-import { EVALUATION_LABEL, STATUS_LABEL } from "@/lib/labels";
+import { EVALUATION_LABEL, STATUS_LABEL, revisitLabel, scheduledByConsultant } from "@/lib/labels";
+import { withRevisits } from "@/server/revisits";
 import { cx } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { ContactButtons } from "@/components/contact-buttons";
@@ -56,6 +57,21 @@ function MineCard({ v, today, now, mode, index, team }: { v: VisitListItem & { n
           <Icon name="home" className="size-4 text-ink-3" />
           {v.propertyCode ? <span className="num font-semibold text-ink">{v.propertyCode}</span> : <span className="text-warn">sem código</span>}
         </p>
+        {(v.revisit || scheduledByConsultant(v)) && (
+          <p className="mt-2 flex flex-wrap gap-1.5 text-[12px] font-semibold">
+            {v.revisit && (
+              <span className="rounded-full bg-tint px-2 py-0.5 text-ink-2">
+                ↺ {revisitLabel(v.revisit)}
+                {v.revisit.sameProperty ? " · mesmo imóvel" : ""}
+              </span>
+            )}
+            {scheduledByConsultant(v) && (
+              <span className="rounded-full bg-accent-soft px-2 py-0.5 text-accent-strong">
+                Agendada {!team && v.scheduledById === v.consultantId ? "por você" : `por ${v.scheduledBy?.name.split(" ")[0]}`}
+              </span>
+            )}
+          </p>
+        )}
         {mode === "done" && v.note && <p className="mt-2 line-clamp-2 text-sm text-ink-3">“{v.note}”</p>}
       </div>
     </div>
@@ -98,7 +114,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
   const busca = sp.busca?.trim().slice(0, 80) ?? "";
   const { awaiting, upcoming, done, today } = await listMine(actor, now);
   const results = busca
-    ? await db.visit.findMany({ where: historyWhere(actor, { q: busca }), select: { ...visitListSelect, note: true }, orderBy: { scheduledStart: "desc" }, take: 40 })
+    ? await withRevisits(await db.visit.findMany({ where: historyWhere(actor, { q: busca }), select: { ...visitListSelect, note: true }, orderBy: { scheduledStart: "desc" }, take: 40 }))
     : [];
   const isToday = (d: Date) => dayKey(d) === today;
   const todayDone = done.filter((v) => isToday(v.scheduledStart)).length;

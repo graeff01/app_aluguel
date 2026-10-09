@@ -330,6 +330,7 @@ async function createManualVisitTx(actor: AuthzActor, data: z.output<typeof manu
         consultantId,
         assignmentStatus: "MANUAL",
         assignmentNote: "CADASTRO_MANUAL",
+        scheduledById: actor.id,
         ...link,
       },
     });

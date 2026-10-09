@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { requireActor, orNotFound } from "@/lib/require";
 import { getVisitDetail } from "@/server/queries";
-import { canCorrectVisitData, hasGlobalView } from "@/lib/authz";
+import { canCorrectVisitData, canCreateManualVisit, hasGlobalView } from "@/lib/authz";
 import { fmt } from "@/lib/time";
 import { formatPhone } from "@/lib/phone";
 import { ASSIGNMENT_NOTE_LABEL } from "@/lib/parser";
-import { CONFLICT_LABEL, EVALUATION_LABEL, MATCH_LABEL, OPP_STATUS_LABEL, STATUS_LABEL } from "@/lib/labels";
+import { CONFLICT_LABEL, EVALUATION_LABEL, MATCH_LABEL, OPP_STATUS_LABEL, STATUS_LABEL, revisitLabel, scheduledByConsultant, scheduledByLabel } from "@/lib/labels";
 import { Alert, Badge, KeyValue, LinkButton, Panel, Section } from "@/components/ui";
 import { VisitStatusBadge } from "@/components/visit-badges";
 import { VisitAdminTools } from "./admin-tools";
@@ -51,6 +51,17 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
             <span>{fmt.longDate(visit.scheduledStart)}</span> · {fmt.time(visit.scheduledStart)}–{fmt.time(visit.scheduledEnd)}
           </p>
           <h1 className="text-2xl font-bold">{visit.clientName ?? <span className="text-warn">Cliente sem nome</span>}</h1>
+          {(visit.revisit || scheduledByConsultant(visit)) && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {visit.revisit && (
+                <Badge tone="info">
+                  Revisita · {revisitLabel(visit.revisit).replace("Cliente já visitou ", "já visitou ")}
+                  {visit.revisit.sameProperty ? " (mesmo imóvel)" : ""}
+                </Badge>
+              )}
+              {scheduledByConsultant(visit) && <Badge tone="accent">Agendada pela consultora</Badge>}
+            </div>
+          )}
         </div>
         <VisitStatusBadge v={visit} now={now} />
       </div>
@@ -64,6 +75,11 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
         {canCorrect && (
           <LinkButton href={`/visitas/${visit.id}/corrigir`} variant="secondary" className="flex-1 sm:flex-none">
             Corrigir dados
+          </LinkButton>
+        )}
+        {canCreateManualVisit(actor, settings) && visit.clientName && (
+          <LinkButton href={`/visitas/nova?de=${visit.id}`} variant="secondary" className="flex-1 sm:flex-none">
+            Agendar nova visita
           </LinkButton>
         )}
       </div>
@@ -90,6 +106,10 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
               ["Imóvel", visit.propertyCode ?? <Badge tone="warn">ausente</Badge>],
               ["Consultora", visit.consultant?.name ?? <Badge tone="warn">a definir</Badge>],
               ["Origem", visit.origin === "GOOGLE" ? "Agenda Google" : "Cadastro manual"],
+              ["Agendada por", scheduledByLabel(visit)],
+              ...(visit.revisit
+                ? [["Revisita", `${revisitLabel(visit.revisit)} (última em ${fmt.date(visit.revisit.lastDoneAt)}${visit.revisit.sameProperty ? ", inclusive neste imóvel" : ""})`] as [string, React.ReactNode]]
+                : []),
               ...(visit.externalRef ? [["Ref. externa", <span key="r">{visit.externalRef} <span className="text-xs text-ink-3">(significado não confirmado)</span></span>] as [string, React.ReactNode]] : []),
               ...(global ? [["Identificação", MATCH_LABEL[visit.clientMatch]] as [string, React.ReactNode]] : []),
               ...(global && visit.assignmentNote ? [["Atribuição", ASSIGNMENT_NOTE_LABEL[visit.assignmentNote] ?? visit.assignmentNote] as [string, React.ReactNode]] : []),

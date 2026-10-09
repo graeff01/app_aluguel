@@ -248,3 +248,34 @@ describe("oportunidades e clientes (critério 9)", () => {
     expect(today.visits).toHaveLength(1);
   });
 });
+
+describe("revisita e quem agendou", () => {
+  it("visita marcada pela consultora após visita realizada aparece como revisita agendada por ela", async () => {
+    // 1ª visita: veio da agenda central (sem quem agendou)
+    const first = await manual(u.a, { start: "2026-10-05T10:00", code: "0101" });
+    await db.visit.update({ where: { id: first.id }, data: { origin: "GOOGLE", scheduledById: null } });
+    await concludeVisit(u.a, first.id, { requestId: rid(), expectedVersion: 1, status: "DONE", evaluation: "UNDECIDED", note: "quer ver outros" }, NOW);
+
+    // 2ª visita: a consultora agenda no app
+    const second = await manual(u.a, { start: "2026-10-06T16:00", code: "0202" });
+    expect(second.scheduledById).toBe(u.a.id);
+
+    const detail = await getVisitDetail(u.a, second.id, NOW);
+    expect(detail.visit.scheduledBy).toMatchObject({ id: u.a.id, role: "CONSULTANT" });
+    expect(detail.visit.revisit).toMatchObject({ previous: 1, sameProperty: false });
+
+    const firstDetail = await getVisitDetail(u.a, first.id, NOW);
+    expect(firstDetail.visit.revisit).toBeNull();
+    expect(firstDetail.visit.scheduledBy).toBeNull();
+
+    const today = await listToday(u.a, NOW);
+    expect(today.visits.find((v) => v.id === second.id)?.revisit?.previous).toBe(1);
+  });
+
+  it("visita anterior não realizada não conta como revisita", async () => {
+    const first = await manual(u.a, { start: "2026-10-05T10:00" });
+    await concludeVisit(u.a, first.id, { requestId: rid(), expectedVersion: 1, status: "NO_SHOW", note: "não veio" }, NOW);
+    const second = await manual(u.a, { start: "2026-10-06T16:00" });
+    expect((await getVisitDetail(u.a, second.id, NOW)).visit.revisit).toBeNull();
+  });
+});

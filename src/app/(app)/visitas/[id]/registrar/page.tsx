@@ -5,6 +5,7 @@ import { canConcludeVisit, canCorrectVisitData, hasGlobalView } from "@/lib/auth
 import { db } from "@/lib/db";
 import { fmt } from "@/lib/time";
 import { formatPhone } from "@/lib/phone";
+import { revisitLabel, scheduledByConsultant } from "@/lib/labels";
 import { Alert, Panel } from "@/components/ui";
 import { OutcomeForm } from "./outcome-form";
 import { ContactButtons } from "@/components/contact-buttons";
@@ -60,6 +61,13 @@ export default async function RegisterPage({ params, searchParams }: { params: P
           {visit.phoneRaw ? <> · {formatPhone(visit.phoneNormalized, visit.phoneRaw)}</> : <> · <span className="text-warn">sem telefone</span></>}
         </p>
         <p className="text-ink-2">Responsável: {visit.consultant?.name ?? "—"}</p>
+        {visit.revisit && (
+          <p className="text-ink-2">
+            ↺ <strong className="text-ink">Revisita</strong> · {revisitLabel(visit.revisit).toLowerCase()}
+            {visit.revisit.sameProperty ? " (inclusive este imóvel)" : ""}
+          </p>
+        )}
+        {scheduledByConsultant(visit) && <p className="text-ink-2">Agendada pela consultora{visit.scheduledBy && visit.scheduledBy.id !== visit.consultantId ? ` ${visit.scheduledBy.name}` : ""}.</p>}
         <ContactButtons phone={visit.phoneNormalized} name={visit.clientName} compact className="mt-3" />
         {canCorrectVisitData(actor, visit, settings) && (
           <Link href={`/visitas/${visit.id}/corrigir?voltar=registrar`} className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-primary">

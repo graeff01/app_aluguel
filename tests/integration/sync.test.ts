@@ -25,6 +25,16 @@ beforeEach(async () => {
 });
 
 describe("importação e classificação", () => {
+  it("evento criado pela consultora fica marcado como agendado por ela; da agenda central fica sem", async () => {
+    api.put(visitEvent("central", { start: "2026-10-06T13:00:00Z" }));
+    api.put(visitEvent("byA", { start: "2026-10-07T13:00:00Z", extra: { creator: { email: "Consultora.A@exemplo.test" } } }));
+    await sync();
+    const central = await db.visit.findFirstOrThrow({ where: { sourceEvent: { googleEventId: "central" } } });
+    const byA = await db.visit.findFirstOrThrow({ where: { sourceEvent: { googleEventId: "byA" } } });
+    expect(central.scheduledById).toBeNull();
+    expect(byA).toMatchObject({ scheduledById: users.a.id, consultantId: users.a.id });
+  });
+
   it("importa visita padrão, atribui pela consultora convidada e não guarda eventos irrelevantes (critérios 1 e 4)", async () => {
     api.put(visitEvent("ev1", { start: "2026-10-06T13:00:00Z", attendees: ["consultora.a@exemplo.test", "gestora@exemplo.test"] }));
     api.put({ id: "lunch", summary: "Almoço", start: { dateTime: "2026-10-06T15:00:00Z" }, end: { dateTime: "2026-10-06T16:00:00Z" } });

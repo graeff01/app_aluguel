@@ -9,6 +9,7 @@ import { getSettings } from "@/lib/settings";
 import { addDays, dateOnlyKey, dayKey, endOfDayInTz, isDayKey, startOfDayInTz } from "@/lib/time";
 import { computeMetrics, type MetricOpportunity, type MetricVisit } from "@/lib/metrics";
 import type { VisitStatus } from "@/generated/prisma/enums";
+import { withRevisits, type Revisit } from "./revisits";
 
 export const visitListSelect = {
   id: true,
@@ -27,11 +28,14 @@ export const visitListSelect = {
   excluded: true,
   autoCanceled: true,
   version: true,
+  clientId: true,
+  scheduledById: true,
   consultant: { select: { id: true, name: true } },
+  scheduledBy: { select: { id: true, name: true, role: true } },
   property: { select: { photoUrl: true, title: true } },
 } satisfies Prisma.VisitSelect;
 
-export type VisitListItem = Prisma.VisitGetPayload<{ select: typeof visitListSelect }>;
+export type VisitListItem = Prisma.VisitGetPayload<{ select: typeof visitListSelect }> & { revisit?: Revisit | null };
 
 async function chargeStart() {
   const s = await getSettings();
@@ -49,7 +53,7 @@ export async function listToday(actor: AuthzActor, now = new Date()) {
     db.visit.count({ where: await awaitingWhere(actor, now, startOfDayInTz(key)) }),
     db.visit.findFirst({ where: await awaitingWhere(actor, now, startOfDayInTz(key)), orderBy: { scheduledStart: "asc" }, select: { scheduledStart: true } }),
   ]);
-  return { dayKey: key, visits, previousPending: pendingCount, oldestPending: oldestPending?.scheduledStart ?? null };
+  return { dayKey: key, visits: await withRevisits(visits), previousPending: pendingCount, oldestPending: oldestPending?.scheduledStart ?? null };
 }
 
 async function awaitingWhere(actor: AuthzActor, now: Date, before?: Date): Promise<Prisma.VisitWhereInput> {
@@ -83,7 +87,8 @@ export async function listMine(actor: AuthzActor, now = new Date()) {
       take: 30,
     }),
   ]);
-  return { awaiting, upcoming, done, today };
+  const [a, u, d] = await Promise.all([withRevisits(awaiting), withRevisits(upcoming), withRevisits(done)]);
+  return { awaiting: a, upcoming: u, done: d, today };
 }
 
 /** Próxima visita aguardando resultado (a mais antiga), para encadear registros. */
@@ -111,7 +116,7 @@ export async function listPending(actor: AuthzActor, now = new Date()) {
     orderBy: { scheduledStart: "desc" },
     take: 100,
   });
-  return { awaiting, dataIssues };
+  return { awaiting: await withRevisits(awaiting), dataIssues: await withRevisits(dataIssues) };
 }
 
 export type HistoryFilter = {
@@ -157,7 +162,7 @@ export async function listHistory(actor: AuthzActor, f: HistoryFilter) {
     db.visit.findMany({ where, select: visitListSelect, orderBy: { scheduledStart: "desc" }, skip: (page - 1) * take, take }),
     db.visit.count({ where }),
   ]);
-  return { items, total, page, pages: Math.max(1, Math.ceil(total / take)) };
+  return { items: await withRevisits(items), total, page, pages: Math.max(1, Math.ceil(total / take)) };
 }
 
 /** Detalhe com histórico; visitas relacionadas do cliente restritas ao escopo da usuária. */
@@ -173,9 +178,11 @@ export async function getVisitDetail(actor: AuthzActor, id: string, now = new Da
       opportunity: { include: { events: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true } } } }, responsible: { select: { name: true } }, lostReason: true } },
       history: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true } } } },
       sourceEvent: { select: { description: true, title: true, organizerEmail: true, attendees: true, attendeesOmitted: true, googleStatus: true } },
+      scheduledBy: { select: { id: true, name: true, role: true } },
     },
   });
   if (!visit || !canViewVisit(actor, visit)) throw notFound();
+  const [{ revisit }] = await withRevisits([visit]);
   const relatedVisits = visit.clientId
     ? await db.visit.findMany({
         where: { ...visitScope(actor), clientId: visit.clientId, id: { not: visit.id } },
@@ -187,7 +194,7 @@ export async function getVisitDetail(actor: AuthzActor, id: string, now = new Da
   const settings = await getSettings();
   const charged = visit.scheduledStart >= startOfDayInTz(dateOnlyKey(settings.resultsStartDate));
   const awaiting = visit.status === "SCHEDULED" && visit.scheduledEnd <= now && charged && !visit.excluded;
-  return { visit, relatedVisits, awaiting, charged, settings };
+  return { visit: { ...visit, revisit }, relatedVisits, awaiting, charged, settings };
 }
 
 // ─────────────── Revisão (gestão) ───────────────
@@ -346,7 +353,7 @@ export async function getOpportunity(actor: AuthzActor, id: string) {
     },
   });
   if (!opp) throw notFound();
-  return opp;
+  return { ...opp, visits: await withRevisits(opp.visits) };
 }
 
 export async function listClients(f: { q?: string; identity?: string }) {
@@ -375,5 +382,5 @@ export async function getClient(id: string) {
     },
   });
   if (!client) throw notFound();
-  return client;
+  return { ...client, visits: await withRevisits(client.visits) };
 }

@@ -214,6 +214,7 @@ async function upsertVisit(
   t: { start: Date; end: Date; wasCancelled: boolean },
 ) {
   const assignment = assignConsultant(ev.attendees ?? [], !!ev.attendeesOmitted, ctx.aliases);
+  const scheduledById = scheduledByConsultant(ev, ctx.aliases);
   let visit = await tx.visit.findUnique({ where: { sourceEventId } });
 
   if (!visit) {
@@ -260,6 +261,7 @@ async function upsertVisit(
         consultantId: assignment.consultantId,
         assignmentStatus: assignment.status,
         assignmentNote: assignment.note,
+        scheduledById,
         ...link,
       },
     });
@@ -332,6 +334,7 @@ async function upsertVisit(
     data.propertyId = await ensureProperty(tx, parsed.propertyCode);
   }
   if (!visit.externalRef && parsed.externalRef) data.externalRef = parsed.externalRef;
+  if (visit.origin === "GOOGLE" && visit.scheduledById !== scheduledById) data.scheduledById = scheduledById;
   // Atribuição manual nunca é sobrescrita pela sincronização.
   if (visit.assignmentStatus !== "MANUAL" && !manual.has("consultantId")) {
     if (visit.consultantId !== assignment.consultantId || visit.assignmentStatus !== assignment.status) {
@@ -366,6 +369,18 @@ async function upsertVisit(
   if ("clientId" in data && data.clientId !== visit.clientId && visit.clientId) {
     await cleanupOrphanClient(tx, visit.clientId);
   }
+}
+
+/**
+ * Consultora que marcou o evento: criadora (ou organizadora) reconhecida entre os e-mails das consultoras.
+ * Eventos criados pela agenda central/organizadora retornam null.
+ */
+export function scheduledByConsultant(ev: Pick<GEvent, "creator" | "organizer">, consultantAliases: Map<string, string>): string | null {
+  for (const email of [ev.creator?.email, ev.organizer?.email]) {
+    const userId = email ? consultantAliases.get(normalizeEmail(email)) : undefined;
+    if (userId) return userId;
+  }
+  return null;
 }
 
 async function setConflict(tx: Tx, visitId: string, conflict: "CANCELED_IN_GOOGLE" | "NO_LONGER_VISIT" | "CHANGED_AFTER_CONCLUSION" | "POSSIBLE_RECREATION", detail: Record<string, unknown>, ctx: Ctx) {

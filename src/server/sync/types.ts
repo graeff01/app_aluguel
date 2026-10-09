@@ -12,6 +12,8 @@ export type GEvent = {
   start?: { dateTime?: string | null; date?: string | null; timeZone?: string | null } | null;
   end?: { dateTime?: string | null; date?: string | null; timeZone?: string | null } | null;
   organizer?: { email?: string | null } | null;
+  /** quem criou o evento (pode diferir da organizadora em agendas compartilhadas) */
+  creator?: { email?: string | null } | null;
   attendees?: { email?: string | null; organizer?: boolean | null; resource?: boolean | null; responseStatus?: string | null; self?: boolean | null }[] | null;
   attendeesOmitted?: boolean | null;
 };

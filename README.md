@@ -14,6 +14,7 @@ Web responsivo + PWA instalável, interface em português, fuso `America/Sao_Pau
 
 ### Recursos adicionais
 
+- **Revisita e quem agendou:** visita de cliente que já tinha visita realizada aparece como **Revisita** (com quantas vezes já visitou e se foi no mesmo imóvel). Quando é a consultora que marca — pelo botão **Agendar nova visita** no detalhe (dados do cliente pré-preenchidos) ou criando o evento na agenda com o próprio e-mail — a visita fica marcada como **Agendada pela consultora**, separada das marcadas pela agenda central. Também vai para o CSV.
 - **Próxima pendente:** após salvar um resultado, a consultora vai direto para a próxima visita aguardando registro.
 - **Ligar / WhatsApp:** botões no card e no detalhe (somente com telefone validado; apenas abrem o contato, nada é enviado automaticamente).
 - **Lembretes no celular (Web Push):** ativados por cada pessoa no menu da conta. Envio diário (hora configurável, exceto domingo) pelo worker: consultora recebe a contagem das próprias pendências > 24 h; gestora recebe o resumo da equipe. Conteúdo só com contagens. No iPhone exige o app instalado na tela de início (iOS 16.4+).

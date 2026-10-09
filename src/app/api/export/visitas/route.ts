@@ -6,7 +6,8 @@ import { audit } from "@/lib/audit";
 import { historyWhere } from "@/server/queries";
 import { fmt, dayKey } from "@/lib/time";
 import { formatPhone } from "@/lib/phone";
-import { EVALUATION_LABEL, STATUS_LABEL } from "@/lib/labels";
+import { EVALUATION_LABEL, STATUS_LABEL, scheduledByLabel } from "@/lib/labels";
+import { withRevisits } from "@/server/revisits";
 import { csvCell as cell } from "@/lib/csv";
 
 const MAX_ROWS = 20_000;
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
   if (!canViewDashboard(actor)) return new Response("Sem permissão", { status: 403 });
   const sp = req.nextUrl.searchParams;
   const filter = { q: sp.get("q") ?? undefined, from: sp.get("de") ?? undefined, to: sp.get("ate") ?? undefined, status: sp.get("situacao") ?? undefined, consultantId: sp.get("consultora") ?? undefined };
-  const rows = await db.visit.findMany({
+  const rows = await withRevisits(await db.visit.findMany({
     where: historyWhere(actor, filter),
     orderBy: { scheduledStart: "asc" },
     take: MAX_ROWS,
@@ -28,13 +29,14 @@ export async function GET(req: NextRequest) {
       concludedBy: { select: { name: true } },
       client: { select: { identityStatus: true } },
       opportunity: { select: { status: true } },
+      scheduledBy: { select: { name: true, role: true } },
     },
-  });
+  }));
   await db.$transaction((tx) =>
     audit(tx, { actorId: actor.id, action: "export.visits_csv", entityType: "Visit", entityId: "-", changes: { linhas: rows.length, filtros: filter } }),
   );
 
-  const header = ["Data", "Início", "Fim", "Consultora", "Cliente", "Telefone", "Telefone validado", "Imóvel", "Situação", "Avaliação", "Motivo (negativa)", "Observação", "Registrado em", "Registrado por", "Origem", "Identificação do cliente", "Excluída dos indicadores"];
+  const header = ["Data", "Início", "Fim", "Consultora", "Cliente", "Telefone", "Telefone validado", "Imóvel", "Situação", "Avaliação", "Motivo (negativa)", "Observação", "Registrado em", "Registrado por", "Origem", "Agendada por", "Revisita (visitas anteriores)", "Identificação do cliente", "Excluída dos indicadores"];
   const lines = [header.map(cell).join(";")];
   for (const v of rows) {
     lines.push(
@@ -54,6 +56,8 @@ export async function GET(req: NextRequest) {
         v.concludedAt ? fmt.dateTime(v.concludedAt) : "",
         v.concludedBy?.name ?? (v.autoCanceled ? "Agenda Google" : ""),
         v.origin === "GOOGLE" ? "Agenda" : "Manual",
+        scheduledByLabel(v),
+        v.revisit ? `sim (${v.revisit.previous})` : "não",
         v.client?.identityStatus === "CONFIRMED" ? "Confirmada" : v.client ? "Pendente" : "",
         v.excluded ? "sim" : "não",
       ]

@@ -4,9 +4,11 @@ import { ActionForm, FieldError, SubmitButton } from "@/components/action-form";
 import { Field, Input, Select } from "@/components/ui";
 import { createVisitAction } from "@/app/actions/visits";
 
-export function NewVisitForm({ consultants, defaultStart }: { consultants: { id: string; name: string }[]; defaultStart: string }) {
+type Defaults = { clientName: string; phoneRaw: string; propertyCode: string; consultantId: string };
+
+export function NewVisitForm({ consultants, defaultStart, defaults }: { consultants: { id: string; name: string }[]; defaultStart: string; defaults?: Defaults }) {
   const requestId = useMemo(() => crypto.randomUUID(), []);
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(defaults?.propertyCode ?? "");
   return (
     <ActionForm action={createVisitAction} className="max-w-xl">
       {(s) => (
@@ -27,20 +29,20 @@ export function NewVisitForm({ consultants, defaultStart }: { consultants: { id:
             </Field>
           </div>
           <Field label="Nome do cliente" htmlFor="clientName">
-            <Input id="clientName" name="clientName" required maxLength={200} autoComplete="off" />
+            <Input id="clientName" name="clientName" defaultValue={defaults?.clientName} required maxLength={200} autoComplete="off" />
             <FieldError state={s} name="clientName" />
           </Field>
           <Field label="Telefone (com DDD)" htmlFor="phoneRaw" hint="Opcional. Sem telefone, o cadastro fica com identificação pendente.">
-            <Input id="phoneRaw" name="phoneRaw" type="tel" inputMode="tel" maxLength={40} />
+            <Input id="phoneRaw" name="phoneRaw" defaultValue={defaults?.phoneRaw} type="tel" inputMode="tel" maxLength={40} />
           </Field>
-          <Field label="Código do imóvel" htmlFor="propertyCode">
-            <Input id="propertyCode" name="propertyCode" required maxLength={40} inputMode="numeric" onChange={(e) => setCode(e.target.value)} />
+          <Field label="Código do imóvel" htmlFor="propertyCode" hint={defaults ? "Troque se o cliente quiser ver outro imóvel." : undefined}>
+            <Input id="propertyCode" name="propertyCode" defaultValue={defaults?.propertyCode} required maxLength={40} inputMode="numeric" onChange={(e) => setCode(e.target.value)} />
             <FieldError state={s} name="propertyCode" />
             <PropertyPreviewLine code={code} />
           </Field>
           {consultants.length > 0 && (
             <Field label="Consultora responsável" htmlFor="consultantId">
-              <Select id="consultantId" name="consultantId" required defaultValue="">
+              <Select id="consultantId" name="consultantId" required defaultValue={consultants.some((c) => c.id === defaults?.consultantId) ? defaults!.consultantId : ""}>
                 <option value="" disabled>
                   Selecione
                 </option>

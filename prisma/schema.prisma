@@ -40,6 +40,7 @@ model User {
   visits           Visit[]                @relation("VisitConsultant")
   realizedVisits   Visit[]                @relation("VisitRealizedBy")
   concludedVisits  Visit[]                @relation("VisitConcludedBy")
+  scheduledVisits  Visit[]                @relation("VisitScheduledBy")
   outcomeHistory   VisitOutcomeHistory[]
   opportunities    Opportunity[]          @relation("OppResponsible")
   closedOpps       Opportunity[]          @relation("OppClosedResponsible")
@@ -423,6 +424,10 @@ model Visit {
   consultant       User?            @relation("VisitConsultant", fields: [consultantId], references: [id])
   assignmentStatus AssignmentStatus
   assignmentNote   String?
+  /// consultora que marcou a visita (criadora do evento na agenda ou cadastro no app).
+  /// null = agenda central (organizadora). Usado para distinguir revisitas marcadas pela consultora.
+  scheduledById    String?
+  scheduledBy      User?            @relation("VisitScheduledBy", fields: [scheduledById], references: [id])
   clientId         String?
   client           Client?          @relation(fields: [clientId], references: [id])
   clientMatch      ClientMatch      @default(NO_PHONE)

@@ -6,6 +6,7 @@ import { VisitStatusBadge } from "./visit-badges";
 import { ContactButtons } from "./contact-buttons";
 import { TONE_BAR, visitTone } from "@/lib/visit-tone";
 import type { VisitListItem } from "@/server/queries";
+import { revisitLabel, scheduledByConsultant } from "@/lib/labels";
 
 export function VisitCard({ v, now = new Date(), showConsultant, showDate }: { v: VisitListItem; now?: Date; showConsultant?: boolean; showDate?: boolean }) {
   const started = v.scheduledStart.getTime() <= now.getTime() + 15 * 60_000;
@@ -13,6 +14,7 @@ export function VisitCard({ v, now = new Date(), showConsultant, showDate }: { v
   const awaiting = v.status === "SCHEDULED" && v.scheduledEnd <= now && !v.excluded;
   const overdue24 = awaiting && now.getTime() - v.scheduledEnd.getTime() > 24 * 3600_000;
   const otherDay = showDate || dayKey(v.scheduledStart) !== dayKey(now);
+  const byConsultant = scheduledByConsultant(v);
   return (
     <li className="animate-rise group relative overflow-hidden rounded-[26px] border border-line bg-surface shadow-card transition-shadow hover:shadow-float">
       <span aria-hidden className={cx("absolute inset-y-0 left-0 w-[5px]", TONE_BAR[visitTone(v, now)])} />
@@ -37,8 +39,15 @@ export function VisitCard({ v, now = new Date(), showConsultant, showDate }: { v
             {showConsultant && <span>{v.consultant?.name ?? <span className="text-warn">sem consultora</span>}</span>}
             {overdue24 && <span className="font-semibold text-accent-strong">há mais de 24 h</span>}
           </div>
-          {(v.syncConflict !== "NONE" || v.assignmentStatus === "NEEDS_REVIEW") && (
+          {(v.syncConflict !== "NONE" || v.assignmentStatus === "NEEDS_REVIEW" || v.revisit || byConsultant) && (
             <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {v.revisit && (
+                <Badge tone="info">
+                  Revisita · {revisitLabel(v.revisit).replace("Cliente já visitou ", "já visitou ")}
+                  {v.revisit.sameProperty ? " (mesmo imóvel)" : ""}
+                </Badge>
+              )}
+              {byConsultant && <Badge tone="accent">Agendada pela consultora{v.scheduledBy && v.scheduledBy.id !== v.consultantId ? ` (${v.scheduledBy.name.split(" ")[0]})` : ""}</Badge>}
               {v.syncConflict !== "NONE" && <Badge tone="warn">Conflito com a agenda</Badge>}
               {v.assignmentStatus === "NEEDS_REVIEW" && <Badge tone="warn">Atribuição em revisão</Badge>}
             </div>
