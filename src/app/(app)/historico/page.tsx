@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { isMobileRequest } from "@/lib/session";
 import Link from "next/link";
 import { requireActor } from "@/lib/require";
 import { hasGlobalView } from "@/lib/authz";
@@ -11,7 +12,8 @@ export const metadata = { title: "Histórico" };
 
 export default async function HistoryPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const actor = await requireActor();
-  if (!hasGlobalView(actor)) redirect("/minhas");
+  // celular: a consultora usa a tela única (Minhas visitas); no computador tem o menu completo
+  if (!hasGlobalView(actor) && (await isMobileRequest())) redirect("/minhas");
   const sp = await searchParams;
   const global = hasGlobalView(actor);
   const result = await listHistory(actor, { q: sp.q, from: sp.de, to: sp.ate, status: sp.situacao, consultantId: sp.consultora, page: Number(sp.pagina) || 1 });

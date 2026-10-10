@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { isMobileRequest } from "@/lib/session";
 import { requireActor } from "@/lib/require";
 import { hasGlobalView } from "@/lib/authz";
 import { listPending } from "@/server/queries";
@@ -16,7 +17,8 @@ const ISSUE: Record<string, string> = { MISSING_NAME: "sem nome", MISSING_CODE: 
 
 export default async function PendingPage() {
   const actor = await requireActor();
-  if (!hasGlobalView(actor)) redirect("/minhas");
+  // celular: a consultora usa a tela única (Minhas visitas); no computador tem o menu completo
+  if (!hasGlobalView(actor) && (await isMobileRequest())) redirect("/minhas");
   const now = new Date();
   const { awaiting, dataIssues: issues } = await listPending(actor, now);
   const global = hasGlobalView(actor);

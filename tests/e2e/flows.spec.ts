@@ -326,3 +326,16 @@ test("gestora: ao vivo, termômetro e relatório do proprietário", async ({ pag
   expect(res.headers()["content-type"]).toBe("application/pdf");
   expect((await res.body()).subarray(0, 5).toString()).toBe("%PDF-");
 });
+
+test("consultora no computador: menu lateral e telas próprias", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  await login(page, "b@e2e.test");
+  const nav = page.getByRole("navigation", { name: "Principal" });
+  await expect(nav.getByRole("link", { name: /Minhas visitas/ })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Painel" })).toHaveCount(0); // sem itens da gestão
+  await nav.getByRole("link", { name: "Histórico" }).click();
+  await expect(page.getByRole("heading", { name: "Histórico" })).toBeVisible();
+  await expect(page.getByText("Cliente Alfa")).toHaveCount(0); // só as visitas dela
+  await nav.getByRole("link", { name: "Rota do dia" }).click();
+  await expect(page.getByRole("heading", { name: /^Rota de/ })).toBeVisible();
+});

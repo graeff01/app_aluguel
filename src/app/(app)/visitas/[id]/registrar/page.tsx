@@ -56,6 +56,8 @@ export default async function RegisterPage({ params, searchParams }: { params: P
       )}
       <h1 className="mb-3 text-[28px] leading-tight font-bold tracking-[-0.03em]">{isEdit ? "Alterar resultado" : "Registrar resultado"}</h1>
       {visit.excluded && <Alert tone="warn" title="Esta visita foi excluída dos indicadores pela gestão." />}
+      <div className="lg:grid lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start lg:gap-8 xl:grid-cols-[400px_minmax(0,1fr)]">
+      <aside className="lg:sticky lg:top-24">
       <Panel className="mb-6">
         <p className="text-sm text-ink-3">
           {fmt.shortDate(visit.scheduledStart)} · {fmt.time(visit.scheduledStart)}–{fmt.time(visit.scheduledEnd)}
@@ -83,6 +85,8 @@ export default async function RegisterPage({ params, searchParams }: { params: P
       <div className="mb-6">
         <PropertyCard code={visit.propertyCode} photoUrl={visit.property?.photoUrl} title={visit.property?.title} template={settings.propertyUrlTemplate} />
       </div>
+      </aside>
+      <div className="min-w-0 lg:rounded-[26px] lg:border lg:border-line lg:bg-surface lg:p-7 lg:shadow-card">
       <OutcomeForm
         visitId={visit.id}
         version={visit.version}
@@ -102,6 +106,8 @@ export default async function RegisterPage({ params, searchParams }: { params: P
           note: isEdit ? (visit.note ?? "") : "",
         }}
       />
+      </div>
+      </div>
     </>
   );
 }

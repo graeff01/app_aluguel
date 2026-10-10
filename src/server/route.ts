@@ -80,7 +80,7 @@ export async function dayRoute(actor: AuthzActor, opts: { day?: string; consulta
       sameProperty,
       sameArea,
       drive: leg,
-      tight: gapMin !== null && !sameProperty && (leg ? gapMin < leg.minutes + ARRIVAL_BUFFER_MIN : !sameArea && gapMin < TIGHT_GAP_MIN),
+      tight: gapMin !== null && !sameProperty && (leg ? gapMin < leg.minutes + ARRIVAL_BUFFER_MIN : !sameArea && !!prev?.property?.neighborhood && !!v.property?.neighborhood && gapMin < TIGHT_GAP_MIN),
       overlap: gapMin !== null && gapMin < 0,
       pending,
     };

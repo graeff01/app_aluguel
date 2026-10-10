@@ -17,6 +17,7 @@ import { ensurePropertyCoords } from "@/server/geo";
 import { db } from "@/lib/db";
 import { endOfDayInTz, startOfDayInTz } from "@/lib/time";
 import { log } from "@/lib/log";
+import { isMobileRequest } from "@/lib/session";
 
 export const metadata = { title: "Rota do dia" };
 
@@ -84,10 +85,11 @@ export default async function RoutePage({ searchParams }: { searchParams: Promis
       tight: x.tight,
     };
   });
-  const listOpen = r.stops.some((x) => x.pending && (!x.loc || x.loc.approximate)) || !r.stops.some((x) => x.property?.lat != null);
+  // no computador a lista fica sempre aberta ao lado do mapa
+  const listOpen = !(await isMobileRequest()) || r.stops.some((x) => x.pending && (!x.loc || x.loc.approximate)) || !r.stops.some((x) => x.property?.lat != null);
 
   return (
-    <div className="mx-auto max-w-xl">
+    <div className="mx-auto max-w-xl lg:max-w-none">
       <Link href={global ? "/ao-vivo" : "/minhas"} className="mb-3 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
         ← {global ? "Ao vivo" : "Minhas visitas"}
       </Link>
@@ -112,7 +114,9 @@ export default async function RoutePage({ searchParams }: { searchParams: Promis
         )}
       </div>
 
-      {r.stops.length > 0 && <RouteMapLazy stops={mapStops} line={r.line} totalDriveMin={r.totalDriveMin} />}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:gap-6">
+      <div className="lg:sticky lg:top-24">{r.stops.length > 0 && <RouteMapLazy stops={mapStops} line={r.line} totalDriveMin={r.totalDriveMin} />}</div>
+      <div className="min-w-0">
 
       {r.routeUrl ? (
         <a
@@ -238,6 +242,8 @@ export default async function RoutePage({ searchParams }: { searchParams: Promis
       </ol>
       </details>
       )}
+      </div>
+      </div>
       <p className="pt-6 pb-6 text-center text-[12px] text-ink-3">
         O endereço vem do campo “Local” do evento na agenda ou do que for informado aqui. Sem endereço, a rota usa o bairro do anúncio.
       </p>

@@ -168,7 +168,7 @@ export default function RouteMap({ stops, line, totalDriveMin }: { stops: MapSto
 
   return (
     <div className="relative mb-4 overflow-hidden rounded-[26px] border border-line bg-tint shadow-card">
-      <div ref={box} className="h-[62vh] min-h-[380px] w-full md:h-[560px]" role="region" aria-label="Mapa da rota" />
+      <div ref={box} className="h-[62vh] min-h-[380px] w-full md:h-[560px] lg:h-[calc(100dvh-230px)] lg:min-h-[520px]" role="region" aria-label="Mapa da rota" />
 
       <div className="pointer-events-none absolute top-3 left-3 z-[500] flex flex-col items-start gap-2">
         <span className="pointer-events-auto rounded-full bg-surface/90 px-3 py-1.5 text-[12px] font-semibold text-ink shadow-card backdrop-blur">

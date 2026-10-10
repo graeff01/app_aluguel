@@ -126,7 +126,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
   const nextToday = future.find((v) => isToday(v.scheduledStart));
 
   return (
-    <div className="mx-auto max-w-xl">
+    <div className="mx-auto max-w-xl lg:max-w-none">
       <p className="mb-1 text-xs font-semibold tracking-[0.14em] text-accent-strong uppercase">{fmt.longDate(now)}</p>
       <h1 className="text-[30px] leading-tight font-bold tracking-[-0.035em]">
         {team ? "Visitas da equipe" : `${greeting(now)}, ${actor.name.split(" ")[0]}`}
@@ -141,8 +141,10 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
             : `${toRegister} visitas esperando o seu registro.`}
       </p>
 
+      <div className="mt-5 lg:mt-7 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <aside className="lg:sticky lg:top-24 lg:order-2" aria-label="Resumo do dia">
       {todayTotal > 0 && (
-        <div className="mt-5 mb-7 rounded-[22px] border border-line bg-surface px-5 py-4 shadow-card">
+        <div className="mb-4 rounded-[22px] border border-line bg-surface px-5 py-4 shadow-card">
           <div className="mb-2.5 flex items-baseline justify-between">
             <span className="text-sm font-semibold">Hoje</span>
             <span className="num text-sm text-ink-3">
@@ -154,10 +156,9 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
           </div>
         </div>
       )}
-      {todayTotal === 0 && <div className="mb-7" />}
 
       {!team && future.some((v) => isToday(v.scheduledStart)) && !busca && (
-        <Link href="/rota" className="press animate-rise mb-7 flex items-center justify-between gap-3 rounded-[22px] border border-line bg-surface px-5 py-4 shadow-card">
+        <Link href="/rota" className="press animate-rise mb-4 flex items-center justify-between gap-3 rounded-[22px] border border-line bg-surface px-5 py-4 shadow-card">
           <span className="flex items-center gap-3">
             <span className="grid size-10 place-items-center rounded-full bg-tint text-ink">
               <Icon name="route" className="size-5" />
@@ -173,26 +174,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         </Link>
       )}
 
-      {sp.salvo && (
-        <div role="status" className="animate-rise mb-5 flex items-center gap-3 rounded-2xl bg-good-soft px-4 py-3 text-sm font-semibold text-good">
-          <span aria-hidden className="animate-pop grid size-6 place-items-center rounded-full bg-good text-bg">✓</span>
-          Resultado salvo.
-        </div>
-      )}
-
-      {toRegister === 0 && !busca && (
-        <div className="animate-rise mb-9 rounded-[26px] border border-good/15 bg-good-soft px-6 py-8 text-center">
-          <span aria-hidden className="animate-pop mx-auto mb-3 grid size-12 place-items-center rounded-full bg-good text-xl text-bg shadow-[0_8px_20px_-8px_var(--good)]">
-            ✓
-          </span>
-          <p className="text-[17px] font-bold text-good">Tudo em dia</p>
-          <p className="mt-1 text-sm text-good/80">
-            {nextToday ? `Nenhum resultado pendente. Próxima visita às ${fmt.time(nextToday.scheduledStart)}.` : "Nenhuma visita esperando resultado."}
-          </p>
-        </div>
-      )}
-
-      <form role="search" className="mb-6" action="/minhas">
+      <form role="search" className="mb-7 lg:mb-4" action="/minhas">
         <label htmlFor="busca" className="sr-only">
           Buscar visita por nome, telefone ou código
         </label>
@@ -212,6 +194,47 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         </div>
       </form>
 
+        {!team && done.length > 0 && (
+          <div className="mb-4 hidden rounded-[22px] border border-line bg-surface px-5 py-4 shadow-card lg:block">
+            <p className="mb-3 text-sm font-semibold">Últimos 7 dias</p>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {[
+                { label: "registradas", value: done.length },
+                { label: "positivas", value: done.filter((v) => v.evaluation === "POSITIVE").length },
+                { label: "não vieram", value: done.filter((v) => v.status === "NO_SHOW").length },
+              ].map((t) => (
+                <div key={t.label} className="rounded-2xl bg-tint px-2 py-2.5">
+                  <p className="num text-[22px] leading-none font-bold">{t.value}</p>
+                  <p className="mt-1 text-[11px] text-ink-3">{t.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <Link href="/visitas/nova" className="press mb-4 hidden min-h-12 items-center justify-center gap-2 rounded-full border border-line-strong bg-surface text-[15px] font-semibold shadow-card lg:flex">
+          <Icon name="plus" className="size-4" /> Visita fora da agenda
+        </Link>
+      </aside>
+      <div className="min-w-0 lg:order-1">
+      {sp.salvo && (
+        <div role="status" className="animate-rise mb-5 flex items-center gap-3 rounded-2xl bg-good-soft px-4 py-3 text-sm font-semibold text-good">
+          <span aria-hidden className="animate-pop grid size-6 place-items-center rounded-full bg-good text-bg">✓</span>
+          Resultado salvo.
+        </div>
+      )}
+
+      {toRegister === 0 && !busca && (
+        <div className="animate-rise mb-9 rounded-[26px] border border-good/15 bg-good-soft px-6 py-8 text-center">
+          <span aria-hidden className="animate-pop mx-auto mb-3 grid size-12 place-items-center rounded-full bg-good text-xl text-bg shadow-[0_8px_20px_-8px_var(--good)]">
+            ✓
+          </span>
+          <p className="text-[17px] font-bold text-good">Tudo em dia</p>
+          <p className="mt-1 text-sm text-good/80">
+            {nextToday ? `Nenhum resultado pendente. Próxima visita às ${fmt.time(nextToday.scheduledStart)}.` : "Nenhuma visita esperando resultado."}
+          </p>
+        </div>
+      )}
+
       {busca ? (
         <section aria-labelledby="t-busca" className="mb-9">
           <div className="mb-3 flex items-center justify-between">
@@ -225,7 +248,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
           {results.length === 0 ? (
             <p className="rounded-3xl border border-dashed border-line-strong px-5 py-6 text-center text-sm text-ink-3">Nenhuma visita encontrada.</p>
           ) : (
-            <ul className="space-y-3">
+            <ul className="grid gap-3 2xl:grid-cols-2">
               {results.map((v, i) => (
                 <MineCard
                   key={v.id}
@@ -250,7 +273,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
           <h2 id="t-aw" className="mb-3 text-[12px] font-bold tracking-[0.12em] text-ink-3 uppercase">
             Para registrar
           </h2>
-          <ul className="space-y-3">
+          <ul className="grid gap-3 2xl:grid-cols-2">
             {awaiting.map((v, i) => (
               <MineCard key={v.id} v={v} today={today} now={now} mode="awaiting" index={i} team={team} />
             ))}
@@ -268,7 +291,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         {future.length === 0 ? (
           <p className="rounded-3xl border border-dashed border-line-strong px-5 py-6 text-center text-sm text-ink-3">Nenhuma visita hoje ou amanhã.</p>
         ) : (
-          <ul className="space-y-3">
+          <ul className="grid gap-3 2xl:grid-cols-2">
             {future.map((v, i) => (
               <MineCard key={v.id} v={v} today={today} now={now} mode="upcoming" index={toRegister + i} team={team} />
             ))}
@@ -282,7 +305,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
             Registradas nos últimos 7 dias ({done.length})
             <span aria-hidden className="text-lg transition-transform group-open:rotate-45">+</span>
           </summary>
-          <ul className="space-y-3">
+          <ul className="grid gap-3 2xl:grid-cols-2">
             {done.map((v, i) => (
               <MineCard key={v.id} v={v} today={today} now={now} mode="done" index={i} team={team} />
             ))}
@@ -293,7 +316,10 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         </>
       )}
 
-      <p className="pb-6 text-center text-sm text-ink-3">
+      </div>
+      </div>
+
+      <p className="pb-6 text-center text-sm text-ink-3 lg:hidden">
         Visita fora da agenda?{" "}
         <Link href="/visitas/nova" className="font-semibold text-ink underline underline-offset-4">
           Cadastrar

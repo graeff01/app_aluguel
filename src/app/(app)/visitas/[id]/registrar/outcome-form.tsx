@@ -136,7 +136,7 @@ export function OutcomeForm(p: Props) {
   const saving = save.kind === "saving" || save.kind === "saved";
 
   return (
-    <form onSubmit={submit} noValidate className="pb-24">
+    <form onSubmit={submit} noValidate className="pb-24 md:pb-0">
       <fieldset className="mb-6">
         <legend className="mb-3 text-[17px] font-bold tracking-[-0.02em]">A visita aconteceu?</legend>
         <div className="grid gap-2 sm:grid-cols-2">

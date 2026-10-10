@@ -44,8 +44,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
 
   const consultantNav: NavItem[] = [
-    { href: "/hoje", label: "Hoje", icon: "today" },
-    { href: "/pendencias", label: "Pendências", icon: "pending", badge: pending },
+    { href: "/minhas", label: "Visitas", icon: "today", badge: pending },
+    { href: "/rota", label: "Rota", icon: "route" },
+    { href: "/pendencias", label: "Pendências", icon: "pending" },
     { href: "/historico", label: "Histórico", icon: "history" },
   ];
   const managerBottom: NavItem[] = [
@@ -93,14 +94,31 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             ]
           : []),
       ]
-    : [{ items: [...consultantNav, { href: "/visitas/nova", label: "Visita manual", icon: "plus" } as NavItem] }];
+    : [
+        {
+          title: "Meu dia",
+          items: [
+            { href: "/minhas", label: "Minhas visitas", icon: "today", badge: pending },
+            { href: "/rota", label: "Rota do dia", icon: "route" },
+          ] as NavItem[],
+        },
+        {
+          title: "Registros",
+          items: [
+            { href: "/pendencias", label: "Pendências", icon: "pending" },
+            { href: "/historico", label: "Histórico", icon: "history" },
+            { href: "/visitas/nova", label: "Visita manual", icon: "plus" },
+          ] as NavItem[],
+        },
+      ];
 
   const dot = { ok: "bg-good", stale: "bg-accent", error: "bg-bad", off: "bg-ink-3/50" }[health.level];
   // consultora só vê o status da agenda quando há problema que a afeta
   const showHealth = global || health.level === "stale" || health.level === "error";
 
-  // Consultora (e gestão que escolheu, no celular): tela única, sem menus
-  const simple = !global || (actor.simpleMobile && (await isMobileRequest()));
+  // Celular: consultora (e gestão que escolheu) usa a tela única, sem menus.
+  // Computador: todos usam o sistema web com menu lateral (itens conforme o perfil).
+  const simple = (await isMobileRequest()) && (!global || actor.simpleMobile);
   if (simple) {
     return (
       <div className="flex min-h-dvh flex-col">
