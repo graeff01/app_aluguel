@@ -34,6 +34,7 @@ describe("dados do anúncio", () => {
   const html = `<html><head><script type="application/ld+json">${JSON.stringify({
     "@context": "https://schema.org",
     "@type": "RealEstateListing",
+    image: [{ "@type": "ImageObject", url: "https://img.test/1.jpg" }, "https://img.test/2.jpg", { url: "http://inseguro.test/x.jpg" }, "https://img.test/1.jpg"],
     offers: [
       {
         "@type": "Offer",
@@ -41,13 +42,15 @@ describe("dados do anúncio", () => {
         itemOffered: { "@type": "Accommodation", name: "Apartamento - Nossa Senhora das Graças - Canoas", address: { streetAddress: "Rua da Agência 85" }, floorSize: { value: 91 }, numberOfRooms: 2, accommodationCategory: "Apartamento" },
         priceSpecification: [
           { name: "Aluguel", price: 4500 },
+          { name: "Condomínio", price: 560 },
+          { name: "IPTU", price: 130 },
           { name: "Total", price: 5190 },
         ],
       },
     ],
   })}</script></head></html>`;
   it("lê tipo, bairro, cidade, valores, área e quartos (e ignora o endereço da agência)", () => {
-    expect(parseListing(html, null)).toEqual({ category: "Apartamento", neighborhood: "Nossa Senhora das Graças", city: "Canoas", rent: 4500, totalPrice: 5190, area: 91, bedrooms: 2 });
+    expect(parseListing(html, null)).toEqual({ category: "Apartamento", neighborhood: "Nossa Senhora das Graças", city: "Canoas", rent: 4500, totalPrice: 5190, condoFee: 560, iptu: 130, area: 91, bedrooms: 2, photos: ["https://img.test/1.jpg", "https://img.test/2.jpg"] });
   });
   it("sem JSON-LD, usa o bairro do título", () => {
     expect(parseListing("<html></html>", "Casa com 3 quartos para alugar em Igara, Canoas.")).toMatchObject({ neighborhood: "Igara", city: "Canoas", rent: null });

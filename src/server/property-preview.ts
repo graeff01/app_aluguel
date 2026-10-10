@@ -36,12 +36,15 @@ export type Listing = {
   city: string | null;
   rent: number | null;
   totalPrice: number | null;
+  condoFee: number | null;
+  iptu: number | null;
   area: number | null;
   bedrooms: number | null;
+  photos: string[];
 };
 export type Preview = { status: "OK" | "NOT_FOUND" | "ERROR"; photoUrl: string | null; title: string | null; listing?: Listing };
 
-const EMPTY_LISTING: Listing = { category: null, neighborhood: null, city: null, rent: null, totalPrice: null, area: null, bedrooms: null };
+const EMPTY_LISTING: Listing = { category: null, neighborhood: null, city: null, rent: null, totalPrice: null, condoFee: null, iptu: null, area: null, bedrooms: null, photos: [] };
 
 type Json = Record<string, unknown>;
 const obj = (v: unknown): Json | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null);
@@ -73,7 +76,7 @@ function findListingNode(v: unknown, depth = 0): Json | null {
  * Bairro/cidade vêm do nome "Tipo - Bairro - Cidade" ou do og:title "... em Bairro, Cidade.".
  */
 export function parseListing(html: string, ogTitle: string | null): Listing {
-  const out: Listing = { ...EMPTY_LISTING };
+  const out: Listing = { ...EMPTY_LISTING, photos: [] };
   for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
     let data: unknown;
     try {
@@ -89,6 +92,10 @@ export function parseListing(html: string, ogTitle: string | null): Listing {
     const spec = (name: string) => num(specs.find((p) => typeof p.name === "string" && p.name.toLowerCase().startsWith(name))?.price);
     out.rent = spec("aluguel") ?? num(offer?.price);
     out.totalPrice = spec("total");
+    out.condoFee = spec("condom");
+    out.iptu = spec("iptu");
+    const imgs = [...arr(node.image), ...arr(item?.image)].map((i) => (typeof i === "string" ? i : obj(i)?.url)).filter((u): u is string => typeof u === "string" && /^https:\/\//i.test(u));
+    out.photos = [...new Set(imgs)].slice(0, 8);
     out.category = txt(item?.accommodationCategory, 40);
     out.area = num(obj(item?.floorSize)?.value);
     out.bedrooms = num(item?.numberOfRooms);

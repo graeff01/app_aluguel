@@ -220,8 +220,8 @@ export async function sendUpcomingVisitReminders(now = new Date(), opts: { send?
       { id: c.id, email: c.email, subs: pushOn ? c._count.pushSubscriptions : 0 },
       {
         title: `Visita às ${timeFmt.format(v.scheduledStart)}${v.propertyCode ? ` · imóvel ${v.propertyCode}` : ""}`,
-        body: mins >= 60 ? `Começa em ${Math.round(mins / 60)} h. Toque para ver os detalhes.` : `Começa em ${mins} min. Toque para ver os detalhes.`,
-        url: "/minhas",
+        body: mins >= 60 ? `Começa em ${Math.round(mins / 60)} h. Toque para ver a ficha antes de entrar.` : `Começa em ${mins} min. Toque para ver a ficha antes de entrar.`,
+        url: `/visitas/${v.id}/registrar`,
         tag: `visita-${v.id}`,
       },
       send,

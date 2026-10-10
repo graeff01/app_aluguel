@@ -9,8 +9,11 @@ import { revisitLabel, scheduledByConsultant } from "@/lib/labels";
 import { Alert, Panel } from "@/components/ui";
 import { OutcomeForm } from "./outcome-form";
 import { ContactButtons } from "@/components/contact-buttons";
-import { PropertyCard } from "@/components/property-preview";
 import { notFound } from "next/navigation";
+import { visitBrief } from "@/server/brief";
+import { VisitBrief } from "@/components/visit-brief";
+import { propertyUrl } from "@/server/property-preview";
+import { isMobileRequest } from "@/lib/session";
 
 export const metadata = { title: "Registrar resultado" };
 
@@ -29,6 +32,10 @@ export default async function RegisterPage({ params, searchParams }: { params: P
   const isEdit = visit.status !== "SCHEDULED" && !visit.autoCanceled;
   const now = new Date();
   const global = hasGlobalView(actor);
+  const brief = await visitBrief(actor, visit.id);
+  // antes/durante a visita (ou no computador) a ficha vem aberta; depois, no celular, o formulário vem primeiro
+  const briefOpen = visit.scheduledEnd > now || !(await isMobileRequest());
+  const siteUrl = visit.propertyCode && settings.propertyUrlTemplate.includes("{codigo}") ? propertyUrl(settings.propertyUrlTemplate, visit.propertyCode) : null;
   const future = visit.scheduledStart.getTime() > now.getTime() + 15 * 60_000;
   // atalho da notificação ("Gostou", "Não gostou", "Não veio"): já vem marcado; a observação continua obrigatória
   const preset = !isEdit && !future && visit.status === "SCHEDULED" ? sp.r : undefined;
@@ -54,7 +61,7 @@ export default async function RegisterPage({ params, searchParams }: { params: P
           </Link>
         </div>
       )}
-      <h1 className="mb-3 text-[28px] leading-tight font-bold tracking-[-0.03em]">{isEdit ? "Alterar resultado" : "Registrar resultado"}</h1>
+      <h1 className="mb-3 text-[28px] leading-tight font-bold tracking-[-0.03em]">{isEdit ? "Alterar resultado" : future ? "Próxima visita" : "Registrar resultado"}</h1>
       {visit.excluded && <Alert tone="warn" title="Esta visita foi excluída dos indicadores pela gestão." />}
       <div className="lg:grid lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start lg:gap-8 xl:grid-cols-[400px_minmax(0,1fr)]">
       <aside className="lg:sticky lg:top-24">
@@ -82,9 +89,7 @@ export default async function RegisterPage({ params, searchParams }: { params: P
           </Link>
         )}
       </Panel>
-      <div className="mb-6">
-        <PropertyCard code={visit.propertyCode} photoUrl={visit.property?.photoUrl} title={visit.property?.title} template={settings.propertyUrlTemplate} />
-      </div>
+      <VisitBrief data={brief} siteUrl={siteUrl} open={briefOpen} />
       </aside>
       <div className="min-w-0 lg:rounded-[26px] lg:border lg:border-line lg:bg-surface lg:p-7 lg:shadow-card">
       <OutcomeForm

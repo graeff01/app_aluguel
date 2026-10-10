@@ -229,7 +229,7 @@ test("visita futura: resultado travado até o horário, cancelar liberado", asyn
   const locked = card.getByRole("link", { name: /Resultado a partir das/ });
   await expect(locked).toBeVisible();
   await locked.click();
-  await expect(page.getByRole("heading", { name: "Registrar resultado" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Próxima visita" })).toBeVisible();
   await expect(page.getByRole("radio", { name: /Sim, aconteceu/ })).toBeDisabled();
   await expect(page.getByRole("radio", { name: /Cliente não compareceu/ })).toBeDisabled();
   await expect(page.getByText(/Disponível a partir das/).first()).toBeVisible();
@@ -338,4 +338,15 @@ test("consultora no computador: menu lateral e telas próprias", async ({ page }
   await expect(page.getByText("Cliente Alfa")).toHaveCount(0); // só as visitas dela
   await nav.getByRole("link", { name: "Rota do dia" }).click();
   await expect(page.getByRole("heading", { name: /^Rota de/ })).toBeVisible();
+});
+
+test("ficha antes de entrar: valores do imóvel e pontos para a conversa", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await login(page, "c@e2e.test");
+  await page.getByRole("link", { name: /Cliente Rota/ }).first().click();
+  const brief = page.locator("details", { hasText: "Antes de entrar" });
+  await expect(brief).toHaveAttribute("open", "");
+  await expect(brief.getByText(/2\.310/)).toBeVisible();
+  await expect(brief.getByText("Condomínio")).toBeVisible();
+  await expect(brief.getByText("Primeira visita deste cliente com você.")).toBeVisible();
 });

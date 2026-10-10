@@ -374,6 +374,10 @@ model Property {
   city          String?
   rent          Int?
   totalPrice    Int?
+  condoFee      Int?
+  iptu          Int?
+  /// até 8 fotos do anúncio (galeria da ficha da visita)
+  photos        String[] @default([])
   area          Int?
   bedrooms      Int?
   /// endereço para a rota do dia (não é dado pessoal: é o endereço do imóvel)

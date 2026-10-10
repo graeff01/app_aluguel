@@ -40,7 +40,7 @@ function MineCard({ v, today, now, mode, index, team }: { v: VisitListItem & { n
   const rel = mode === "done" ? null : relativeTime(mode === "awaiting" ? v.scheduledEnd : v.scheduledStart, now);
   const hasPhone = !!v.phoneNormalized && mode !== "done";
   const href = `/visitas/${v.id}/registrar`;
-  const label = `${mode === "done" ? "Alterar resultado" : mode === "upcoming" && !startsSoon ? "Abrir visita" : "Registrar resultado"}: ${v.clientName ?? "cliente sem nome"}, ${when(v, today)}`;
+  const label = `${mode === "done" ? "Alterar resultado" : mode === "upcoming" && !startsSoon ? "Ver ficha da visita" : "Registrar resultado"}: ${v.clientName ?? "cliente sem nome"}, ${when(v, today)}`;
   const info = (
     <div className="flex gap-4">
       <PropertyThumb photoUrl={v.property?.photoUrl} className="size-[72px]" />
