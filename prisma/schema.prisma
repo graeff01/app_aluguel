@@ -30,6 +30,10 @@ model User {
   simpleMobile       Boolean @default(false)
   /// ciência do aviso de privacidade (LGPD)
   privacyAcceptedAt  DateTime?
+  /// primeiro acesso guiado concluído (ou pulado)
+  onboardedAt        DateTime?
+  /// conta Google vinculada no "Entrar com Google" (identificador estável do Google)
+  googleSub          String?   @unique
   role          Role
   active        Boolean   @default(true)
   deactivatedAt DateTime?
@@ -662,4 +666,27 @@ model ErrorEvent {
   lastSeenAt  DateTime @default(now())
 
   @@index([lastSeenAt])
+}
+
+// ───────────────────────────── Backups ─────────────────────────────
+
+enum BackupStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+/// Backups diários (arquivo criptografado no armazenamento externo). Sem dados pessoais aqui: só metadados.
+model BackupRun {
+  id         String       @id @default(cuid())
+  status     BackupStatus
+  trigger    String
+  startedAt  DateTime     @default(now())
+  finishedAt DateTime?
+  /// nome do arquivo no armazenamento
+  objectKey  String?
+  sizeBytes  Int?
+  rows       Int?
+  errorCode  String?
+  @@index([startedAt])
 }

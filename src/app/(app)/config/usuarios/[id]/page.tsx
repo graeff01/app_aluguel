@@ -8,7 +8,7 @@ import { ROLE_LABEL } from "@/lib/labels";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { InlineAction } from "@/components/inline-action";
 import { Field, Input, PageHeader, Section, Select } from "@/components/ui";
-import { addAliasAction, removeAliasAction, resetLinkAction, tempPasswordAction, updateUserAction } from "@/app/actions/admin";
+import { addAliasAction, removeAliasAction, resetLinkAction, resetOnboardingAction, tempPasswordAction, updateUserAction } from "@/app/actions/admin";
 
 export const metadata = { title: "Usuário" };
 
@@ -87,6 +87,20 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
                 </Field>
                 <SubmitButton variant="secondary">Definir senha provisória</SubmitButton>
               </ActionForm>
+            </div>
+          </Section>
+          <Section title="Primeiro acesso">
+            <div className="max-w-xl rounded-3xl border border-line bg-surface p-5 shadow-card">
+              <p className="mb-3 text-ink-2">
+                {u.onboardedAt ? `Guia concluído em ${u.onboardedAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}.` : "Ainda não passou pelo guia de primeiro acesso."}
+                {u.googleSub ? " Entra com Google." : ""}
+              </p>
+              {u.onboardedAt && (
+                <ActionForm action={resetOnboardingAction}>
+                  <input type="hidden" name="userId" value={u.id} />
+                  <SubmitButton variant="secondary">Mostrar o guia de novo no próximo acesso</SubmitButton>
+                </ActionForm>
+              )}
             </div>
           </Section>
         </>

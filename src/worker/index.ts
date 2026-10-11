@@ -10,9 +10,10 @@ import { db } from "@/lib/db";
 import { log, errorCode } from "@/lib/log";
 import { getSettings } from "@/lib/settings";
 import { executeRun } from "@/server/sync/runner";
-import { sendDailyReminders, sendMonthlyReportNotice, sendResultReminders, sendUpcomingVisitReminders, sendWeeklySummary } from "@/server/reminders";
+import { sendDailyReminders, sendMonthlyReportNotice, sendResultReminders, sendSyncAlerts, sendUpcomingVisitReminders, sendWeeklySummary } from "@/server/reminders";
 import { refreshPropertyPreviews } from "@/server/property-preview";
 import { refreshGeocodes } from "@/server/geo";
+import { maybeDailyBackup } from "@/server/backup";
 import { recordError } from "@/lib/error-tracking";
 import { runRetention } from "@/server/privacy";
 
@@ -71,6 +72,7 @@ async function main() {
         lastUpcomingCheck = Date.now();
         await sendUpcomingVisitReminders().catch((e) => log.error("upcoming_reminders.failed", { code: errorCode(e) }));
         await sendResultReminders().catch((e) => log.error("result_reminders.failed", { code: errorCode(e) }));
+        await sendSyncAlerts().catch((e) => log.error("sync_alerts.failed", { code: errorCode(e) }));
       }
       if (Date.now() - lastPreviewCheck > 2 * 60_000) {
         lastPreviewCheck = Date.now();
@@ -83,6 +85,7 @@ async function main() {
         await sendWeeklySummary().catch((e) => log.error("weekly_summary.failed", { code: errorCode(e) }));
         await runRetention().catch((e) => log.error("retention.failed", { code: errorCode(e) }));
         await sendMonthlyReportNotice().catch((e) => log.error("monthly_report_notice.failed", { code: errorCode(e) }));
+        await maybeDailyBackup().catch((e) => log.error("backup.check_failed", { code: errorCode(e) }));
 
       }
     } catch (e) {

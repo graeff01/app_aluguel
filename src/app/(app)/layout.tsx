@@ -18,6 +18,7 @@ import { UndoToast } from "@/components/undo-toast";
 import { Suspense } from "react";
 import { cx } from "@/components/ui";
 import { AppBadge } from "@/components/app-badge";
+import { Onboarding } from "@/components/onboarding";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (actor.mustChangePassword) return <div className="min-h-dvh bg-bg"><ForcePasswordDialog name={actor.name} /></div>;
   // LGPD: ciência do aviso de privacidade no primeiro acesso
   if (!actor.privacyAcceptedAt) return <div className="min-h-dvh"><PrivacyDialog name={actor.name} /></div>;
+  // primeiro acesso guiado (instalar, notificações, como usar)
+  if (!actor.onboardedAt) return <Onboarding name={actor.name} role={actor.role} pushKey={pushConfig()?.publicKey ?? null} />;
   const settings = await getSettings();
   const now = new Date();
   const global = hasGlobalView(actor);
@@ -113,6 +116,24 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ];
 
   const dot = { ok: "bg-good", stale: "bg-accent", error: "bg-bad", off: "bg-ink-3/50" }[health.level];
+  // agenda parada (desconectada ou sem sucesso há mais de 1 h): faixa vermelha para a gestão
+  const agendaDown = global && (health.level === "error" || (health.level === "stale" && !!health.lastSuccessAt && now.getTime() - health.lastSuccessAt.getTime() > 3600_000));
+  const agendaBanner = agendaDown ? (
+    <div role="alert" className="border-b border-bad/20 bg-bad-soft">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 md:px-8">
+        <p className="text-[14px] font-semibold text-bad">
+          Agenda Google parada: {health.message.replace(/ — avise a administração$/, "")}. Visitas novas não estão chegando.
+        </p>
+        {isAdmin(actor) ? (
+          <Link href="/admin/google" className="press inline-flex min-h-10 items-center rounded-full bg-bad px-4 text-[13px] font-semibold text-white">
+            Reconectar
+          </Link>
+        ) : (
+          <span className="text-[13px] text-bad/80">A administração foi avisada.</span>
+        )}
+      </div>
+    </div>
+  ) : null;
   // consultora só vê o status da agenda quando há problema que a afeta
   const showHealth = global || health.level === "stale" || health.level === "error";
 
@@ -142,6 +163,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </div>
           </div>
         </header>
+        {agendaBanner}
         <main className="mx-auto w-full max-w-xl flex-1 px-4 pt-6 pb-16">{children}</main>
         <Suspense>
           <UndoToast />
@@ -182,6 +204,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </div>
           </div>
         </header>
+        {agendaBanner}
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-32 md:px-8 md:pt-9 md:pb-12">{children}</main>
       </div>
       <BottomNav items={global ? managerBottom : consultantNav} />

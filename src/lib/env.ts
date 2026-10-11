@@ -27,6 +27,10 @@ export const env = {
   get googleRedirectUri() {
     return process.env.GOOGLE_REDIRECT_URI ?? `${this.appUrl}/api/google/callback`;
   },
+  /** retorno do "Entrar com Google" (cadastre também no Google Cloud Console) */
+  get googleLoginRedirectUri() {
+    return process.env.GOOGLE_LOGIN_REDIRECT_URI ?? `${this.appUrl}/api/auth/google/callback`;
+  },
   get setupToken() {
     return process.env.SETUP_TOKEN ?? "";
   },

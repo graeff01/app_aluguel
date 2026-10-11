@@ -146,3 +146,14 @@ export async function acceptPrivacyAction(): Promise<{ ok: boolean }> {
   });
   return { ok: true };
 }
+
+/** Primeiro acesso guiado concluído (ou pulado). */
+export async function completeOnboardingAction(skipped: boolean): Promise<{ ok: boolean }> {
+  const actor = await readActor();
+  if (!actor) return { ok: false };
+  await db.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: actor.id }, data: { onboardedAt: new Date() } });
+    await audit(tx, { actorId: actor.id, action: skipped ? "user.onboarding_skipped" : "user.onboarding_done", entityType: "User", entityId: actor.id });
+  });
+  return { ok: true };
+}

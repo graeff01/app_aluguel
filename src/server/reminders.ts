@@ -15,6 +15,7 @@ import { log } from "@/lib/log";
 import { computeMetrics } from "@/lib/metrics";
 import { appLink, emailConfig, sendEmail, type EmailSender } from "@/lib/email";
 import { notDemo } from "./demo";
+import { syncHealth } from "./sync-status";
 
 const DAY = 86400_000;
 
@@ -389,4 +390,53 @@ export async function sendResultReminders(now = new Date(), opts: { send?: Sende
   }
   if (sent) log.info("result_reminders.sent", { notifications: sent });
   return { sent };
+}
+
+// ─────────────── Agenda Google parada (gestão e admin) ───────────────
+
+/**
+ * Avisa admin e gestão quando a importação da agenda para (conexão expirada/revogada ou sem sucesso há mais de 1 h).
+ * No máximo um aviso por pessoa por dia; quando volta ao normal, avisa que normalizou.
+ */
+export async function sendSyncAlerts(now = new Date(), opts: { send?: Sender; email?: EmailSender | null } = {}) {
+  const send = opts.send ?? sendPush;
+  const email = opts.email !== undefined ? opts.email : emailConfig() ? sendEmail : null;
+  const pushOn = !!opts.send || !!pushConfig();
+  if (!pushOn && !email) return { skipped: "NO_CHANNEL" as const };
+  const h = await syncHealth(now);
+  if (h.level === "off") return { skipped: "NOT_CONFIGURED" as const };
+  const broken = h.level === "error" || (h.level === "stale" && h.lastSuccessAt !== null && now.getTime() - h.lastSuccessAt.getTime() > 3600_000);
+  const day = dayKey(now);
+  const people = await db.user.findMany({ where: { role: { in: ["ADMIN", "MANAGER"] }, active: true }, select: { id: true, role: true, email: true, _count: { select: { pushSubscriptions: true } } } });
+  let sent = 0;
+  for (const u of people) {
+    const who = { id: u.id, email: u.email, subs: pushOn ? u._count.pushSubscriptions : 0 };
+    if (broken) {
+      const id = await claim(u.id, day, "sync_alert", 1);
+      if (!id) continue;
+      const delivered = await notify(
+        who,
+        {
+          title: "Agenda Google parada",
+          body: u.role === "ADMIN" ? `${h.message}. Visitas novas não estão chegando — toque para reconectar.` : `${h.message}. Visitas novas não estão chegando — a administração já foi avisada.`,
+          url: u.role === "ADMIN" ? "/admin/google" : "/painel",
+          tag: `agenda-${day}`,
+        },
+        send,
+        email,
+      );
+      await db.reminderLog.update({ where: { id }, data: { delivered } });
+      sent += delivered;
+    } else if (h.level === "ok") {
+      const alerted = await db.reminderLog.findUnique({ where: { userId_day_kind: { userId: u.id, day, kind: "sync_alert" } } });
+      if (!alerted) continue;
+      const id = await claim(u.id, day, "sync_recovered", 1);
+      if (!id) continue;
+      const delivered = await notify(who, { title: "Agenda Google normalizada", body: "A importação das visitas voltou a funcionar.", url: "/painel", tag: `agenda-${day}` }, send, email);
+      await db.reminderLog.update({ where: { id }, data: { delivered } });
+      sent += delivered;
+    }
+  }
+  if (sent) log.info("sync_alerts.sent", { notifications: sent, broken });
+  return { sent, broken };
 }

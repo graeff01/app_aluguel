@@ -15,6 +15,8 @@ import { authorizedClient, realCalendarApi, revokeToken } from "@/server/sync/go
 import { DETAIL_ROLES } from "@/server/sync/types";
 import { requestManualSync } from "@/server/sync/runner";
 import { createDemoData, removeDemoData } from "@/server/demo";
+import { backupConfig, runBackup } from "@/server/backup";
+import { hitRateLimit } from "@/lib/ratelimit";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const ROLES: Role[] = ["ADMIN", "MANAGER", "CONSULTANT"];
@@ -356,6 +358,32 @@ export async function tempPasswordAction(_: ActionState, fd: FormData) {
     });
     return "Senha provisória definida. A pessoa vai criar a própria senha no próximo acesso.";
   });
+}
+
+export async function backupNowAction(_: ActionState, _fd: FormData) {
+  return done(await runAction(async (actor) => {
+    assert(isAdmin(actor));
+    if (!backupConfig()) throw new AppError("INVALID_STATE", "Backup não configurado: faltam as variáveis BACKUP_* no Railway.");
+    const rl = await hitRateLimit("backup:manual", 1, 600);
+    if (!rl.allowed) throw new AppError("RATE_LIMITED", `Um backup foi feito há pouco. Tente em ${Math.ceil(rl.retryAfterSeconds / 60)} min.`);
+    const r = await runBackup({ trigger: "MANUAL" });
+    await db.$transaction((tx) => audit(tx, { actorId: actor.id, action: "backup.manual", entityType: "BackupRun", entityId: "-", changes: { ok: "ok" in r ? r.ok : false } }));
+    if ("ok" in r && r.ok) return `Backup feito (${(r.sizeBytes / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} KB, ${r.rows} linhas).`;
+    throw new AppError("INVALID_STATE", "O backup falhou. Confira as credenciais do armazenamento.");
+  }));
+}
+
+export async function resetOnboardingAction(_: ActionState, fd: FormData) {
+  return done(await runAction(async (actor) => {
+    const target = await db.user.findUnique({ where: { id: str(fd, "userId") } });
+    if (!target) throw new AppError("NOT_FOUND", "Usuário não encontrado.");
+    assert(canManageUser(actor, target.role));
+    await db.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: target.id }, data: { onboardedAt: null } });
+      await audit(tx, { actorId: actor.id, action: "user.onboarding_reset", entityType: "User", entityId: target.id });
+    });
+    return "O guia aparece de novo no próximo acesso.";
+  }));
 }
 
 export async function createDemoDataAction(_: ActionState, fd: FormData) {

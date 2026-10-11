@@ -1,6 +1,6 @@
 /**
  * Infraestrutura do Railway (IaC). Aplicar com:  railway config plan && railway config apply
- * Segredos (TOKEN_ENCRYPTION_KEY, GOOGLE_*; SETUP_TOKEN só temporariamente) NÃO ficam aqui: são definidos no Railway
+ * Segredos (TOKEN_ENCRYPTION_KEY, GOOGLE_*, VAPID_*, BACKUP_*; SETUP_TOKEN só temporariamente) NÃO ficam aqui: são definidos no Railway
  * (railway variables --set ...) e marcados com preserve() para o IaC nunca sobrescrevê-los.
  */
 import { defineRailway, github, postgres, preserve, project, service } from "railway/iac";
@@ -18,6 +18,12 @@ export default defineRailway(() => {
     VAPID_PUBLIC_KEY: preserve(),
     VAPID_PRIVATE_KEY: preserve(),
     VAPID_SUBJECT: preserve(),
+    // backup diário (Cloudflare R2/S3) — ver docs/DEPLOY.md
+    BACKUP_S3_ENDPOINT: preserve(),
+    BACKUP_S3_BUCKET: preserve(),
+    BACKUP_S3_ACCESS_KEY_ID: preserve(),
+    BACKUP_S3_SECRET_ACCESS_KEY: preserve(),
+    BACKUP_ENCRYPTION_KEY: preserve(),
   };
 
   const web = service("web", {

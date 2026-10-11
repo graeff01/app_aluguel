@@ -4,7 +4,8 @@ import { fmt } from "@/lib/time";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Alert, Badge, Field, KeyValue, PageHeader, Panel, Section, Select } from "@/components/ui";
 import { SyncButton } from "@/components/sync-button";
-import { createDemoDataAction, fullSyncAction, removeDemoDataAction } from "@/app/actions/admin";
+import { backupNowAction, createDemoDataAction, fullSyncAction, removeDemoDataAction } from "@/app/actions/admin";
+import { backupConfig } from "@/server/backup";
 import { countDemoVisits } from "@/server/demo";
 
 export const metadata = { title: "Diagnóstico" };
@@ -23,6 +24,14 @@ export default async function DiagnosticsPage() {
     Promise.all([db.sourceEvent.count(), db.sourceEvent.count({ where: { classification: "AMBIGUOUS", reviewDecision: null } }), db.visit.count({ where: { origin: "GOOGLE" } }), db.visit.count({ where: { origin: "MANUAL" } })]),
   ]);
   const demoVisits = await countDemoVisits();
+  const backups = await db.backupRun.findMany({ orderBy: { startedAt: "desc" }, take: 6 });
+  let backupReady = false;
+  try {
+    backupReady = !!backupConfig();
+  } catch {
+    backupReady = false;
+  }
+  const lastOk = backups.find((b) => b.status === "SUCCESS");
   const consultants = await db.user.findMany({ where: { role: "CONSULTANT", active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
   const workerAlive = beats[0] && Date.now() - beats[0].beatAt.getTime() < 2 * 60_000;
   return (
@@ -102,6 +111,37 @@ export default async function DiagnosticsPage() {
           })}
           {runs.length === 0 && <li className="px-4 py-3 text-ink-3">Nenhuma execução ainda.</li>}
         </ul>
+      </Section>
+      <Section title="Backup do banco" hint="Diário, a partir das 3h, criptografado, em armazenamento externo. 30 dias de diários + 1 por mês por 12 meses.">
+        <Panel>
+          {!backupReady ? (
+            <Alert tone="warn" title="Backup não configurado">
+              Defina no Railway (serviços web e worker): BACKUP_S3_ENDPOINT, BACKUP_S3_BUCKET, BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY e BACKUP_ENCRYPTION_KEY. Passo a passo em docs/DEPLOY.md.
+            </Alert>
+          ) : (
+            <p className={lastOk && Date.now() - lastOk.startedAt.getTime() < 36 * 3600_000 ? "font-semibold text-good" : "font-semibold text-bad"}>
+              {lastOk ? `Último backup: ${fmt.dateTime(lastOk.startedAt)} · ${Math.round((lastOk.sizeBytes ?? 0) / 1024).toLocaleString("pt-BR")} KB · ${lastOk.rows ?? 0} linhas` : "Nenhum backup concluído ainda."}
+            </p>
+          )}
+          {backups.length > 0 && (
+            <ul className="mt-3 divide-y divide-line text-sm">
+              {backups.map((b) => (
+                <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <span>
+                    {fmt.dateTime(b.startedAt)} · {b.trigger === "MANUAL" ? "manual" : "automático"}
+                    {b.errorCode ? <span className="text-ink-3"> · {b.errorCode}</span> : null}
+                  </span>
+                  <Badge tone={b.status === "SUCCESS" ? "good" : b.status === "FAILED" ? "bad" : "info"}>{b.status === "SUCCESS" ? "Concluído" : b.status === "FAILED" ? "Falhou" : "Em andamento"}</Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+          {backupReady && (
+            <ActionForm action={backupNowAction} className="mt-4">
+              <SubmitButton variant="secondary">Fazer backup agora</SubmitButton>
+            </ActionForm>
+          )}
+        </Panel>
       </Section>
       <Section title="Dados de demonstração" hint="Visitas fictícias com imóveis reais do site (fotos e bairros de verdade) para mostrar as telas.">
         <Panel>

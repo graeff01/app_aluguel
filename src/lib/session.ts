@@ -14,7 +14,7 @@ export function sessionCookieName() {
   return env.secureCookies ? "__Host-vl_session" : "vl_session";
 }
 
-export type Actor = { id: string; name: string; email: string; role: Role; mustChangePassword: boolean; simpleMobile: boolean; privacyAcceptedAt: Date | null };
+export type Actor = { id: string; name: string; email: string; role: Role; mustChangePassword: boolean; simpleMobile: boolean; privacyAcceptedAt: Date | null; onboardedAt: Date | null };
 
 export async function createSession(userId: string) {
   const token = randomToken(32);
@@ -56,7 +56,7 @@ export async function readActor(): Promise<Actor | null> {
     });
   }
   const u = session.user;
-  return { id: u.id, name: u.name, email: u.email, role: u.role, mustChangePassword: u.mustChangePassword, simpleMobile: u.simpleMobile, privacyAcceptedAt: u.privacyAcceptedAt };
+  return { id: u.id, name: u.name, email: u.email, role: u.role, mustChangePassword: u.mustChangePassword, simpleMobile: u.simpleMobile, privacyAcceptedAt: u.privacyAcceptedAt, onboardedAt: u.onboardedAt };
 }
 
 /** Usuário autenticado e ativo da requisição atual (ou null). Memoizado por requisição. */

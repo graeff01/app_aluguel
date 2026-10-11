@@ -20,7 +20,12 @@ export function hashPassword(pw: string) {
 /** Verifica com custo constante mesmo sem usuário (evita enumeração por tempo). */
 export async function verifyPassword(storedHash: string | null | undefined, pw: string): Promise<boolean> {
   try {
-    return await verify(storedHash || (await (dummyHash ??= hash("senha-ficticia-para-tempo-constante", OPTS))), pw);
+    if (!storedHash) {
+      // sem senha guardada (usuário inexistente, convite pendente ou só Google): gasta o mesmo tempo e SEMPRE recusa
+      await verify(await (dummyHash ??= hash("senha-ficticia-para-tempo-constante", OPTS)), pw);
+      return false;
+    }
+    return await verify(storedHash, pw);
   } catch {
     return false;
   }

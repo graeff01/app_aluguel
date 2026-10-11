@@ -42,7 +42,17 @@ Infraestrutura declarada em **`.railway/railway.ts`** (Infrastructure as Code do
    - URIs de redirecionamento autorizados:
      - Desenvolvimento: `http://localhost:3000/api/google/callback`
      - Produção: `https://SEU-DOMINIO/api/google/callback` (o mesmo valor de `APP_URL` + `/api/google/callback`)
+     - **Entrar com Google** (login da equipe): `https://SEU-DOMINIO/api/auth/google/callback` (e `http://localhost:3000/api/auth/google/callback` em desenvolvimento)
    - Copie **Client ID** e **Client Secret** para as variáveis do Railway (nunca para o repositório).
+
+### Entrar com Google (login da equipe)
+
+- Usa o **mesmo cliente OAuth**; pede só `openid`, `email` e `profile` (escopos não sensíveis — sem aviso de “app não verificado”).
+- Só entra quem **já está cadastrado e ativo** no app, pelo e-mail principal ou por um “e-mail da agenda” vinculado. Não há cadastro automático.
+- No primeiro acesso a conta Google fica vinculada ao usuário; outra conta Google com o mesmo e-mail é recusada depois disso.
+- Entrar com Google descarta a **senha provisória** (ela deixa de funcionar). O login por e-mail e senha continua disponível.
+- Para a equipe toda conseguir entrar, o app OAuth precisa estar **“Em produção”** (em “Teste”, só os usuários de teste entram).
+- Funciona com contas Google (Gmail e Google Workspace). E-mails de outros provedores (iCloud, Outlook) continuam com senha.
 
 ### Permissão no calendário central
 
@@ -154,7 +164,26 @@ Os testes automatizados usam uma **API Google simulada**. Antes de considerar a 
 
 ## 6. Backup e restauração
 
-> **Situação atual:** o workspace VELOCE está no plano **Hobby**, que não inclui backups automáticos de volume (recurso do plano Pro). A tentativa de ativar pela API retornou “Not Authorized”. Opções: migrar o workspace para Pro e ativar *Backups* (diário/semanal/mensal) no serviço Postgres, ou adotar backup lógico periódico para um bucket (ver abaixo).
+O worker faz um **backup lógico diário** (a partir das 3h de Brasília): exporta todas as tabelas, compacta e **criptografa** (AES-256-GCM) antes de enviar a um armazenamento compatível com S3. Retenção: 30 dias de diários + o primeiro de cada mês por 12 meses. Até 3 tentativas por dia; se as três falharem, o admin recebe notificação. Status e botão “Fazer backup agora” em **Diagnóstico**. (O plano Hobby do Railway não tem backup de volume; este backup independe do plano.)
+
+### Configurar (Cloudflare R2 — gratuito até 10 GB)
+
+1. Cloudflare → **R2** → *Create bucket* → nome `visitas-backup` (localização automática). Deixe **sem acesso público**.
+2. R2 → **Manage R2 API Tokens** → *Create API token* → permissão **Object Read & Write**, restrita ao bucket `visitas-backup`. Anote **Access Key ID** e **Secret Access Key** (o segredo só aparece uma vez).
+3. Anote o endpoint S3: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` (aparece na página do token/bucket).
+4. Gere a chave de criptografia no seu computador: `openssl rand -base64 32`. **Guarde uma cópia num gerenciador de senhas** — sem ela nenhum backup abre (é ela que protege os dados se alguém obtiver o arquivo).
+5. No Railway, nos serviços **web e worker**, defina:
+   `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET=visitas-backup`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY`, `BACKUP_ENCRYPTION_KEY` (opcional: `BACKUP_S3_REGION`, padrão `auto`).
+6. No app (admin) → Diagnóstico → **Fazer backup agora** e confira “Último backup”.
+
+### Restaurar
+
+1. Crie um banco **vazio** e aplique as migrações da **mesma versão** do backup: `DATABASE_URL=<destino> npx prisma migrate deploy`.
+2. Liste os arquivos: `BACKUP_ENCRYPTION_KEY=... BACKUP_S3_...=... npx tsx scripts/restore-backup.ts --listar`
+3. Restaure: `RESTORE_DATABASE_URL=<destino> BACKUP_ENCRYPTION_KEY=... npx tsx scripts/restore-backup.ts --chave backups/visitas-AAAA-MM-DD-HHMM.vlb` (ou `--arquivo` para um arquivo local). O script recusa banco com dados (use `--substituir` para apagar e restaurar) e banco em outra versão.
+4. Aponte o `DATABASE_URL` do Railway para o banco restaurado (ou restaure direto no Postgres do projeto com `--substituir`, em janela de manutenção).
+
+Teste de restauração: coberto pelos testes automáticos (ida e volta completa: datas, listas e JSON idênticos).
 
 ### Publicação protegida por testes
 

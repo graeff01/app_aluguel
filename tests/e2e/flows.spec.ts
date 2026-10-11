@@ -350,3 +350,28 @@ test("ficha antes de entrar: valores do imóvel e pontos para a conversa", async
   await expect(brief.getByText("Condomínio")).toBeVisible();
   await expect(brief.getByText("Primeira visita deste cliente com você.")).toBeVisible();
 });
+
+test("primeiro acesso guiado: passos, como usar e entra no app", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await page.goto("/login");
+  await page.getByLabel("E-mail").fill("guia@e2e.test");
+  await page.getByLabel("Senha").fill(PW);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  const guide = page.getByRole("dialog");
+  await expect(guide.getByRole("heading", { name: "Olá, Gisele!" })).toBeVisible();
+  await guide.getByRole("button", { name: "Vamos lá" }).click();
+  // celular sem o app instalado: passo de instalação
+  await expect(guide.getByRole("heading", { name: "Instale o app na tela inicial" })).toBeVisible();
+  await guide.getByRole("button", { name: /Continuar/ }).first().click();
+  // passo de notificações (aparece quando há chaves de notificação configuradas)
+  const notify = guide.getByRole("heading", { name: "Ative as notificações" });
+  await expect(notify.or(guide.getByRole("heading", { name: "Como usar" }))).toBeVisible();
+  if (await notify.isVisible()) await guide.getByRole("button", { name: "Agora não" }).click();
+  await expect(guide.getByRole("heading", { name: "Como usar" })).toBeVisible();
+  await expect(guide.getByText("Antes da visita")).toBeVisible();
+  await guide.getByRole("button", { name: "Começar a usar" }).click();
+  await expect(page.getByRole("heading", { name: /^Bo(m|a) (dia|tarde|noite), Gisele/ })).toBeVisible();
+  // não aparece de novo
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Olá, Gisele!" })).toHaveCount(0);
+});

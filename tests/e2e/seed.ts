@@ -20,6 +20,9 @@ const c = await db.user.create({ data: { name: "Consultora C", email: "c@e2e.tes
 await db.user.create({ data: { name: "Pessoa Nova", email: "privacidade@e2e.test", role: "CONSULTANT", passwordHash: hash } });
 // demais usuários de teste já deram ciência do aviso de privacidade
 await db.user.updateMany({ where: { email: { not: "privacidade@e2e.test" } }, data: { privacyAcceptedAt: new Date() } });
+await db.user.create({ data: { name: "Gisele Nova", email: "guia@e2e.test", role: "CONSULTANT", passwordHash: hash, privacyAcceptedAt: new Date() } });
+// todos já passaram pelo guia de primeiro acesso, exceto a usuária do teste do guia
+await db.user.updateMany({ where: { email: { not: "guia@e2e.test" } }, data: { onboardedAt: new Date() } });
 const ago = (h: number) => toLocalInput(new Date(Date.now() - h * 3600_000));
 await createManualVisit(admin, { requestId: "e2e-seed-a1", scheduledStart: ago(3), clientName: "Cliente Alfa", phoneRaw: "(51) 99876-0001", propertyCode: "00777", consultantId: a.id });
 await createManualVisit(admin, { requestId: "e2e-seed-a2", scheduledStart: ago(30), clientName: "Cliente Beta", phoneRaw: "", propertyCode: "00888", consultantId: a.id });

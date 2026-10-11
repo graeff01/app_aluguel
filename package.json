@@ -39,6 +39,7 @@
     "@types/react-dom": "^19.3.0",
     "@types/sanitize-html": "^2.16.2",
     "@types/web-push": "^3.6.4",
+    "aws4fetch": "^1.0.20",
     "date-fns": "^4.4.0",
     "dotenv": "^17.4.2",
     "esbuild": "^0.28.2",
