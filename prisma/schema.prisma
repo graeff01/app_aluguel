@@ -16,6 +16,8 @@ enum Role {
   ADMIN
   MANAGER
   CONSULTANT
+  /// pré-atendimento (ex.: Jasmin): cadastra pré-análises e encaminha para consultoras
+  PRE_SERVICE
 }
 
 model User {
@@ -56,6 +58,9 @@ model User {
   reminderLogs     ReminderLog[]
   syncRuns         SyncRun[]
   googleConnection GoogleConnection[]
+  preAnalysesCreated  PreAnalysis[] @relation("PreAnalysisCreatedBy")
+  preAnalysesAssigned PreAnalysis[] @relation("PreAnalysisConsultant")
+  preAnalysesResolved PreAnalysis[] @relation("PreAnalysisResolvedBy")
 }
 
 /// E-mails usados para reconhecer a consultora entre os convidados do evento.
@@ -133,6 +138,10 @@ model AppSettings {
   resultReminderHours      Int      @default(2)
   /// alerta à gestão quando a visita passa N horas sem resultado (0 = desligado)
   managerAlertHours        Int      @default(24)
+  /// evento movido na agenda para este horário ou depois (Brasília) = visita cancelada (0 = desligado)
+  cancelAfterHour          Int      @default(21)
+  /// LGPD: dias após o resultado para apagar CPF, nascimento, e-mail, telefone e salário da pré-análise
+  preAnalysisRetentionDays Int      @default(90)
   /// LGPD: anonimizar clientes sem atividade há N meses (0 = desligado)
   retentionMonths          Int      @default(24)
   /// LGPD: contato para pedidos de titulares (exibido no aviso de privacidade)
@@ -691,4 +700,54 @@ model BackupRun {
   rows       Int?
   errorCode  String?
   @@index([startedAt])
+}
+
+// ───────────────────────────── Pré-análise (antes de agendar visita) ─────────────────────────────
+
+enum PreAnalysisStatus {
+  /// enviada à consultora, aguardando análise
+  AWAITING
+  APPROVED
+  REJECTED
+  /// pendente (ex.: faltam documentos); continua em aberto
+  PENDING
+}
+
+/// Dados do titular do CPF para pré-análise feita fora do sistema pela consultora.
+/// LGPD: CPF, nascimento, e-mail, telefone e salário ficam CRIPTOGRAFADOS (AES-256-GCM) e são apagados
+/// automaticamente N dias após o resultado (AppSettings.preAnalysisRetentionDays). Ficam só nome, faixa de renda,
+/// resultado e datas para os indicadores.
+model PreAnalysis {
+  id           String            @id @default(cuid())
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  createdById  String
+  createdBy    User              @relation("PreAnalysisCreatedBy", fields: [createdById], references: [id])
+  consultantId String
+  consultant   User              @relation("PreAnalysisConsultant", fields: [consultantId], references: [id])
+  status       PreAnalysisStatus @default(AWAITING)
+  fullName     String
+  /// HMAC do CPF (detecta repetição sem guardar o número em claro)
+  cpfHash      String?
+  cpfEnc       String?
+  birthDateEnc String?
+  emailEnc     String?
+  phoneEnc     String?
+  /// salário em centavos (criptografado)
+  salaryEnc    String?
+  /// faixa de renda (fica após a remoção dos dados): ate2k, 2a4k, 4a6k, 6a10k, 10kmais
+  incomeBand   String
+  /// imóvel de interesse (opcional)
+  propertyCode String?
+  note         String?
+  resultNote   String?
+  resultAt     DateTime?
+  resultById   String?
+  resultBy     User?             @relation("PreAnalysisResolvedBy", fields: [resultById], references: [id])
+  /// dados sensíveis apagados (retenção LGPD)
+  purgedAt     DateTime?
+
+  @@index([consultantId, status])
+  @@index([createdAt])
+  @@index([cpfHash])
 }

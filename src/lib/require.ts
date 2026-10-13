@@ -5,9 +5,14 @@ import { getActor, type Actor } from "./session";
 import { hasGlobalView, isAdmin } from "./authz";
 import { AppError } from "./errors";
 
-export async function requireActor(): Promise<Actor> {
+/**
+ * Usuário autenticado. O pré-atendimento só acessa as telas de pré-análise:
+ * qualquer outra tela o leva para /pre-analises (passe { preService: true } nas telas permitidas).
+ */
+export async function requireActor(opts: { preService?: boolean } = {}): Promise<Actor> {
   const a = await getActor();
   if (!a) redirect("/login");
+  if (a.role === "PRE_SERVICE" && !opts.preService) redirect("/pre-analises");
   return a;
 }
 export async function requireManager(): Promise<Actor> {

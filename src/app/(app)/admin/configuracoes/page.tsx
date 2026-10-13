@@ -49,6 +49,14 @@ export default async function SettingsPage() {
             <Input id="staleOpportunityDays" name="staleOpportunityDays" type="number" min={2} max={60} defaultValue={s.staleOpportunityDays} />
           </Field>
         </Section>
+        <Section title="Agenda e pré-análise">
+          <Field label="Cancelar visita quando o evento for movido para depois das (hora)" htmlFor="cancelAfterHour" hint="O pré-atendimento cancela movendo o evento no Google para esse horário ou mais tarde; o app marca a visita como cancelada e mantém o horário original. 0 desliga.">
+            <Input id="cancelAfterHour" name="cancelAfterHour" type="number" min={0} max={23} defaultValue={s.cancelAfterHour} />
+          </Field>
+          <Field label="Apagar CPF, nascimento, e-mail, telefone e salário da pré-análise após (dias)" htmlFor="preAnalysisRetentionDays" hint="Contados a partir do resultado. Ficam nome, faixa de renda e resultado para os indicadores.">
+            <Input id="preAnalysisRetentionDays" name="preAnalysisRetentionDays" type="number" min={7} max={365} defaultValue={s.preAnalysisRetentionDays} />
+          </Field>
+        </Section>
         <Section title="Privacidade (LGPD)">
           <Field label="Anonimizar clientes sem atividade há (meses)" htmlFor="retentionMonths" hint="Remove nome, telefone e observações; indicadores preservados. 0 desliga. Roda uma vez por dia.">
             <Input id="retentionMonths" name="retentionMonths" type="number" min={0} max={120} defaultValue={s.retentionMonths} />

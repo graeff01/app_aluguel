@@ -413,7 +413,7 @@ test("admin: desativar tira da lista e cadastrar de novo reativa a mesma conta",
 
 test("admin: todas as telas de gestão e administração abrem sem erro", async ({ page }) => {
   await login(page, "admin@e2e.test");
-  for (const path of ["/painel", "/ao-vivo", "/rota", "/relatorios", "/hoje", "/pendencias", "/revisao", "/historico", "/oportunidades", "/imoveis", "/clientes", "/mais", "/config/usuarios", "/admin/google", "/admin/padroes", "/config/motivos", "/admin/configuracoes", "/admin/sincronizacao", "/config/auditoria"]) {
+  for (const path of ["/painel", "/ao-vivo", "/rota", "/relatorios", "/hoje", "/pendencias", "/revisao", "/historico", "/oportunidades", "/imoveis", "/clientes", "/mais", "/config/usuarios", "/admin/google", "/admin/padroes", "/config/motivos", "/admin/configuracoes", "/admin/sincronizacao", "/config/auditoria", "/pre-analises", "/pre-analises/nova"]) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
     await expect(page.getByText("Não foi possível carregar esta tela"), path).toHaveCount(0);
@@ -421,4 +421,46 @@ test("admin: todas as telas de gestão e administração abrem sem erro", async 
   await page.goto("/admin/sincronizacao");
   await expect(page.getByRole("heading", { name: "Diagnóstico da sincronização" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Apagar dados de teste" })).toBeVisible();
+});
+
+test("pré-análise: pré-atendimento envia, consultora responde e pré-atendimento só vê as pré-análises", async ({ page, browser }, info) => {
+  test.skip(info.project.name !== "desktop");
+  await page.goto("/login");
+  await page.getByLabel("E-mail").fill("jasmin@e2e.test");
+  await page.getByLabel("Senha").fill(PW);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.waitForURL(/\/pre-analises/);
+  // primeiro acesso guiado do pré-atendimento
+  const guide = page.getByRole("dialog");
+  if (await guide.isVisible().catch(() => false)) await guide.getByRole("button", { name: "Pular" }).click();
+  await expect(page.getByRole("heading", { name: "Pré-análises" })).toBeVisible();
+  await page.goto("/minhas");
+  await expect(page).toHaveURL(/\/pre-analises/); // outras telas não abrem
+  await page.goto("/pre-analises/nova");
+  await page.getByLabel("Nome completo").fill("Maria Titular da Silva");
+  await page.getByRole("textbox", { name: "CPF" }).fill("52998224725");
+  await expect(page.getByRole("textbox", { name: "CPF" })).toHaveValue("529.982.247-25");
+  await page.getByLabel("Data de nascimento").fill("1990-05-20");
+  await page.getByLabel("E-mail").fill("maria@exemplo.test");
+  await page.getByLabel("Telefone").fill("(51) 99876-1234");
+  await page.getByLabel(/Salário/).fill("4.500,00");
+  await page.getByLabel("Encaminhar para a consultora").selectOption({ label: "Consultora A" });
+  await page.getByLabel(/titular do CPF e que ele autorizou/).check();
+  await page.getByRole("button", { name: "Enviar para a consultora" }).click();
+  await expect(page.getByText("✓ Enviada para Consultora A")).toBeVisible();
+  await expect(page.getByText("529.982.247-25")).toBeVisible();
+
+  const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+  const c = await ctx.newPage();
+  await login(c, "a@e2e.test");
+  await c.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: /Pré-análises/ }).click();
+  await c.getByRole("link", { name: /Maria Titular da Silva/ }).click();
+  await c.getByText("Aprovado", { exact: true }).click();
+  await c.getByLabel(/Observação/).fill("Aprovado sem fiador.");
+  await c.getByRole("button", { name: "Registrar resultado" }).click();
+  await expect(c.getByText("Resultado registrado. O pré-atendimento foi avisado.")).toBeVisible();
+  await ctx.close();
+
+  await page.goto("/pre-analises?aba=respondidas");
+  await expect(page.getByRole("link", { name: /Maria Titular da Silva/ })).toContainText("Aprovado");
 });

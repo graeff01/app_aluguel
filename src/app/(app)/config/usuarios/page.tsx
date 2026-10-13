@@ -69,6 +69,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
           <Field label="Papel" htmlFor="role">
             <Select id="role" name="role" defaultValue="CONSULTANT">
               <option value="CONSULTANT">Consultora</option>
+              <option value="PRE_SERVICE">Pré-atendimento</option>
               {isAdmin(actor) && <option value="MANAGER">Gestora</option>}
               {isAdmin(actor) && <option value="ADMIN">Administrador(a)</option>}
             </Select>

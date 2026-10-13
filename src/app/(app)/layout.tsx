@@ -18,13 +18,14 @@ import { UndoToast } from "@/components/undo-toast";
 import { Suspense } from "react";
 import { cx } from "@/components/ui";
 import { AppBadge } from "@/components/app-badge";
+import { countOpenFor } from "@/server/pre-analysis";
 import { Icon } from "@/components/icons";
 import { Onboarding } from "@/components/onboarding";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const actor = await requireActor();
+  const actor = await requireActor({ preService: true });
   // senha provisória: nada do app é exibido até a troca
   if (actor.mustChangePassword) return <div className="min-h-dvh bg-bg"><ForcePasswordDialog name={actor.name} /></div>;
   // LGPD: ciência do aviso de privacidade no primeiro acesso
@@ -34,6 +35,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const settings = await getSettings();
   const now = new Date();
   const global = hasGlobalView(actor);
+  const preOpen = await countOpenFor(actor);
+  const preService = actor.role === "PRE_SERVICE";
   const [pending, health, reviewCount] = await Promise.all([
     db.visit.count({
       // "para registrar": já terminou ou já começou (em andamento)
@@ -69,6 +72,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             { href: "/ao-vivo", label: "Ao vivo", icon: "live" },
             { href: "/rota", label: "Rotas", icon: "route" },
             { href: "/relatorios", label: "Relatórios", icon: "audit" },
+            { href: "/pre-analises", label: "Pré-análises", icon: "clients", badge: preOpen },
             { href: "/hoje", label: "Hoje", icon: "today" },
             { href: "/pendencias", label: "Pendências", icon: "pending", badge: pending },
             { href: "/revisao", label: "Revisão", icon: "review", badge: reviewCount },
@@ -109,6 +113,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {
           title: "Registros",
           items: [
+            { href: "/pre-analises", label: "Pré-análises", icon: "clients", badge: preOpen },
             { href: "/pendencias", label: "Pendências", icon: "pending" },
             { href: "/historico", label: "Histórico", icon: "history" },
             { href: "/visitas/nova", label: "Visita manual", icon: "plus" },
@@ -116,6 +121,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         },
       ];
 
+  // pré-atendimento: só as telas de pré-análise
+  const preNav: NavItem[] = [
+    { href: "/pre-analises", label: "Pré-análises", icon: "clients", badge: preOpen },
+    { href: "/pre-analises/nova", label: "Nova", icon: "plus" },
+  ];
+  const navGroups = preService ? [{ title: "Pré-atendimento", items: preNav }] : groups;
   const dot = { ok: "bg-good", stale: "bg-accent", error: "bg-bad", off: "bg-ink-3/50" }[health.level];
   // agenda parada (desconectada ou sem sucesso há mais de 1 h): faixa vermelha para a gestão
   const agendaDown = global && (health.level === "error" || (health.level === "stale" && !!health.lastSuccessAt && now.getTime() - health.lastSuccessAt.getTime() > 3600_000));
@@ -140,13 +151,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // Celular: consultora (e gestão que escolheu) usa a tela única, sem menus.
   // Computador: todos usam o sistema web com menu lateral (itens conforme o perfil).
-  const simple = (await isMobileRequest()) && (!global || actor.simpleMobile);
+  const simple = (await isMobileRequest()) && (actor.role === "CONSULTANT" || (global && actor.simpleMobile));
   if (simple) {
     return (
       <div className="flex min-h-dvh flex-col">
         <OfflineBanner />
         <RefreshOnFocus />
-        <AppBadge count={pending} />
+        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen : pending} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-2.5">
             <Link href="/minhas" className="flex items-center gap-2">
@@ -179,11 +190,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-dvh">
-      <SideNav groups={groups} productName={settings.productName} />
+      <SideNav groups={navGroups} productName={settings.productName} />
       <div className="flex min-w-0 flex-1 flex-col">
         <OfflineBanner />
         <RefreshOnFocus />
-        <AppBadge count={pending} />
+        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen : pending} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 md:px-8">
             <Link href="/" className="flex items-center gap-2 md:hidden">
@@ -212,7 +223,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {agendaBanner}
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-32 md:px-8 md:pt-9 md:pb-12">{children}</main>
       </div>
-      <BottomNav items={global ? managerBottom : consultantNav} />
+      <BottomNav items={preService ? preNav : global ? managerBottom : consultantNav} />
       <Suspense>
         <UndoToast />
       </Suspense>

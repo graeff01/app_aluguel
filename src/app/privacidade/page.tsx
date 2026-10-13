@@ -9,10 +9,12 @@ export const dynamic = "force-dynamic";
 export default async function PrivacyPage() {
   const brand = await getSettingsSafe();
   let months = 24;
+  let preDays = 90;
   let contact = "";
   try {
     const s = await getSettings();
     months = s.retentionMonths;
+    preDays = s.preAnalysisRetentionDays;
     contact = s.privacyContact;
   } catch {}
   const h2 = "mt-8 mb-2 text-[18px] font-bold tracking-[-0.02em]";
@@ -34,13 +36,17 @@ export default async function PrivacyPage() {
         <li>
           <strong className="text-ink">Equipe:</strong> nome, e-mail de login e registros de uso (quem registrou ou alterou cada informação).
         </li>
-        <li>Não são coletados documentos (CPF, RG), dados financeiros nem dados sensíveis. As observações não devem conter esse tipo de informação.</li>
+        <li>
+          <strong className="text-ink">Pré-análise para locação</strong> (antes de agendar a visita, a pedido do cliente): nome completo, CPF, data de nascimento, e-mail, telefone e
+          salário do titular do CPF, e o resultado da análise. Esses dados ficam criptografados e são vistos só pelo pré-atendimento, pela gestão e pela consultora responsável.
+        </li>
+        <li>Fora da pré-análise não são coletados documentos (CPF, RG), dados financeiros nem dados sensíveis. As observações das visitas não devem conter esse tipo de informação.</li>
       </ul>
 
       <h2 className={h2}>Para que são usados</h2>
       <p>
-        Organizar o atendimento após a visita, dar retorno ao cliente e medir a qualidade do atendimento (taxas de interesse, não comparecimento e locações). Base legal:
-        legítimo interesse da imobiliária e procedimentos preliminares à contratação solicitados pelo cliente.
+        Organizar o atendimento após a visita, dar retorno ao cliente, fazer a pré-análise para a locação e medir a qualidade do atendimento (taxas de interesse, não
+        comparecimento, aprovação e locações). Base legal: legítimo interesse da imobiliária e procedimentos preliminares à contratação solicitados pelo cliente.
       </p>
 
       <h2 className={h2}>Com quem são compartilhados</h2>
@@ -58,7 +64,9 @@ export default async function PrivacyPage() {
           </>
         ) : (
           <>Os dados são mantidos enquanto necessários ao atendimento e excluídos a pedido do titular.</>
-        )}
+        )}{" "}
+        Na pré-análise, CPF, data de nascimento, e-mail, telefone e salário são apagados automaticamente <strong className="text-ink">{preDays} dias</strong> após o resultado;
+        ficam apenas o nome, a faixa de renda e o resultado, para os indicadores.
       </p>
 
       <h2 className={h2}>Direitos do titular</h2>

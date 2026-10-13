@@ -12,7 +12,7 @@ let u: Awaited<ReturnType<typeof makeUsers>>;
 let seq = 0;
 const rid = () => `req-${Date.now()}-${++seq}`;
 
-async function manual(actor: { id: string; role: "ADMIN" | "MANAGER" | "CONSULTANT" }, p: { name?: string; phone?: string; code?: string; start?: string; consultantId?: string } = {}) {
+async function manual(actor: { id: string; role: "ADMIN" | "MANAGER" | "CONSULTANT" | "PRE_SERVICE" }, p: { name?: string; phone?: string; code?: string; start?: string; consultantId?: string } = {}) {
   return createManualVisit(actor, {
     requestId: rid(),
     scheduledStart: p.start ?? "2026-10-06T10:00",

@@ -16,6 +16,7 @@ import { LockedRegisterButton } from "@/components/locked-register";
 import { InstallHint } from "@/components/install-hint";
 import { historyWhere } from "@/server/queries";
 import { db } from "@/lib/db";
+import { countOpenFor } from "@/server/pre-analysis";
 
 export const metadata = { title: "Minhas visitas" };
 
@@ -113,6 +114,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
   const now = new Date();
   const busca = sp.busca?.trim().slice(0, 80) ?? "";
   const { awaiting, upcoming, done, today } = await listMine(actor, now);
+  const preOpen = team ? 0 : await countOpenFor(actor);
   const results = busca
     ? await withRevisits(await db.visit.findMany({ where: historyWhere(actor, { q: busca }), select: { ...visitListSelect, note: true }, orderBy: { scheduledStart: "desc" }, take: 40 }), visitScope(actor))
     : [];
@@ -143,6 +145,17 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
 
       <div className="mt-5 lg:mt-7 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
       <aside className="lg:sticky lg:top-24 lg:order-2" aria-label="Resumo do dia">
+        {preOpen > 0 && (
+          <Link href="/pre-analises" className="press animate-rise mb-4 flex items-center justify-between gap-3 rounded-[22px] border border-accent/30 bg-accent-soft px-5 py-4 shadow-card">
+            <span>
+              <span className="block text-[15px] font-bold text-accent-strong">
+                {preOpen === 1 ? "1 pré-análise para responder" : `${preOpen} pré-análises para responder`}
+              </span>
+              <span className="text-[13px] text-accent-strong/80">Enviadas pelo pré-atendimento</span>
+            </span>
+            <Icon name="arrow" className="size-5 text-accent-strong" />
+          </Link>
+        )}
       {todayTotal > 0 && (
         <div className="mb-4 rounded-[22px] border border-line bg-surface px-5 py-4 shadow-card">
           <div className="mb-2.5 flex items-baseline justify-between">

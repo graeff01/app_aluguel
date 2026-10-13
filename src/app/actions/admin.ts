@@ -21,7 +21,7 @@ import { wipeTestData } from "@/server/wipe";
 import { hitRateLimit } from "@/lib/ratelimit";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const ROLES: Role[] = ["ADMIN", "MANAGER", "CONSULTANT"];
+const ROLES: Role[] = ["ADMIN", "MANAGER", "CONSULTANT", "PRE_SERVICE"];
 
 async function issueResetLink(userId: string, actorId: string) {
   const token = randomToken(32);
@@ -294,6 +294,8 @@ export async function settingsAction(_: ActionState, fd: FormData) {
         resultPromptEnabled: str(fd, "resultPromptEnabled") === "1",
         resultReminderHours: int("resultReminderHours", 0, 12),
         managerAlertHours: int("managerAlertHours", 0, 72),
+        cancelAfterHour: int("cancelAfterHour", 0, 23),
+        preAnalysisRetentionDays: int("preAnalysisRetentionDays", 7, 365),
         retentionMonths: int("retentionMonths", 0, 120),
         privacyContact: str(fd, "privacyContact").trim().slice(0, 120),
         coverageGoal: int("coverageGoal", 50, 100),

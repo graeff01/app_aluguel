@@ -16,6 +16,7 @@ import { refreshGeocodes } from "@/server/geo";
 import { maybeDailyBackup } from "@/server/backup";
 import { recordError } from "@/lib/error-tracking";
 import { runRetention } from "@/server/privacy";
+import { runPreAnalysisRetention } from "@/server/pre-analysis";
 
 const TICK_MS = Number(process.env.WORKER_TICK_MS ?? 15_000);
 const WORKER_ID = process.env.RAILWAY_REPLICA_ID ?? process.env.HOSTNAME ?? "local";
@@ -84,6 +85,7 @@ async function main() {
         await sendDailyReminders().catch((e) => log.error("reminders.failed", { code: errorCode(e) }));
         await sendWeeklySummary().catch((e) => log.error("weekly_summary.failed", { code: errorCode(e) }));
         await runRetention().catch((e) => log.error("retention.failed", { code: errorCode(e) }));
+        await runPreAnalysisRetention().catch((e) => log.error("preanalysis_retention.failed", { code: errorCode(e) }));
         await sendMonthlyReportNotice().catch((e) => log.error("monthly_report_notice.failed", { code: errorCode(e) }));
         await maybeDailyBackup().catch((e) => log.error("backup.check_failed", { code: errorCode(e) }));
 

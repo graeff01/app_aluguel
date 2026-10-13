@@ -44,7 +44,7 @@ export function canCorrectVisitData(a: AuthzActor, v: VisitLike, s: PermissionSe
 }
 
 export function canCreateManualVisit(a: AuthzActor, s: PermissionSettings) {
-  return hasGlobalView(a) || s.consultantCanCreateVisit;
+  return hasGlobalView(a) || (a.role === "CONSULTANT" && s.consultantCanCreateVisit);
 }
 
 export const canAssignVisit = hasGlobalView;
@@ -66,10 +66,26 @@ export function canUpdateOpportunity(a: AuthzActor, o: OppLike, s: PermissionSet
   return hasGlobalView(a) || (s.consultantCanUpdateOpp && o.responsibleId === a.id);
 }
 
-/** Gestora gerencia consultoras; admin gerencia todos. */
+/** Gestora gerencia consultoras e o pré-atendimento; admin gerencia todos. */
 export function canManageUser(a: AuthzActor, targetRole: Role) {
   if (isAdmin(a)) return true;
-  return a.role === "MANAGER" && targetRole === "CONSULTANT";
+  return a.role === "MANAGER" && (targetRole === "CONSULTANT" || targetRole === "PRE_SERVICE");
+}
+
+// ─────────── Pré-análise ───────────
+export const isPreService = (a: AuthzActor) => a.role === "PRE_SERVICE";
+/** Cadastrar e encaminhar: pré-atendimento e gestão. */
+export const canCreatePreAnalysis = (a: AuthzActor) => isPreService(a) || hasGlobalView(a);
+/** Pré-atendimento e gestão veem todas; consultora só as encaminhadas para ela. */
+export function preAnalysisScope(a: AuthzActor): Prisma.PreAnalysisWhereInput {
+  return isPreService(a) || hasGlobalView(a) ? {} : { consultantId: a.id };
+}
+export function canViewPreAnalysis(a: AuthzActor, p: { consultantId: string }) {
+  return isPreService(a) || hasGlobalView(a) || p.consultantId === a.id;
+}
+/** Dar o resultado: a consultora encaminhada ou a gestão. */
+export function canResolvePreAnalysis(a: AuthzActor, p: { consultantId: string }) {
+  return hasGlobalView(a) || (a.role === "CONSULTANT" && p.consultantId === a.id);
 }
 
 export function assert(cond: boolean, msg?: string): asserts cond {

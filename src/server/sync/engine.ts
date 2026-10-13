@@ -59,6 +59,8 @@ type Ctx = {
   calendarId: string;
   patterns: PatternConfig;
   aliases: Map<string, string>;
+  /** evento movido para este horário (local) ou depois = cancelamento pelo pré-atendimento; 0 = desligado */
+  cancelAfterHour: number;
   stats: SyncStats;
   sleep: (ms: number) => Promise<void>;
   seen: Set<string>;
@@ -231,6 +233,11 @@ async function applyEventLocation(tx: Tx, code: string | null, location: string 
 
 type Parsed = NonNullable<ReturnType<typeof parseVisitEvent>>;
 
+/** Marca das visitas canceladas por "evento movido para depois das 21h" (permite restaurar se voltar ao horário normal). */
+export const LATE_CANCEL_NOTE = "Cancelada pelo pré-atendimento (evento movido para depois das 21h na agenda)";
+const localHour = (d: Date) => Number(new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", hour: "numeric", hourCycle: "h23" }).format(d));
+const isLateMove = (start: Date, ctx: Ctx) => ctx.cancelAfterHour > 0 && localHour(start) >= ctx.cancelAfterHour;
+
 async function upsertVisit(
   tx: Tx,
   ctx: Ctx,
@@ -289,9 +296,16 @@ async function upsertVisit(
         assignmentNote: assignment.note,
         scheduledById,
         ...link,
+        // já chegou movido para depois das 21h: entra como cancelada
+        ...(isLateMove(t.start, ctx) ? { status: "CANCELED" as const, autoCanceled: true, note: LATE_CANCEL_NOTE, concludedAt: ctx.now } : {}),
       },
     });
     ctx.stats.created++;
+    if (created.status === "CANCELED") {
+      await tx.visitOutcomeHistory.create({ data: { visitId: created.id, status: "CANCELED", note: LATE_CANCEL_NOTE } });
+      ctx.stats.canceled++;
+      return;
+    }
     // Evidência fraca de recriação (mesmo telefone e imóvel, visita anterior cancelada no Google): revisão humana.
     if (parsed.phoneNormalized && parsed.propertyCode) {
       const candidate = await tx.visit.findFirst({
@@ -306,6 +320,23 @@ async function upsertVisit(
       if (candidate) await setConflict(tx, created.id, "POSSIBLE_RECREATION", { candidateVisitId: candidate.id }, ctx);
     }
     return;
+  }
+
+  // Cancelamento pelo pré-atendimento: evento movido para depois das 21h.
+  // O horário original é mantido na visita (indicadores ficam no dia certo). Voltando ao horário normal, restaura.
+  const lateCanceled = visit.status === "CANCELED" && visit.autoCanceled && visit.note === LATE_CANCEL_NOTE;
+  if (isLateMove(t.start, ctx)) {
+    if (visit.status === "SCHEDULED") {
+      await tx.visit.update({ where: { id: visit.id }, data: { status: "CANCELED", autoCanceled: true, note: LATE_CANCEL_NOTE, concludedAt: ctx.now, concludedById: null, version: { increment: 1 } } });
+      await tx.visitOutcomeHistory.create({ data: { visitId: visit.id, status: "CANCELED", note: LATE_CANCEL_NOTE } });
+      await audit(tx, { actorId: null, action: "sync.visit_late_canceled", entityType: "Visit", entityId: visit.id, changes: { horarioNaAgenda: t.start.toISOString() } });
+      ctx.stats.canceled++;
+    }
+    return; // já cancelada ou com resultado: não muda nada
+  }
+  if (lateCanceled) {
+    visit = await tx.visit.update({ where: { id: visit.id }, data: { status: "SCHEDULED", autoCanceled: false, note: null, concludedAt: null, concludedById: null, version: { increment: 1 } } });
+    await tx.visitOutcomeHistory.create({ data: { visitId: visit.id, status: "SCHEDULED", note: "Evento voltou para horário normal na agenda" } });
   }
 
   const manual = new Set(visit.manualFields);
@@ -462,6 +493,7 @@ export async function runSync(context: SyncContext): Promise<SyncStats> {
     calendarId: conn.calendarId,
     patterns: await getPatternConfig(),
     aliases: await loadAliases(),
+    cancelAfterHour: settings.cancelAfterHour,
     sleep,
     seen: new Set(),
     stats: { mode: "incremental", pages: 0, received: 0, visits: 0, ambiguous: 0, ignored: 0, created: 0, updated: 0, canceled: 0, conflicts: 0, windowExtended: false, reconciled: 0 },

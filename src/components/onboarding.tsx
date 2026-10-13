@@ -14,7 +14,12 @@ type BIP = Event & { prompt: () => Promise<void>; userChoice?: Promise<{ outcome
 type Platform = { ios: boolean; android: boolean; mobile: boolean; standalone: boolean };
 type StepKey = "welcome" | "install" | "notify" | "howto";
 
-const HOWTO: Record<"consultant" | "manager", { icon: IconName; title: string; text: string }[]> = {
+const HOWTO: Record<"consultant" | "manager" | "pre", { icon: IconName; title: string; text: string }[]> = {
+  pre: [
+    { icon: "plus", title: "Nova pré-análise", text: "Preencha os dados do titular do CPF e escolha a consultora. Ela recebe na hora, no app." },
+    { icon: "pending", title: "Acompanhe o resultado", text: "Aprovado, reprovado ou pendente: você é avisada quando a consultora responder." },
+    { icon: "today", title: "Cancelar visita", text: "Mova o evento na agenda Google para depois das 21h: o app marca a visita como cancelada sozinho." },
+  ],
   consultant: [
     { icon: "today", title: "Antes da visita", text: "Toque na visita e veja a ficha: valores, fotos, histórico do cliente e pontos para a conversa." },
     { icon: "check", title: "Depois da visita", text: "“Registrar resultado”: aconteceu? gostou? e uma observação (dá para ditar). Leva menos de um minuto." },
@@ -27,7 +32,7 @@ const HOWTO: Record<"consultant" | "manager", { icon: IconName; title: string; t
   ],
 };
 
-export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN" | "MANAGER" | "CONSULTANT"; pushKey: string | null }) {
+export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN" | "MANAGER" | "CONSULTANT" | "PRE_SERVICE"; pushKey: string | null }) {
   const [platform, setPlatform] = useState<Platform | null>(null);
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -36,7 +41,7 @@ export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN
   const [iosHandoff, setIosHandoff] = useState(false);
   const push = usePush(pushKey);
   const first = name.split(" ")[0];
-  const kind = role === "CONSULTANT" ? "consultant" : "manager";
+  const kind = role === "CONSULTANT" ? "consultant" : role === "PRE_SERVICE" ? "pre" : "manager";
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -103,7 +108,9 @@ export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN
               <ul className="mt-8 space-y-4">
                 {(kind === "consultant"
                   ? ["Suas visitas chegam sozinhas da agenda.", "Você registra o resultado em segundos, no celular.", "O app lembra você — nada fica para trás."]
-                  : ["As visitas chegam sozinhas da agenda da equipe.", "Você acompanha o dia de cada consultora ao vivo.", "Relatórios e PDFs prontos para a direção e proprietários."]
+                  : kind === "pre"
+                    ? ["Você envia a pré-análise direto para a consultora.", "Os dados do cliente ficam protegidos e criptografados.", "Você acompanha o resultado de cada uma."]
+                    : ["As visitas chegam sozinhas da agenda da equipe.", "Você acompanha o dia de cada consultora ao vivo.", "Relatórios e PDFs prontos para a direção e proprietários."]
                 ).map((t) => (
                   <li key={t} className="flex items-start gap-3 text-[15px]">
                     <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-good-soft text-good">
@@ -170,7 +177,7 @@ export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN
                 Ative as notificações
               </h1>
               <p className="mt-2 text-[15px] text-ink-2">
-                {kind === "consultant" ? "É assim que o app avisa antes de cada visita e pergunta “Como foi?” quando ela termina." : "É assim que você fica sabendo de visitas sem resultado e se a agenda parar."}
+                {kind === "consultant" ? "É assim que o app avisa antes de cada visita e pergunta “Como foi?” quando ela termina." : kind === "pre" ? "É assim que você fica sabendo quando a consultora responder a pré-análise." : "É assim que você fica sabendo de visitas sem resultado e se a agenda parar."}
               </p>
               <div className="mt-6">
                 {push.state === "on" ? (
