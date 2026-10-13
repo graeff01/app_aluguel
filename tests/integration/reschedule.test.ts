@@ -81,3 +81,19 @@ describe("agenda Google", () => {
     expect(await db.visit.findUniqueOrThrow({ where: { id: old.id } })).toMatchObject({ status: "RESCHEDULED", syncConflict: "NONE" });
   });
 });
+
+describe("reagendar para outro imóvel e cópia configurada", () => {
+  it("troca o código do imóvel mantendo o cliente; convidados incluem as cópias configuradas", async () => {
+    const conn = await makeConnection();
+    await db.appSettings.update({ where: { id: 1 }, data: { calendarCcEmails: "pre@exemplo.test, outra@exemplo.test" } });
+    const old = await createManualVisit(u.admin, { requestId: "resch-prop-req", scheduledStart: local("2026-10-13T17:00:00Z"), clientName: "Cliente Troca", phoneRaw: "(51) 99876-8888", propertyCode: "111111", consultantId: u.a.id });
+    await expect(rescheduleVisit(u.a, old.id, { requestId: "p0", scheduledStart: local("2026-10-14T18:00:00Z"), durationMinutes: 60, mode: "reschedule", propertyCode: "!!" }, NOW)).rejects.toMatchObject({ code: "VALIDATION" });
+    const nv = await rescheduleVisit(u.a, old.id, { requestId: "p1", scheduledStart: local("2026-10-14T18:00:00Z"), durationMinutes: 60, mode: "reschedule", propertyCode: " 222222 " }, NOW);
+    expect(nv).toMatchObject({ propertyCode: "222222", clientId: old.clientId, clientName: "Cliente Troca" });
+    expect(nv.propertyId).not.toBe(old.propertyId);
+    expect((await db.visit.findUniqueOrThrow({ where: { id: old.id } })).note).toContain("(imóvel 222222)");
+    const url = new URL((await calendarLinkFor(u.a, nv.id)).url);
+    expect(url.searchParams.get("text")).toContain("cod 222222");
+    expect(url.searchParams.get("add")).toBe(`${conn.calendarId},pre@exemplo.test,outra@exemplo.test`);
+  });
+});

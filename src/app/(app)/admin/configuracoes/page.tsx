@@ -53,6 +53,9 @@ export default async function SettingsPage() {
           <Field label="Cancelar visita quando o evento for movido para depois das (hora)" htmlFor="cancelAfterHour" hint="O pré-atendimento cancela movendo o evento no Google para esse horário ou mais tarde; o app marca a visita como cancelada e mantém o horário original. 0 desliga.">
             <Input id="cancelAfterHour" name="cancelAfterHour" type="number" min={0} max={23} defaultValue={s.cancelAfterHour} />
           </Field>
+          <Field label="E-mails em cópia nos agendamentos das consultoras" htmlFor="calendarCcEmails" hint="Vão como convidados no evento que a consultora cria pelo app (Reagendar / Nova visita), além da conta central. Separe por vírgula. Ex.: o e-mail do pré-atendimento.">
+            <Input id="calendarCcEmails" name="calendarCcEmails" defaultValue={s.calendarCcEmails} maxLength={500} />
+          </Field>
           <Field label="Apagar CPF, nascimento, e-mail, telefone e salário da pré-análise após (dias)" htmlFor="preAnalysisRetentionDays" hint="Contados a partir do resultado. Ficam nome, faixa de renda e resultado para os indicadores.">
             <Input id="preAnalysisRetentionDays" name="preAnalysisRetentionDays" type="number" min={7} max={365} defaultValue={s.preAnalysisRetentionDays} />
           </Field>

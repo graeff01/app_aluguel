@@ -142,6 +142,8 @@ model AppSettings {
   cancelAfterHour          Int      @default(21)
   /// LGPD: dias após o resultado para apagar CPF, nascimento, e-mail, telefone e salário da pré-análise
   preAnalysisRetentionDays Int      @default(90)
+  /// e-mails colocados em cópia nos eventos que as consultoras criam pelo app (reagendar/nova visita), separados por vírgula
+  calendarCcEmails         String   @default("")
   /// LGPD: anonimizar clientes sem atividade há N meses (0 = desligado)
   retentionMonths          Int      @default(24)
   /// LGPD: contato para pedidos de titulares (exibido no aviso de privacidade)

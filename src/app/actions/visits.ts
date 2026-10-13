@@ -121,6 +121,7 @@ export async function rescheduleAction(_: ActionState, fd: FormData): Promise<Ac
       durationMinutes: Number(str(fd, "duration")) || 60,
       mode,
       note: str(fd, "note"),
+      propertyCode: str(fd, "propertyCode"),
     });
     target = `/visitas/${v.id}/agenda?${mode === "new" ? "nova" : "remarcada"}=1`;
   });

@@ -4,7 +4,8 @@ import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Field, Input, Select, Textarea, cx } from "@/components/ui";
 import { rescheduleAction } from "@/app/actions/visits";
 
-export function RescheduleForm({ visitId, canReschedule, defaultDate, defaultTime, defaultDuration }: { visitId: string; canReschedule: boolean; defaultDate: string; defaultTime: string; defaultDuration: number }) {
+export function RescheduleForm({ visitId, canReschedule, defaultDate, defaultTime, defaultDuration, propertyCode }: { visitId: string; canReschedule: boolean; defaultDate: string; defaultTime: string; defaultDuration: number; propertyCode: string }) {
+  const [code, setCode] = useState(propertyCode);
   const [mode, setMode] = useState<"reschedule" | "new">(canReschedule ? "reschedule" : "new");
   const requestId = useMemo(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`), []);
   return (
@@ -53,6 +54,9 @@ export function RescheduleForm({ visitId, canReschedule, defaultDate, defaultTim
               </Select>
             </Field>
           </div>
+          <Field label="Código do imóvel" htmlFor="propertyCode" error={st.fieldErrors?.propertyCode} hint={code.trim() && code.trim() !== propertyCode ? `Outro imóvel: a nova visita e a agenda vão com o ${code.trim()}, mesmo cliente.` : "Mesmo imóvel. Troque o código se o cliente for ver outro."}>
+            <Input id="propertyCode" name="propertyCode" inputMode="numeric" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} required />
+          </Field>
           <Field label="Motivo (opcional)" htmlFor="note" hint="Ex.: cliente pediu outro dia.">
             <Textarea id="note" name="note" rows={2} maxLength={300} />
           </Field>

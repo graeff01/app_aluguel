@@ -11,7 +11,8 @@ import { audit } from "@/lib/audit";
 import { AppError, notFound } from "@/lib/errors";
 import { assert, canConcludeVisit, type AuthzActor } from "@/lib/authz";
 import { fromLocalInput, fmt } from "@/lib/time";
-import { getPatternConfig } from "@/lib/settings";
+import { getPatternConfig, getSettings } from "@/lib/settings";
+import { ensureProperty } from "./visits";
 import { cleanAddress } from "@/lib/address";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem 0/O/1/I
@@ -22,7 +23,7 @@ function newLinkCode() {
   return "VL-" + Array.from(b, (x) => CODE_ALPHABET[x % CODE_ALPHABET.length]).join("");
 }
 
-export type RescheduleInput = { requestId: string; scheduledStart: string; durationMinutes: number; mode: "reschedule" | "new"; note?: string };
+export type RescheduleInput = { requestId: string; scheduledStart: string; durationMinutes: number; mode: "reschedule" | "new"; note?: string; propertyCode?: string };
 
 export async function rescheduleVisit(actor: AuthzActor, visitId: string, input: RescheduleInput, now = new Date()) {
   const old = await db.visit.findUnique({ where: { id: visitId } });
@@ -33,6 +34,9 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
   const start = fromLocalInput(input.scheduledStart);
   if (!start) throw new AppError("VALIDATION", "Informe data e horário.", { scheduledStart: "Data inválida." });
   if (start.getTime() < now.getTime() - 5 * 60_000) throw new AppError("VALIDATION", "Escolha um horário a partir de agora.", { scheduledStart: "Horário já passou." });
+  const code = (input.propertyCode ?? "").replace(/\s+/g, "").slice(0, 40) || old.propertyCode;
+  if (!/^[0-9A-Za-z-]{2,40}$/.test(code)) throw new AppError("VALIDATION", "Código do imóvel inválido.", { propertyCode: "Confira o código." });
+  const otherProperty = code !== old.propertyCode;
   const minutes = Math.min(600, Math.max(15, Math.round(input.durationMinutes || 60)));
   const reschedule = input.mode === "reschedule" && old.status === "SCHEDULED";
   const requestId = `resched-${input.requestId}`.slice(0, 100);
@@ -43,7 +47,7 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
 
   return db.$transaction(async (tx) => {
     if (reschedule) {
-      const note = `Remarcada para ${fmt.shortDate(start)} às ${fmt.time(start)}${input.note?.trim() ? ` — ${input.note.trim().slice(0, 300)}` : ""}`;
+      const note = `Remarcada para ${fmt.shortDate(start)} às ${fmt.time(start)}${otherProperty ? ` (imóvel ${code})` : ""}${input.note?.trim() ? ` — ${input.note.trim().slice(0, 300)}` : ""}`;
       await tx.visit.update({ where: { id: old.id }, data: { status: "RESCHEDULED", note, concludedAt: now, concludedById: actor.id, version: { increment: 1 } } });
       await tx.visitOutcomeHistory.create({ data: { visitId: old.id, status: "RESCHEDULED", note, authorId: actor.id } });
     }
@@ -56,8 +60,8 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
         clientName: old.clientName,
         phoneRaw: old.phoneRaw,
         phoneNormalized: old.phoneNormalized,
-        propertyCode: old.propertyCode,
-        propertyId: old.propertyId,
+        propertyCode: code,
+        propertyId: otherProperty ? await ensureProperty(tx, code) : old.propertyId,
         clientId: old.clientId,
         clientMatch: old.clientMatch,
         consultantId: old.consultantId,
@@ -68,7 +72,7 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
         linkCode: newLinkCode(),
       },
     });
-    await audit(tx, { actorId: actor.id, action: reschedule ? "visit.rescheduled" : "visit.revisit_scheduled", entityType: "Visit", entityId: created.id, changes: { anterior: old.id, inicio: start.toISOString() } });
+    await audit(tx, { actorId: actor.id, action: reschedule ? "visit.rescheduled" : "visit.revisit_scheduled", entityType: "Visit", entityId: created.id, changes: { anterior: old.id, inicio: start.toISOString(), ...(otherProperty ? { imovelAnterior: old.propertyCode, imovelNovo: code } : {}) } });
     return created;
   });
 }
@@ -81,12 +85,14 @@ export async function calendarLinkFor(actor: AuthzActor, visitId: string) {
   });
   if (!v) throw notFound();
   assert(canConcludeVisit(actor, v));
-  const [patterns, conn] = await Promise.all([getPatternConfig(), db.googleConnection.findFirst({ where: { status: { not: "DISCONNECTED" } }, orderBy: { connectedAt: "desc" } })]);
+  const [patterns, conn, settings] = await Promise.all([getPatternConfig(), db.googleConnection.findFirst({ where: { status: { not: "DISCONNECTED" } }, orderBy: { connectedAt: "desc" } }), getSettings()]);
   const prefix = patterns.visitPrefixes[0] ?? "visita clt";
   const label = prefix.charAt(0).toUpperCase() + prefix.slice(1);
   const title = [label, v.clientName, v.propertyCode ? `cod ${v.propertyCode}` : null, v.phoneRaw].filter(Boolean).join(" - ");
   const utc = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-  const guests = [conn?.calendarId?.includes("@") ? conn.calendarId : conn?.googleEmail].filter(Boolean) as string[];
+  // conta central (para o app ler) + cópias configuradas (ex.: pré-atendimento)
+  const cc = settings.calendarCcEmails.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e));
+  const guests = [...new Set([conn?.calendarId?.includes("@") ? conn.calendarId : conn?.googleEmail, ...cc].filter(Boolean) as string[])];
   const details = [
     v.rescheduledFromId ? "Visita remarcada pela consultora no app Visitas Locação." : "Visita marcada pela consultora no app Visitas Locação.",
     `Ref.: ${v.linkCode ?? ""} (não apague esta linha: liga o evento à visita no app)`,

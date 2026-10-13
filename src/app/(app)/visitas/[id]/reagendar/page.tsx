@@ -28,7 +28,7 @@ export default async function ReschedulePage({ params }: { params: Promise<{ id:
       {!visit.clientName || !visit.propertyCode ? (
         <p className="rounded-2xl bg-warn-soft px-4 py-3 text-sm text-warn">Complete o nome do cliente e o código do imóvel antes de reagendar (Corrigir dados).</p>
       ) : (
-        <RescheduleForm visitId={visit.id} canReschedule={canReschedule} defaultDate={addDays(dayKey(new Date()), 1)} defaultTime={time} defaultDuration={[30, 45, 60, 90, 120].includes(duration) ? duration : 60} />
+        <RescheduleForm visitId={visit.id} canReschedule={canReschedule} defaultDate={addDays(dayKey(new Date()), 1)} defaultTime={time} defaultDuration={[30, 45, 60, 90, 120].includes(duration) ? duration : 60} propertyCode={visit.propertyCode} />
       )}
     </div>
   );
