@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* Tema: automático (segue o aparelho) ou escolhido no menu da conta (data-theme no <html>) */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+  &:where([data-theme="dark"] *) {
+    @slot;
+  }
+}
+
 /*
  * Linguagem visual: grafite + off-white quente, com laranja apenas como destaque.
  * --accent vem da configuração (Regras e app → Cor de destaque).
@@ -31,9 +43,9 @@
   color-scheme: light;
 }
 
-/* Modo escuro: segue o aparelho. Superfícies grafite quentes, laranja mantido como destaque. */
+/* Modo escuro: segue o aparelho (ou a escolha no menu da conta). Superfícies grafite quentes, laranja mantido como destaque. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --accent-strong: color-mix(in srgb, var(--accent) 80%, #ffffff);
     --accent-soft: color-mix(in srgb, var(--accent) 16%, #1b1e21);
     --primary: #ecebe7; /* ação principal clara sobre fundo escuro */
@@ -59,6 +71,32 @@
     color-scheme: dark;
   }
 }
+  :root[data-theme="dark"] {
+    --accent-strong: color-mix(in srgb, var(--accent) 80%, #ffffff);
+    --accent-soft: color-mix(in srgb, var(--accent) 16%, #1b1e21);
+    --primary: #ecebe7; /* ação principal clara sobre fundo escuro */
+    --on-primary: #17191b;
+    --bg: #121416;
+    --surface: #1b1e21;
+    --surface-2: #202427;
+    --ink: #eceae6;
+    --ink-2: #b9bdc2;
+    --ink-3: #8b9197;
+    --line: #2b2f34;
+    --line-strong: #3b4046;
+    --good: #82c672;
+    --good-soft: #1b2a19;
+    --bad: #f08c78;
+    --bad-soft: #35211c;
+    --warn: #ecb662;
+    --warn-soft: #302616;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px -4px rgb(0 0 0 / 0.35);
+    --shadow-lg: 0 2px 4px rgb(0 0 0 / 0.3), 0 16px 40px -12px rgb(0 0 0 / 0.6);
+    --tint: rgb(255 255 255 / 0.06);
+    --tint-strong: rgb(255 255 255 / 0.18);
+    color-scheme: dark;
+  }
+
 
 @theme inline {
   --color-primary: var(--primary);
@@ -207,17 +245,28 @@ body::after {
   background-size: 180px 180px;
 }
 @media (prefers-color-scheme: dark) {
-  body::before {
+  :root:not([data-theme="light"]) body::before {
     background:
       radial-gradient(60rem 42rem at 100% -8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 62%),
       radial-gradient(52rem 40rem at -12% 105%, rgb(90 120 160 / 0.12), transparent 60%),
       linear-gradient(180deg, #14161a 0%, #101214 100%);
   }
-  body::after {
+  :root:not([data-theme="light"]) body::after {
     opacity: 0.07;
     mix-blend-mode: screen;
   }
 }
+  :root[data-theme="dark"] body::before {
+    background:
+      radial-gradient(60rem 42rem at 100% -8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 62%),
+      radial-gradient(52rem 40rem at -12% 105%, rgb(90 120 160 / 0.12), transparent 60%),
+      linear-gradient(180deg, #14161a 0%, #101214 100%);
+  }
+  :root[data-theme="dark"] body::after {
+    opacity: 0.07;
+    mix-blend-mode: screen;
+  }
+
 @media print {
   body::before,
   body::after {
@@ -228,8 +277,10 @@ body::after {
 /* ── Mapa da rota (Leaflet) ── */
 .rm-tiles { filter: grayscale(0.85) contrast(0.92) brightness(1.04) saturate(0.9); }
 @media (prefers-color-scheme: dark) {
-  .rm-tiles { filter: invert(1) hue-rotate(180deg) grayscale(0.85) brightness(0.82) contrast(0.95); }
+  :root:not([data-theme="light"]) .rm-tiles { filter: invert(1) hue-rotate(180deg) grayscale(0.85) brightness(0.82) contrast(0.95); }
 }
+  :root[data-theme="dark"] .rm-tiles { filter: invert(1) hue-rotate(180deg) grayscale(0.85) brightness(0.82) contrast(0.95); }
+
 .leaflet-container { font-family: inherit; background: var(--tint); }
 .leaflet-control-attribution { font-size: 10px; background: rgb(255 255 255 / 0.75) !important; border-radius: 8px 0 0 0; }
 .rm-pin-wrap { background: none; border: 0; }

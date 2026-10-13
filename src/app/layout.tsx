@@ -4,6 +4,7 @@ import "./globals.css";
 import { getSettingsSafe } from "@/lib/settings-safe";
 import { ServiceWorkerRegister } from "@/components/sw-register";
 import { ErrorReporter } from "@/components/error-reporter";
+import { cookies } from "next/headers";
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope", display: "swap" });
 
@@ -31,8 +32,11 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const s = await getSettingsSafe();
+  // aparência escolhida no menu da conta (sem cookie = automático, segue o aparelho)
+  const t = (await cookies()).get("vl_theme")?.value;
+  const theme = t === "light" || t === "dark" ? t : undefined;
   return (
-    <html lang="pt-BR" className={manrope.variable} style={{ ["--accent" as string]: s.primaryColor }}>
+    <html lang="pt-BR" className={manrope.variable} data-theme={theme} style={{ ["--accent" as string]: s.primaryColor }}>
       <body className="min-h-dvh font-sans antialiased">
         {children}
         <ServiceWorkerRegister />

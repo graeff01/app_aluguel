@@ -466,3 +466,20 @@ test("pré-análise: pré-atendimento envia, consultora responde e pré-atendime
   await page.goto("/pre-analises?aba=respondidas");
   await expect(page.getByRole("link", { name: /Maria Titular da Silva/ })).toContainText("Aprovado");
 });
+
+test("aparência: escolher claro ou escuro no menu da conta vale na hora e fica salvo", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await login(page, "b@e2e.test");
+  const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const light = await bg();
+  await page.getByLabel("Menu da conta").click();
+  await page.getByRole("radio", { name: "Escuro" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(await bg()).not.toBe(light);
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByLabel("Menu da conta").click();
+  await page.getByRole("radio", { name: "Automático" }).click();
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme", /./);
+  expect(await bg()).toBe(light);
+});
