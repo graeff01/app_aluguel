@@ -280,6 +280,20 @@ test("gestora: relatório mensal com prévia e PDF", async ({ page }, info) => {
   expect((await res.body()).subarray(0, 5).toString()).toBe("%PDF-");
 });
 
+test("consultora no celular: botão Rota sempre no topo", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  // consultora A só tem visitas já passadas hoje: antes a Rota ficava sem acesso no celular
+  await login(page, "a@e2e.test");
+  const rota = page.getByRole("banner").getByRole("link", { name: "Rota" });
+  await expect(rota).toBeVisible();
+  await rota.click();
+  await expect(page).toHaveURL(/\/rota/);
+  await expect(page.getByRole("heading", { name: /^Rota de/ })).toBeVisible();
+  // volta para a tela única pelo logo
+  await page.getByRole("banner").getByRole("link", { name: /Visitas/ }).first().click();
+  await expect(page).toHaveURL(/\/minhas/);
+});
+
 test("consultora: rota do dia abre no Maps com o endereço do imóvel", async ({ page }, info) => {
   test.skip(info.project.name !== "mobile");
   await login(page, "c@e2e.test");

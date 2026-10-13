@@ -157,7 +157,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         </div>
       )}
 
-      {!team && future.some((v) => isToday(v.scheduledStart)) && !busca && (
+      {!team && todayTotal > 0 && !busca && (
         <Link href="/rota" className="press animate-rise mb-4 flex items-center justify-between gap-3 rounded-[22px] border border-line bg-surface px-5 py-4 shadow-card">
           <span className="flex items-center gap-3">
             <span className="grid size-10 place-items-center rounded-full bg-tint text-ink">
@@ -166,7 +166,8 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
             <span>
               <span className="block text-[15px] font-semibold">Rota de hoje</span>
               <span className="text-[13px] text-ink-3">
-                {future.filter((v) => isToday(v.scheduledStart)).length} {future.filter((v) => isToday(v.scheduledStart)).length === 1 ? "parada" : "paradas"} · abre no Google Maps ou Waze
+                {todayTotal} {todayTotal === 1 ? "parada" : "paradas"}
+                {nextToday ? ` · próxima às ${fmt.time(nextToday.scheduledStart)}` : ""} · mapa, Google Maps ou Waze
               </span>
             </span>
           </span>
