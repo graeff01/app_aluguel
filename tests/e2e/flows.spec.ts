@@ -496,9 +496,32 @@ test("reagendar pela consultora: nova data e botão do Google Agenda preenchido"
   const g = page.getByRole("link", { name: "Colocar na agenda Google" });
   await expect(g).toHaveAttribute("href", /^https:\/\/calendar\.google\.com\/calendar\/render\?action=TEMPLATE/);
   expect(new URL((await g.getAttribute("href"))!).searchParams.get("text")).toContain("cod 00322");
+  expect(new URL((await g.getAttribute("href"))!).searchParams.get("text")).toMatch(/ - REAGENDADA$/);
+  expect(new URL((await g.getAttribute("href"))!).searchParams.get("text")).toMatch(/ - REAGENDADA$/);
   await page.getByRole("link", { name: "Voltar para Minhas visitas" }).click();
   await expect(page.getByText("Falta pôr na agenda").first()).toBeVisible();
-  await expect(page.getByText("↻ Remarcada").first()).toBeVisible();
+  await expect(page.getByText(/↻ Remarcada de/).first()).toBeVisible();
+});
+
+test("registrar resultado e já marcar nova visita para o mesmo cliente", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await login(page, "c@e2e.test");
+  await page.getByRole("link", { name: /Registrar resultado: Cliente Atalho/ }).first().click();
+  await page.getByText("Sim, aconteceu").click();
+  await page.getByText("Ainda decidindo", { exact: true }).click();
+  await page.getByLabel(/Observação/).fill("Gostou, quer ver outro do mesmo bairro.");
+  await page.getByText(/Marcar uma nova visita para este cliente/).click();
+  await page.getByRole("button", { name: "Salvar resultado" }).click();
+  await expect(page.getByText("✓ Resultado salvo. Agora marque a nova visita.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nova visita para o cliente" })).toBeVisible();
+  await page.getByLabel("Código do imóvel").fill("761739");
+  await page.getByRole("button", { name: "Marcar e preparar a agenda" }).click();
+  await expect(page.getByText(/✓ Nova visita marcada para/)).toBeVisible();
+  const g = page.getByRole("link", { name: "Colocar na agenda Google" });
+  const text = new URL((await g.getAttribute("href"))!).searchParams.get("text")!;
+  expect(text).toContain("Cliente Atalho");
+  expect(text).toContain("cod 761739");
+  expect(text).not.toContain("REAGENDADA");
 });
 
 test("admin: Regras e app salva (cor padrão não bloqueia) e guarda os e-mails em cópia", async ({ page }, info) => {

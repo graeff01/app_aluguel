@@ -60,9 +60,13 @@ function MineCard({ v, today, now, mode, index, team }: { v: VisitListItem & { n
           <Icon name="home" className="size-4 text-ink-3" />
           {v.propertyCode ? <span className="num font-semibold text-ink">{v.propertyCode}</span> : <span className="text-warn">sem código</span>}
         </p>
-        {(v.revisit || scheduledByConsultant(v) || v.rescheduledFromId) && (
+        {(v.revisit || scheduledByConsultant(v) || (v.rescheduledFromId && v.assignmentNote === "REAGENDADA")) && (
           <p className="mt-2 flex flex-wrap gap-1.5 text-[12px] font-semibold">
-            {v.rescheduledFromId && <span className="rounded-full bg-[#e7effc] px-2 py-0.5 text-[#2357b3] dark:bg-[#1f2c44] dark:text-[#93b8ff]">↻ Remarcada</span>}
+            {v.rescheduledFromId && v.assignmentNote === "REAGENDADA" && (
+              <span className="rounded-full bg-[#e7effc] px-2 py-0.5 text-[#2357b3] dark:bg-[#1f2c44] dark:text-[#93b8ff]">
+                ↻ Remarcada{v.rescheduledFrom ? ` de ${fmt.shortDate(v.rescheduledFrom.scheduledStart).replace(".", "")}` : ""}
+              </span>
+            )}
             {v.linkCode && !v.sourceEventId && v.status === "SCHEDULED" && <span className="rounded-full bg-warn-soft px-2 py-0.5 text-warn">Falta pôr na agenda</span>}
             {v.revisit && (
               <span className="rounded-full bg-tint px-2 py-0.5 text-ink-2">

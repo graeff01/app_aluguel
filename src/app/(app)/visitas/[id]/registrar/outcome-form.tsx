@@ -54,6 +54,8 @@ export function OutcomeForm(p: Props) {
   const [reasonId, setReasonId] = useState<string>(p.initial.negativeReasonId ?? "");
   const [note, setNote] = useState(p.initial.note);
   const [version, setVersion] = useState(p.version);
+  // depois de salvar, já abrir a marcação de uma nova visita para o mesmo cliente
+  const [thenNew, setThenNew] = useState(false);
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
   // chave de idempotência estável enquanto a tela estiver aberta (retry não duplica)
   const requestId = useMemo(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`), []);
@@ -105,6 +107,11 @@ export function OutcomeForm(p: Props) {
         try {
           navigator.vibrate?.(18); // confirmação tátil discreta (Android)
         } catch {}
+        if (thenNew && (status === "DONE" || status === "NO_SHOW")) {
+          router.replace(`/visitas/${p.visitId}/reagendar?nova=1`);
+          router.refresh();
+          return;
+        }
         const undo = data.undo ? `desfazer=${data.undo.visitId}.${data.undo.requestId}` : "";
         if (data.next?.id && !p.isEdit) {
           // vai direto para a próxima pendente
@@ -242,6 +249,25 @@ export function OutcomeForm(p: Props) {
         </p>
       </div>
 
+      {status === "RESCHEDULED" && !p.isEdit && (
+        <div className="mb-4 rounded-2xl border border-[#2f6fde]/25 bg-[#eef4ff] p-4 dark:bg-[#1a2436]">
+          <p className="text-[15px] font-bold text-[#1f4fa3] dark:text-[#bcd3ff]">Já tem a nova data?</p>
+          <p className="mt-0.5 text-[13px] text-[#2357b3]/80 dark:text-[#93b8ff]/80">A visita fica como Remarcada e a nova já sai pronta, com “REAGENDADA” no título do Google.</p>
+          <Link href={`/visitas/${p.visitId}/reagendar`} className="press mt-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-[#2f6fde] px-5 text-[14px] font-semibold text-white">
+            Escolher nova data e horário →
+          </Link>
+          <p className="mt-2 text-[12px] text-ink-3">Sem data ainda? Escreva a observação e salve só como remarcada.</p>
+        </div>
+      )}
+      {(status === "DONE" || status === "NO_SHOW") && (
+        <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-line bg-surface px-4 py-3 text-[14px]">
+          <input type="checkbox" checked={thenNew} onChange={(e) => setThenNew(e.target.checked)} className="mt-0.5 size-5 accent-[var(--accent)]" />
+          <span>
+            <strong>Marcar uma nova visita para este cliente</strong> depois de salvar
+            <span className="block text-[12px] text-ink-3">Puxa o cliente; você escolhe data, horário e o imóvel (pode ser outro).</span>
+          </span>
+        </label>
+      )}
       {!online && (
         <p role="status" className="mb-3 rounded-2xl bg-warn-soft p-4 text-sm text-warn">
           Você está sem conexão. Salvar exige internet; o texto fica nesta tela enquanto ela estiver aberta (não é guardado se fechar ou recarregar).

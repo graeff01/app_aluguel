@@ -34,12 +34,21 @@ describe("reagendar", () => {
     expect(await db.visit.count()).toBe(2);
   });
 
+  it("nova visita exige o resultado da atual antes", async () => {
+    const v = await createManualVisit(u.admin, { requestId: "resch-need-req", scheduledStart: local("2026-10-13T17:00:00Z"), clientName: "Cliente Antes", phoneRaw: "", propertyCode: "761739", consultantId: u.a.id });
+    await expect(rescheduleVisit(u.a, v.id, { requestId: "n0", scheduledStart: local("2026-10-15T18:00:00Z"), durationMinutes: 60, mode: "new" }, NOW)).rejects.toMatchObject({ code: "INVALID_STATE" });
+  });
+
   it("nova visita para o mesmo cliente mantém a anterior", async () => {
     const old = await createManualVisit(u.admin, { requestId: "resch-done-req", scheduledStart: local("2026-10-12T17:00:00Z"), clientName: "Cliente Volta", phoneRaw: "(51) 99876-6666", propertyCode: "761739", consultantId: u.a.id });
     await concludeVisit(u.a, old.id, { requestId: "resch-done-c", expectedVersion: 1, status: "DONE", evaluation: "UNDECIDED", note: "vai pensar" }, NOW);
     const nv = await rescheduleVisit(u.a, old.id, { requestId: "new1", scheduledStart: local("2026-10-15T18:00:00Z"), durationMinutes: 60, mode: "reschedule" }, NOW);
     expect((await db.visit.findUniqueOrThrow({ where: { id: old.id } })).status).toBe("DONE"); // já tinha resultado: não muda
     expect(nv.clientId).toBe(old.clientId);
+    expect(nv.assignmentNote).toBe("NOVA_VISITA_MESMO_CLIENTE");
+    // sem a etiqueta REAGENDADA no título (é revisita, não remarcação)
+    await makeConnection();
+    expect(new URL((await calendarLinkFor(u.a, nv.id)).url).searchParams.get("text")).not.toContain("REAGENDADA");
   });
 });
 
@@ -51,7 +60,7 @@ describe("agenda Google", () => {
     const cal = await calendarLinkFor(u.a, nv.id);
     const url = new URL(cal.url);
     expect(url.hostname).toBe("calendar.google.com");
-    expect(url.searchParams.get("text")).toBe("Visita clt - Cliente Agenda - cod 654321 - (51) 99876-7777");
+    expect(url.searchParams.get("text")).toBe("Visita clt - Cliente Agenda - cod 654321 - (51) 99876-7777 - REAGENDADA");
     expect(url.searchParams.get("dates")).toBe("20261014T180000Z/20261014T190000Z");
     expect(url.searchParams.get("add")).toBe(conn.calendarId);
     expect(url.searchParams.get("details")).toContain(nv.linkCode!);

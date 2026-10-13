@@ -38,6 +38,8 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
   if (!/^[0-9A-Za-z-]{2,40}$/.test(code)) throw new AppError("VALIDATION", "Código do imóvel inválido.", { propertyCode: "Confira o código." });
   const otherProperty = code !== old.propertyCode;
   const minutes = Math.min(600, Math.max(15, Math.round(input.durationMinutes || 60)));
+  // remarcar = a visita ainda não aconteceu; nova visita = só depois de registrar o resultado da atual
+  if (input.mode === "new" && old.status === "SCHEDULED") throw new AppError("INVALID_STATE", "Registre primeiro o resultado desta visita; depois marque a nova.");
   const reschedule = input.mode === "reschedule" && old.status === "SCHEDULED";
   const requestId = `resched-${input.requestId}`.slice(0, 100);
 
@@ -88,7 +90,8 @@ export async function calendarLinkFor(actor: AuthzActor, visitId: string) {
   const [patterns, conn, settings] = await Promise.all([getPatternConfig(), db.googleConnection.findFirst({ where: { status: { not: "DISCONNECTED" } }, orderBy: { connectedAt: "desc" } }), getSettings()]);
   const prefix = patterns.visitPrefixes[0] ?? "visita clt";
   const label = prefix.charAt(0).toUpperCase() + prefix.slice(1);
-  const title = [label, v.clientName, v.propertyCode ? `cod ${v.propertyCode}` : null, v.phoneRaw].filter(Boolean).join(" - ");
+  // a etiqueta vai no FINAL: no começo atrapalharia a leitura do nome do cliente pela sincronização
+  const title = [label, v.clientName, v.propertyCode ? `cod ${v.propertyCode}` : null, v.phoneRaw, v.assignmentNote === "REAGENDADA" ? "REAGENDADA" : null].filter(Boolean).join(" - ");
   const utc = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   // conta central (para o app ler) + cópias configuradas (ex.: pré-atendimento)
   const cc = settings.calendarCcEmails.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e));

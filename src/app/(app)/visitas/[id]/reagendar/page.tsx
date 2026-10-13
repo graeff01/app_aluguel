@@ -8,7 +8,8 @@ import { RescheduleForm } from "./form";
 
 export const metadata = { title: "Reagendar visita" };
 
-export default async function ReschedulePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ReschedulePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ nova?: string }> }) {
+  const sp = await searchParams;
   const actor = await requireActor();
   const { id } = await params;
   const { visit } = await orNotFound(getVisitDetail(actor, id));
@@ -21,8 +22,22 @@ export default async function ReschedulePage({ params }: { params: Promise<{ id:
       <Link href={`/visitas/${visit.id}/registrar`} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
         ← Voltar à visita
       </Link>
+      {sp.nova && !canReschedule && <p role="status" className="mb-4 rounded-2xl bg-good-soft px-4 py-3 text-sm font-semibold text-good">✓ Resultado salvo. Agora marque a nova visita.</p>}
       <h1 className="text-[28px] leading-tight font-bold tracking-[-0.03em]">{canReschedule ? "Reagendar visita" : "Nova visita para o cliente"}</h1>
-      <p className="mt-1.5 mb-6 text-[15px] text-ink-2">
+      <p className="mt-2 rounded-2xl bg-tint px-4 py-2.5 text-[13px] text-ink-2">
+        {canReschedule ? (
+          <>
+            A visita atual fica como <strong className="text-ink">Remarcada</strong> e a nova nasce marcada como remarcada (no Google, com “REAGENDADA” no título). Se a visita já aconteceu e o cliente quer outra,{" "}
+            <Link href={`/visitas/${visit.id}/registrar`} className="font-semibold underline underline-offset-4">
+              registre o resultado primeiro
+            </Link>
+            .
+          </>
+        ) : (
+          <>O resultado desta visita já está registrado. A nova visita puxa o cliente; troque o código se for outro imóvel.</>
+        )}
+      </p>
+      <p className="mt-3 mb-6 text-[15px] text-ink-2">
         {visit.clientName ?? "Cliente"} · imóvel {visit.propertyCode ?? "—"} · hoje marcada para {fmt.shortDate(visit.scheduledStart)} às {fmt.time(visit.scheduledStart)}
       </p>
       {!visit.clientName || !visit.propertyCode ? (

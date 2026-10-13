@@ -31,6 +31,8 @@ export const visitListSelect = {
   clientId: true,
   scheduledById: true,
   rescheduledFromId: true,
+  rescheduledFrom: { select: { scheduledStart: true } },
+  assignmentNote: true,
   linkCode: true,
   sourceEventId: true,
   consultant: { select: { id: true, name: true } },
