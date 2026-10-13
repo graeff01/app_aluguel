@@ -410,3 +410,15 @@ test("admin: desativar tira da lista e cadastrar de novo reativa a mesma conta",
   await page.goto("/config/usuarios");
   await expect(page.getByRole("link", { name: /Pessoa Nova/ })).toBeVisible();
 });
+
+test("admin: todas as telas de gestão e administração abrem sem erro", async ({ page }) => {
+  await login(page, "admin@e2e.test");
+  for (const path of ["/painel", "/ao-vivo", "/rota", "/relatorios", "/hoje", "/pendencias", "/revisao", "/historico", "/oportunidades", "/imoveis", "/clientes", "/mais", "/config/usuarios", "/admin/google", "/admin/padroes", "/config/motivos", "/admin/configuracoes", "/admin/sincronizacao", "/config/auditoria"]) {
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText("Não foi possível carregar esta tela"), path).toHaveCount(0);
+  }
+  await page.goto("/admin/sincronizacao");
+  await expect(page.getByRole("heading", { name: "Diagnóstico da sincronização" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Apagar dados de teste" })).toBeVisible();
+});

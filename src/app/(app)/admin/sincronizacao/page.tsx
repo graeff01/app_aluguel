@@ -4,9 +4,9 @@ import { fmt } from "@/lib/time";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Alert, Badge, Field, KeyValue, PageHeader, Panel, Section, Select } from "@/components/ui";
 import { SyncButton } from "@/components/sync-button";
-import { backupNowAction, createDemoDataAction, fullSyncAction, removeDemoDataAction, wipeTestDataAction } from "@/app/actions/admin";
+import { backupNowAction, createDemoDataAction, fullSyncAction, removeDemoDataAction } from "@/app/actions/admin";
+import { WipeForm } from "./wipe-form";
 import { WIPE_LIMIT, WIPE_PHRASE, wipeAvailable } from "@/server/wipe";
-import { Input } from "@/components/ui";
 import { backupConfig } from "@/server/backup";
 import { countDemoVisits } from "@/server/demo";
 
@@ -193,20 +193,7 @@ export default async function DiagnosticsPage() {
               usuários, configurações, motivos, padrões, a conexão com a agenda e a auditoria. Eventos da agenda já importados ficam ignorados e não voltam.{" "}
               <strong className="text-bad">Não dá para desfazer.</strong>
             </p>
-            <ActionForm action={wipeTestDataAction} confirm="Apagar todos os dados de teste? Não dá para desfazer." className="mt-4">
-              {(st) => (
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                  <div className="sm:w-64">
-                    <label htmlFor="wipe-confirm" className="mb-1.5 block text-sm font-semibold">
-                      Digite {WIPE_PHRASE} para confirmar
-                    </label>
-                    <Input id="wipe-confirm" name="confirm" autoComplete="off" required />
-                    {st.fieldErrors?.confirm && <p className="mt-1.5 text-[13px] font-semibold text-bad">{st.fieldErrors.confirm}</p>}
-                  </div>
-                  <SubmitButton variant="danger">Apagar dados de teste</SubmitButton>
-                </div>
-              )}
-            </ActionForm>
+            <WipeForm phrase={WIPE_PHRASE} />
           </Panel>
         </Section>
       )}
