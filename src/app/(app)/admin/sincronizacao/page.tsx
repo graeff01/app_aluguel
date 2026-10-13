@@ -150,7 +150,7 @@ export default async function DiagnosticsPage() {
       <Section title="Dados de demonstração" hint="Visitas fictícias com imóveis reais do site (fotos e bairros de verdade) para mostrar as telas.">
         <Panel>
           <p className="text-ink-2">
-            Cria 10 visitas para a consultora escolhida — ontem, hoje (registradas, aguardando, em andamento e próximas) e amanhã. Nomes de clientes fictícios, sem telefone.{" "}
+            Cria 12 visitas para a consultora escolhida — ontem, hoje (registradas, aguardando, em andamento e próximas) e 4 amanhã (9h, 10h30, 14h e 16h). Nomes de clientes fictícios, sem telefone.{" "}
             <strong className="text-ink">Não geram notificações</strong> e ficam fora do termômetro, do relatório do proprietário e do relatório mensal. Aparecem no painel e no Ao vivo até serem removidas.
           </p>
           {consultants.length > 0 && (

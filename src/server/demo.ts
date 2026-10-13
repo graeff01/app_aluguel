@@ -9,7 +9,7 @@ import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { AppError } from "@/lib/errors";
 import { assert, isAdmin, type AuthzActor } from "@/lib/authz";
-import { dateOnlyKey, startOfDayInTz, toLocalInput } from "@/lib/time";
+import { addDays, dateOnlyKey, dayKey, startOfDayInTz, toLocalInput } from "@/lib/time";
 import { getSettings } from "@/lib/settings";
 import { concludeVisit, createManualVisit } from "./visits";
 
@@ -29,8 +29,9 @@ export function countDemoVisits() {
   return db.visit.count({ where: demoWhere });
 }
 
-type Slot = { min: number; name: string; code: string; result?: "POSITIVE" | "NEGATIVE" | "UNDECIDED" | "NO_SHOW"; note?: string; duration?: number };
-// minutos em relação a agora (arredondado para meia hora): ontem, hoje (feitas, pendentes, em andamento, próximas) e amanhã
+type Slot = { min?: number; tomorrow?: string; name: string; code: string; result?: "POSITIVE" | "NEGATIVE" | "UNDECIDED" | "NO_SHOW"; note?: string; duration?: number };
+// min: minutos em relação a agora (arredondado para meia hora) — ontem e hoje (feitas, pendentes, em andamento, próximas)
+// tomorrow: horário fixo amanhã (a rota de amanhã sempre tem paradas, qualquer que seja a hora do clique)
 const PLAN: Slot[] = [
   { min: -30 * 60, name: "Mariana Alves", code: "761739" },
   { min: -27 * 60, name: "André Lima", code: "731602", result: "UNDECIDED", note: "Gostou do espaço, vai conversar com a família e dar retorno até segunda." },
@@ -40,8 +41,10 @@ const PLAN: Slot[] = [
   { min: -20, name: "Rafael Costa", code: "391695" },
   { min: 90, name: "Bruno Teixeira", code: "767207" },
   { min: 180, name: "Camila Duarte", code: "775040" },
-  { min: 20 * 60, name: "Larissa Souza", code: "734999" },
-  { min: 23 * 60, name: "Sofia Martins", code: "761128", duration: 45 },
+  { tomorrow: "09:00", name: "Larissa Souza", code: "734999" },
+  { tomorrow: "10:30", name: "Sofia Martins", code: "761128", duration: 45 },
+  { tomorrow: "14:00", name: "Gustavo Ribeiro", code: "740146" },
+  { tomorrow: "16:00", name: "Helena Castro", code: "722136" },
 ];
 
 export async function createDemoData(actor: AuthzActor, consultantId: string, now = new Date()) {
@@ -55,11 +58,11 @@ export async function createDemoData(actor: AuthzActor, consultantId: string, no
   const stamp = now.getTime().toString(36);
   let n = 0;
   for (const [i, p] of PLAN.entries()) {
-    const start = new Date(base + p.min * 60_000);
-    if (start < chargeStart) continue; // antes do início da cobrança não apareceria como pendente
+    const start = p.tomorrow ? null : new Date(base + p.min! * 60_000);
+    if (start && start < chargeStart) continue; // antes do início da cobrança não apareceria como pendente
     const v = await createManualVisit(actor, {
       requestId: `${DEMO_KEY}${stamp}-${i}-${consultantId}`.slice(0, 100),
-      scheduledStart: toLocalInput(start),
+      scheduledStart: p.tomorrow ? `${addDays(dayKey(now), 1)}T${p.tomorrow}` : toLocalInput(start!),
       durationMinutes: p.duration ?? 60,
       clientName: p.name,
       phoneRaw: "",

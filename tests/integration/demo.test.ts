@@ -26,9 +26,12 @@ describe("demonstração", () => {
     // uma visita real da mesma consultora (deve continuar intacta)
     const real = await createManualVisit(u.admin, { requestId: "real-visit-req", scheduledStart: toLocalInput(new Date(NOW.getTime() + 30 * 60_000)), clientName: "Cliente Real", phoneRaw: "", propertyCode: "999", consultantId: u.a.id });
 
-    expect(await createDemoData(u.admin, u.a.id, NOW)).toBe(10);
+    expect(await createDemoData(u.admin, u.a.id, NOW)).toBe(12);
+    // amanhã sempre tem 4 paradas em horário fixo (9h, 10h30, 14h e 16h em São Paulo)
+    const tomorrow = await db.visit.findMany({ where: { consultantId: u.a.id, scheduledStart: { gte: new Date("2026-10-10T03:00:00Z"), lt: new Date("2026-10-11T03:00:00Z") } }, orderBy: { scheduledStart: "asc" } });
+    expect(tomorrow.map((v) => v.scheduledStart.toISOString())).toEqual(["2026-10-10T12:00:00.000Z", "2026-10-10T13:30:00.000Z", "2026-10-10T17:00:00.000Z", "2026-10-10T19:00:00.000Z"]);
     await expect(createDemoData(u.admin, u.a.id, NOW)).rejects.toMatchObject({ code: "INVALID_STATE" });
-    expect(await countDemoVisits()).toBe(10);
+    expect(await countDemoVisits()).toBe(12);
     const names = (await db.visit.findMany({ where: { consultantId: u.a.id }, select: { clientName: true } })).map((v) => v.clientName);
     expect(names.every((n) => !n?.startsWith("[DEMO]"))).toBe(true);
 
@@ -46,7 +49,7 @@ describe("demonstração", () => {
     expect(sent).toEqual(["Visita às 17:10 · imóvel 999"]); // só a visita real
     expect((await propertyHealth(u.manager, { now: NOW })).rows).toHaveLength(0);
 
-    expect(await removeDemoData(u.admin)).toBe(10);
+    expect(await removeDemoData(u.admin)).toBe(12);
     expect(await countDemoVisits()).toBe(0);
     expect(await db.visit.findUnique({ where: { id: real.id } })).not.toBeNull();
     expect(await db.client.count({ where: { name: { in: ["Mariana Alves", "Felipe Moraes"] } } })).toBe(0);
