@@ -36,6 +36,8 @@ model User {
   onboardedAt        DateTime?
   /// conta Google vinculada no "Entrar com Google" (identificador estável do Google)
   googleSub          String?   @unique
+  /// consultora ausente (folga/férias) até esta data, inclusive: o rodízio da pré-análise pula
+  awayUntil          DateTime? @db.Date
   role          Role
   active        Boolean   @default(true)
   deactivatedAt DateTime?
@@ -727,6 +729,8 @@ enum PreAnalysisStatus {
 /// resultado e datas para os indicadores.
 model PreAnalysis {
   id           String            @id @default(cuid())
+  /// idempotência do envio (toque duplo / reenvio não duplica)
+  requestId    String?           @unique
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
   createdById  String

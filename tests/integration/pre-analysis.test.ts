@@ -74,7 +74,7 @@ describe("pré-análise", () => {
     await expect(resolvePreAnalysis(u.a, p.id, { status: "APPROVED", note: "" })).rejects.toMatchObject({ code: "VALIDATION" });
     await resolvePreAnalysis(u.a, p.id, { status: "PENDING", note: "Falta comprovante de renda" }, NOW);
     await resolvePreAnalysis(u.a, p.id, { status: "APPROVED", note: "Aprovado sem fiador" }, new Date(NOW.getTime() + 2 * 3600_000));
-    const second = await createPreAnalysis(jasmin, valid({ consultantId: u.b.id }), NOW);
+    const second = await createPreAnalysis(jasmin, { ...valid({ consultantId: u.b.id }), confirmRepeat: true }, NOW);
     await resolvePreAnalysis(u.b, second.id, { status: "REJECTED", note: "Renda insuficiente" }, NOW);
     expect((await preAnalysisDetail(u.manager, second.id, NOW)).previous.map((x) => x.id)).toEqual([p.id]);
     // a consultora B não vê a pré-análise da A, nem como "repetida"

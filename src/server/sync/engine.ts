@@ -254,7 +254,21 @@ async function upsertVisit(
   // Evento criado pela consultora a partir do app (reagendamento/nova visita): o código VL-XXXXXX liga à visita já existente
   if (!visit) {
     const code = `${ev.summary ?? ""}\n${ev.description ?? ""}`.match(LINK_CODE_RE)?.[0];
-    const linked = code ? await tx.visit.findUnique({ where: { linkCode: code } }) : null;
+    let linked = code ? await tx.visit.findUnique({ where: { linkCode: code } }) : null;
+    // evento criado à mão (sem o código): mesmo telefone + mesmo imóvel, até 3 h de diferença → é a mesma visita
+    if (!linked && parsed.phoneNormalized && parsed.propertyCode) {
+      linked = await tx.visit.findFirst({
+        where: {
+          linkCode: { not: null },
+          sourceEventId: null,
+          status: "SCHEDULED",
+          phoneNormalized: parsed.phoneNormalized,
+          propertyCode: parsed.propertyCode,
+          scheduledStart: { gte: new Date(t.start.getTime() - 3 * 3600_000), lte: new Date(t.start.getTime() + 3 * 3600_000) },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    }
     if (linked && !linked.sourceEventId) {
       visit = await tx.visit.update({ where: { id: linked.id }, data: { sourceEventId, scheduledStart: t.start, scheduledEnd: t.end, ...(scheduledById ? { scheduledById } : {}) } });
       await audit(tx, { actorId: null, action: "sync.visit_linked_by_code", entityType: "Visit", entityId: linked.id, changes: { codigo: code } });

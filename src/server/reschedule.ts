@@ -30,7 +30,7 @@ function newLinkCode() {
  * - DONE: aconteceu e o cliente quer outra visita (avaliação + observação) → a nova é revisita.
  */
 export type RescheduleOutcome = { status: "RESCHEDULED" | "NO_SHOW" | "DONE"; evaluation?: "POSITIVE" | "NEGATIVE" | "UNDECIDED" | null; negativeReasonId?: string | null; note?: string };
-export type RescheduleInput = { requestId: string; scheduledStart: string; durationMinutes: number; mode: "reschedule" | "new"; note?: string; propertyCode?: string; outcome?: RescheduleOutcome };
+export type RescheduleInput = { requestId: string; scheduledStart: string; durationMinutes: number; mode: "reschedule" | "new"; note?: string; propertyCode?: string; outcome?: RescheduleOutcome; allowOverlap?: boolean };
 
 export async function rescheduleVisit(actor: AuthzActor, visitId: string, input: RescheduleInput, now = new Date()) {
   const old = await db.visit.findUnique({ where: { id: visitId } });
@@ -49,6 +49,17 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
   // idempotência: mesmo envio repetido devolve a visita já criada
   const dup = await db.visit.findUnique({ where: { createRequestId: requestId } });
   if (dup) return dup;
+  // horário em cima de outra visita da mesma consultora: avisa (pode confirmar)
+  if (!input.allowOverlap) {
+    const end = new Date(start.getTime() + minutes * 60_000);
+    const clash = await db.visit.findFirst({
+      where: { consultantId: old.consultantId, status: "SCHEDULED", excluded: false, id: { not: old.id }, scheduledStart: { lt: end }, scheduledEnd: { gt: start } },
+      orderBy: { scheduledStart: "asc" },
+    });
+    if (clash) {
+      throw new AppError("VALIDATION", `Conflito: já há visita das ${fmt.time(clash.scheduledStart)} às ${fmt.time(clash.scheduledEnd)}${clash.propertyCode ? ` (imóvel ${clash.propertyCode})` : ""} nesse horário. Mude o horário ou confirme.`, { allowOverlap: "Horário em conflito." });
+    }
+  }
 
   // visita atual em aberto: o status dela é registrado aqui mesmo (ela nunca fica "em aberto")
   const outcome: RescheduleOutcome | null = old.status === "SCHEDULED" ? (input.outcome ?? (input.mode === "reschedule" ? { status: "RESCHEDULED" } : null)) : null;

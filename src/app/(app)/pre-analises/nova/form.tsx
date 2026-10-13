@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ActionForm, FieldError, SubmitButton } from "@/components/action-form";
 import { Field, Input, Textarea, cx } from "@/components/ui";
 import { createPreAnalysisAction } from "@/app/actions/pre-analysis";
@@ -9,7 +9,7 @@ const cpfMask = (v: string) => {
   return d.replace(/^(\d{3})(\d)/, "$1.$2").replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d{1,2})$/, ".$1-$2");
 };
 
-type QueueItem = { id: string; name: string; lastAt: Date | null; monthCount: number; isNext: boolean; isLast: boolean };
+type QueueItem = { id: string; name: string; away: boolean; awayUntil: string | null; lastAt: Date | null; monthCount: number; isNext: boolean; isLast: boolean };
 
 const ago = (d: Date) => {
   const min = Math.round((Date.now() - new Date(d).getTime()) / 60_000);
@@ -21,10 +21,12 @@ const ago = (d: Date) => {
 export function PreAnalysisForm({ consultants }: { consultants: QueueItem[] }) {
   const [cpf, setCpf] = useState("");
   const [chosen, setChosen] = useState(consultants.find((c) => c.isNext)?.id ?? "");
+  const requestId = useMemo(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`), []);
   return (
     <ActionForm action={createPreAnalysisAction} className="max-w-2xl rounded-[26px] border border-line bg-surface p-5 shadow-card sm:p-7">
       {(st) => (
         <>
+          <input type="hidden" name="requestId" value={requestId} />
           <p className="mb-5 rounded-2xl bg-accent-soft px-4 py-3 text-[14px] font-medium text-accent-strong">Todos os dados precisam ser do <strong>titular do CPF</strong>.</p>
           <Field label="Nome completo" htmlFor="fullName" error={st.fieldErrors?.fullName}>
             <Input id="fullName" name="fullName" autoComplete="off" required />
@@ -80,6 +82,7 @@ export function PreAnalysisForm({ consultants }: { consultants: QueueItem[] }) {
                       <span className="mt-1.5 flex flex-wrap gap-1.5">
                         {c.isNext && <span className="rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-bold text-white">Próxima da vez</span>}
                         {c.isLast && <span className="rounded-full bg-tint px-2.5 py-0.5 text-[11px] font-bold text-ink-2">Última a receber</span>}
+                        {c.away && <span className="rounded-full bg-warn-soft px-2.5 py-0.5 text-[11px] font-bold text-warn">Ausente até {c.awayUntil}</span>}
                       </span>
                     </span>
                     <span aria-hidden className={cx("grid size-6 shrink-0 place-items-center rounded-full border-2", on ? "border-accent bg-accent text-white" : "border-line-strong")}>
@@ -99,6 +102,22 @@ export function PreAnalysisForm({ consultants }: { consultants: QueueItem[] }) {
           <Field label="Observação (opcional)" htmlFor="note" hint="Ex.: tem fiador, prefere contato à tarde. Não repita CPF ou dados aqui.">
             <Textarea id="note" name="note" rows={3} maxLength={1000} />
           </Field>
+          {st.fieldErrors?.confirmRepeat && (
+            <label className="mb-3 flex cursor-pointer items-start gap-3 rounded-2xl border border-warn/30 bg-warn-soft px-4 py-3 text-[14px] text-warn">
+              <input type="checkbox" name="confirmRepeat" value="1" className="mt-0.5 size-5" />
+              <span>
+                <strong>Enviar mesmo assim.</strong> Este CPF foi analisado há pouco — confirme só se houve mudança (ex.: renda nova, outro imóvel).
+              </span>
+            </label>
+          )}
+          {st.fieldErrors?.confirmAway && (
+            <label className="mb-3 flex cursor-pointer items-start gap-3 rounded-2xl border border-warn/30 bg-warn-soft px-4 py-3 text-[14px] text-warn">
+              <input type="checkbox" name="confirmAway" value="1" className="mt-0.5 size-5" />
+              <span>
+                <strong>Enviar mesmo assim</strong> para a consultora ausente (ela vê quando voltar).
+              </span>
+            </label>
+          )}
           <label className="mb-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-line px-4 py-3 text-[14px]">
             <input type="checkbox" name="holder" value="1" required className="mt-0.5 size-5 accent-[var(--accent)]" />
             <span>Confirmo que os dados são do <strong>titular do CPF</strong> e que ele autorizou a pré-análise para a locação.</span>

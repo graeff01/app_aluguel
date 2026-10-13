@@ -1,12 +1,18 @@
 "use client";
-import { useActionState, useEffect, useRef, type ReactNode } from "react";
+import { createContext, startTransition, useActionState, useContext, useEffect, useRef, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { btnVariant, cx, type BtnVariant } from "./ui";
 
 export type ActionState = { ok: boolean; message?: string; fieldErrors?: Record<string, string>; at?: number };
 type Action = (prev: ActionState, fd: FormData) => Promise<ActionState>;
 
-/** Formulário com estado do servidor: desabilita envio duplo e exibe erro sem perder o que foi digitado. */
+const PendingContext = createContext(false);
+
+/**
+ * Formulário com estado do servidor: desabilita envio duplo e exibe erro SEM PERDER o que foi digitado.
+ * (O React 19 limpa o formulário depois de toda "action" de <form>, inclusive quando volta erro de validação;
+ * por isso o envio é feito à mão, e a limpeza só acontece com resetOnSuccess.)
+ */
 export function ActionForm({
   action,
   children,
@@ -20,7 +26,7 @@ export function ActionForm({
   resetOnSuccess?: boolean;
   confirm?: string;
 }) {
-  const [state, formAction] = useActionState(action, { ok: false });
+  const [state, formAction, isPending] = useActionState(action, { ok: false });
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (state.ok && resetOnSuccess) ref.current?.reset();
@@ -31,10 +37,21 @@ export function ActionForm({
       action={formAction}
       className={className}
       onSubmit={(e) => {
-        if (confirm && !window.confirm(confirm)) e.preventDefault();
+        e.preventDefault();
+        if (isPending) return; // envio duplo
+        if (confirm && !window.confirm(confirm)) return;
+        const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+        let fd: FormData;
+        try {
+          fd = new FormData(e.currentTarget, submitter);
+        } catch {
+          fd = new FormData(e.currentTarget);
+          if (submitter?.name) fd.append(submitter.name, submitter.value);
+        }
+        startTransition(() => formAction(fd));
       }}
     >
-      {typeof children === "function" ? children(state) : children}
+      <PendingContext.Provider value={isPending}>{typeof children === "function" ? children(state) : children}</PendingContext.Provider>
       {state.message && (
         <p role={state.ok ? "status" : "alert"} className={cx("mt-3 text-sm font-semibold break-words", state.ok ? "text-good" : "text-bad")}>
           {state.message}
@@ -45,7 +62,9 @@ export function ActionForm({
 }
 
 export function SubmitButton({ children, variant = "primary", className, name, value }: { children: ReactNode; variant?: BtnVariant; className?: string; name?: string; value?: string }) {
-  const { pending } = useFormStatus();
+  const status = useFormStatus();
+  const ctxPending = useContext(PendingContext);
+  const pending = status.pending || ctxPending;
   const styles = btnVariant[variant];
   return (
     <button

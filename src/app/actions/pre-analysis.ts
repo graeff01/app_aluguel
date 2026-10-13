@@ -18,6 +18,9 @@ export async function createPreAnalysisAction(_: ActionState, fd: FormData): Pro
       propertyCode: str(fd, "propertyCode"),
       note: str(fd, "note"),
       holderConfirmed: (str(fd, "holder") === "1") as true,
+      requestId: str(fd, "requestId") || undefined,
+      confirmRepeat: str(fd, "confirmRepeat") === "1",
+      confirmAway: str(fd, "confirmAway") === "1",
     });
     id = p.id;
     return "Pré-análise enviada.";

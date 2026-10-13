@@ -117,7 +117,7 @@ describe("status da visita atual ao reagendar", () => {
     expect(n1).toMatchObject({ assignmentNote: "NOVA_VISITA_MESMO_CLIENTE", propertyCode: "222222" });
 
     const a2 = await createManualVisit(u.admin, { requestId: "out-ns-req", scheduledStart: local("2026-10-13T13:00:00Z"), clientName: "Cliente Faltou", phoneRaw: "", propertyCode: "761739", consultantId: u.a.id });
-    const n2 = await rescheduleVisit(u.a, a2.id, { requestId: "o2", scheduledStart: local("2026-10-15T18:00:00Z"), durationMinutes: 60, mode: "reschedule", outcome: { status: "NO_SHOW", note: "Não atendeu" } }, NOW);
+    const n2 = await rescheduleVisit(u.a, a2.id, { requestId: "o2", scheduledStart: local("2026-10-15T20:00:00Z"), durationMinutes: 60, mode: "reschedule", outcome: { status: "NO_SHOW", note: "Não atendeu" } }, NOW);
     expect((await db.visit.findUniqueOrThrow({ where: { id: a2.id } })).status).toBe("NO_SHOW");
     expect(n2.assignmentNote).toBe("REAGENDADA");
   });

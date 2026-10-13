@@ -137,6 +137,14 @@ export function RescheduleForm(p: {
             </Field>
           </section>
 
+          {st.fieldErrors?.allowOverlap && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-warn/30 bg-warn-soft px-4 py-3 text-[14px] text-warn">
+              <input type="checkbox" name="allowOverlap" value="1" className="mt-0.5 size-5" />
+              <span>
+                <strong>Marcar mesmo assim</strong> nesse horário (ex.: as duas visitas são no mesmo prédio).
+              </span>
+            </label>
+          )}
           {st.message && !st.ok && <p className="text-center text-sm font-semibold text-bad">{st.message}</p>}
           <SubmitButton className="w-full">Salvar e preparar a agenda</SubmitButton>
           <p className="text-center text-[12px] text-ink-3">No próximo passo, um toque abre o Google Agenda com tudo preenchido.</p>

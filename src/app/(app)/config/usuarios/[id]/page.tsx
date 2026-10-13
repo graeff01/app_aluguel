@@ -8,7 +8,8 @@ import { ROLE_LABEL } from "@/lib/labels";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { InlineAction } from "@/components/inline-action";
 import { Field, Input, PageHeader, Section, Select } from "@/components/ui";
-import { addAliasAction, removeAliasAction, resetLinkAction, resetOnboardingAction, tempPasswordAction, updateUserAction } from "@/app/actions/admin";
+import { addAliasAction, removeAliasAction, resetLinkAction, resetOnboardingAction, setAwayAction, tempPasswordAction, updateUserAction } from "@/app/actions/admin";
+import { isAway } from "@/server/pre-analysis";
 
 export const metadata = { title: "Usuário" };
 
@@ -99,6 +100,29 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
               </ActionForm>
             </div>
           </Section>
+          {u.role === "CONSULTANT" && u.active && (
+            <Section title="Ausência (folga, férias)">
+              <div className="max-w-xl rounded-3xl border border-line bg-surface p-5 shadow-card">
+                <p className="mb-3 text-ink-2">
+                  {u.awayUntil && isAway(u.awayUntil)
+                    ? `Ausente até ${u.awayUntil.toISOString().slice(0, 10).split("-").reverse().join("/")} — o rodízio da pré-análise pula ela.`
+                    : "Disponível. Marque uma data para o rodízio da pré-análise pular a consultora até lá."}
+                </p>
+                <ActionForm action={setAwayAction}>
+                  <input type="hidden" name="userId" value={u.id} />
+                  <div className="flex flex-wrap items-end gap-3">
+                    <Field label="Ausente até (inclusive)" htmlFor="awayUntil">
+                      <Input id="awayUntil" name="awayUntil" type="date" defaultValue={u.awayUntil ? u.awayUntil.toISOString().slice(0, 10) : ""} />
+                    </Field>
+                    <SubmitButton variant="secondary" className="mb-5">
+                      Salvar
+                    </SubmitButton>
+                  </div>
+                  <p className="text-[12px] text-ink-3">Deixe em branco e salve para remover a ausência.</p>
+                </ActionForm>
+              </div>
+            </Section>
+          )}
           <Section title="Primeiro acesso">
             <div className="max-w-xl rounded-3xl border border-line bg-surface p-5 shadow-card">
               <p className="mb-3 text-ink-2">

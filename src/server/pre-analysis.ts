@@ -87,6 +87,12 @@ const createSchema = z.object({
   propertyCode: z.string().trim().max(40).optional().default(""),
   note: z.string().trim().max(1000).optional().default(""),
   holderConfirmed: z.literal(true, { message: "Confirme que os dados são do titular do CPF." }),
+  /** idempotência: o mesmo envio repetido não duplica */
+  requestId: z.string().max(100).optional(),
+  /** CPF já analisado há pouco: só segue com confirmação explícita */
+  confirmRepeat: z.boolean().optional(),
+  /** consultora marcada como ausente: só segue com confirmação explícita */
+  confirmAway: z.boolean().optional(),
 });
 
 export async function createPreAnalysis(actor: AuthzActor, input: z.input<typeof createSchema>, now = new Date()) {
@@ -94,6 +100,10 @@ export async function createPreAnalysis(actor: AuthzActor, input: z.input<typeof
   const parsed = createSchema.safeParse(input);
   if (!parsed.success) throw new AppError("VALIDATION", "Revise os campos destacados.", Object.fromEntries(parsed.error.issues.map((i) => [i.path.join("."), i.message])));
   const p = parsed.data;
+  if (p.requestId) {
+    const dup = await db.preAnalysis.findUnique({ where: { requestId: p.requestId } });
+    if (dup) return dup;
+  }
   const errors: Record<string, string> = {};
   const cpf = cpfDigits(p.cpf);
   if (!isValidCpf(cpf)) errors.cpf = "CPF inválido (confira os números).";
@@ -108,14 +118,26 @@ export async function createPreAnalysis(actor: AuthzActor, input: z.input<typeof
   if (Object.keys(errors).length) throw new AppError("VALIDATION", "Revise os campos destacados.", errors);
   const consultant = await db.user.findUnique({ where: { id: p.consultantId } });
   if (!consultant || consultant.role !== "CONSULTANT" || !consultant.active) throw new AppError("VALIDATION", "Escolha uma consultora ativa.", { consultantId: "Consultora inválida." });
+  if (isAway(consultant.awayUntil, now) && !p.confirmAway) {
+    throw new AppError("VALIDATION", `${consultant.name.split(" ")[0]} está ausente até ${fmtDay(consultant.awayUntil!)}. Escolha outra consultora ou confirme o envio.`, { confirmAway: "Consultora ausente." });
+  }
+  // mesmo CPF: em aberto bloqueia; analisado nos últimos 30 dias pede confirmação
+  const hash = cpfHash(cpf);
+  const open = await db.preAnalysis.findFirst({ where: { cpfHash: hash, status: { in: ["AWAITING", "PENDING"] } }, include: { consultant: { select: { name: true } } } });
+  if (open) throw new AppError("CONFLICT", `Este CPF já tem uma pré-análise em aberto com ${open.consultant.name.split(" ")[0]} (enviada em ${open.createdAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}). Acompanhe por ela.`, { cpf: "Pré-análise em aberto." });
+  const recent = await db.preAnalysis.findFirst({ where: { cpfHash: hash, resultAt: { gte: new Date(now.getTime() - 30 * DAY) } }, orderBy: { resultAt: "desc" } });
+  if (recent && !p.confirmRepeat) {
+    throw new AppError("VALIDATION", `Este CPF teve pré-análise respondida em ${recent.resultAt!.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })} (${recent.status === "APPROVED" ? "aprovado" : recent.status === "REJECTED" ? "reprovado" : "pendente"}). Confirme para enviar de novo.`, { confirmRepeat: "CPF analisado há pouco." });
+  }
 
   const created = await db.$transaction(async (tx) => {
     const row = await tx.preAnalysis.create({
       data: {
+        requestId: p.requestId || null,
         createdById: actor.id,
         consultantId: consultant.id,
         fullName: p.fullName.replace(/\s+/g, " "),
-        cpfHash: cpfHash(cpf),
+        cpfHash: hash,
         cpfEnc: encryptSecret(cpf),
         birthDateEnc: encryptSecret(p.birthDate),
         emailEnc: encryptSecret(email),
@@ -306,6 +328,16 @@ async function notifyUser(userId: string, payload: { title: string; body: string
   }
 }
 
+// ─────────────── ausência ───────────────
+
+/** awayUntil é uma data (inclusive): ausente se hoje (Brasília) for até essa data. */
+export function isAway(awayUntil: Date | null | undefined, now = new Date()) {
+  if (!awayUntil) return false;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(now);
+  return awayUntil.toISOString().slice(0, 10) >= today;
+}
+const fmtDay = (d: Date) => d.toISOString().slice(0, 10).split("-").reverse().slice(0, 2).join("/");
+
 // ─────────────── rodízio entre consultoras ───────────────
 
 /**
@@ -313,7 +345,7 @@ async function notifyUser(userId: string, payload: { title: string; body: string
  * a última a receber fica marcada. Com duas consultoras, isso alterna entre elas.
  */
 export async function assignmentQueue(now = new Date()) {
-  const consultants = await db.user.findMany({ where: { role: "CONSULTANT", active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  const consultants = await db.user.findMany({ where: { role: "CONSULTANT", active: true }, select: { id: true, name: true, awayUntil: true }, orderBy: { name: "asc" } });
   if (!consultants.length) return [];
   const ids = consultants.map((c) => c.id);
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 3));
@@ -323,8 +355,10 @@ export async function assignmentQueue(now = new Date()) {
   ]);
   const lastAt = new Map(last.map((l) => [l.consultantId, l._max.createdAt]));
   const monthCount = new Map(month.map((m) => [m.consultantId, m._count._all]));
-  const rows = consultants.map((c) => ({ ...c, lastAt: lastAt.get(c.id) ?? null, monthCount: monthCount.get(c.id) ?? 0 }));
-  const byOldest = [...rows].sort((a, b) => (a.lastAt?.getTime() ?? 0) - (b.lastAt?.getTime() ?? 0) || a.name.localeCompare(b.name));
+  const rows = consultants.map((c) => ({ id: c.id, name: c.name, away: isAway(c.awayUntil, now), awayUntil: c.awayUntil ? fmtDay(c.awayUntil) : null, lastAt: lastAt.get(c.id) ?? null, monthCount: monthCount.get(c.id) ?? 0 }));
+  // ausentes saem da vez (se todas estiverem ausentes, segue o rodízio normal)
+  const available = rows.some((r) => !r.away) ? rows.filter((r) => !r.away) : rows;
+  const byOldest = [...available].sort((a, b) => (a.lastAt?.getTime() ?? 0) - (b.lastAt?.getTime() ?? 0) || a.name.localeCompare(b.name));
   const latest = [...rows].filter((r) => r.lastAt).sort((a, b) => b.lastAt!.getTime() - a.lastAt!.getTime())[0];
   return rows.map((r) => ({ ...r, isNext: r.id === byOldest[0].id, isLast: !!latest && r.id === latest.id && rows.length > 1 }));
 }

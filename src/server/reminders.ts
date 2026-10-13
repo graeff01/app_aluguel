@@ -16,6 +16,7 @@ import { computeMetrics } from "@/lib/metrics";
 import { appLink, emailConfig, sendEmail, type EmailSender } from "@/lib/email";
 import { notDemo } from "./demo";
 import { syncHealth } from "./sync-status";
+import { decryptSecret } from "@/lib/crypto";
 
 const DAY = 86400_000;
 
@@ -439,4 +440,101 @@ export async function sendSyncAlerts(now = new Date(), opts: { send?: Sender; em
   }
   if (sent) log.info("sync_alerts.sent", { notifications: sent, broken });
   return { sent, broken };
+}
+
+// ─────────────── Barreiras operacionais (gargalos do dia a dia) ───────────────
+
+/**
+ * - Pré-análise sem resposta: lembra a consultora após 2 h; após 24 h avisa gestão e pré-atendimento.
+ * - Pré-análise aprovada há 3 dias sem visita marcada para aquele telefone: avisa o pré-atendimento.
+ * - Visita de hoje/amanhã sem consultora (convite sem o e-mail dela): avisa gestão e pré-atendimento na hora.
+ * - Reagendamento sem o evento salvo no Google 45 min depois: lembra a consultora.
+ * Uma vez por item (ReminderLog). Sem dados de clientes nas notificações. Silêncio das 21h às 8h (exceto visita sem consultora de hoje).
+ */
+export async function sendOperationalAlerts(now = new Date(), opts: { send?: Sender; email?: EmailSender | null } = {}) {
+  const send = opts.send ?? sendPush;
+  const email = opts.email !== undefined ? opts.email : emailConfig() ? sendEmail : null;
+  const pushOn = !!opts.send || !!pushConfig();
+  if (!pushOn && !email) return { skipped: "NO_CHANNEL" as const };
+  const settings = await getSettings();
+  if (!settings.remindersEnabled) return { skipped: "DISABLED" as const };
+  const H = 3600_000;
+  const day = dayKey(now);
+  const timeFmt = new Intl.DateTimeFormat("pt-BR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+  const dateFmt = new Intl.DateTimeFormat("pt-BR", { timeZone: TZ, day: "2-digit", month: "2-digit" });
+  const who = async (ids: string[]) =>
+    (await db.user.findMany({ where: { id: { in: ids }, active: true }, select: { id: true, email: true, _count: { select: { pushSubscriptions: true } } } })).map((u) => ({ id: u.id, email: u.email, subs: pushOn ? u._count.pushSubscriptions : 0 }));
+  const staff = await db.user.findMany({ where: { role: { in: ["MANAGER", "PRE_SERVICE"] }, active: true }, select: { id: true, role: true } });
+  let sent = 0;
+  const once = async (userId: string, kind: string, payload: PushPayload) => {
+    const id = await claim(userId, day, kind, 1);
+    if (!id) return;
+    const [u] = await who([userId]);
+    if (!u) return;
+    const delivered = await notify(u, payload, send, email);
+    await db.reminderLog.update({ where: { id }, data: { delivered } });
+    sent += delivered;
+  };
+
+  // visita de hoje/amanhã sem consultora: urgente (ninguém vai vê-la)
+  const unassigned = await db.visit.findMany({
+    where: { ...notDemo, status: "SCHEDULED", excluded: false, consultantId: null, scheduledStart: { gt: now, lte: new Date(now.getTime() + 36 * H) } },
+    select: { id: true, scheduledStart: true, propertyCode: true },
+  });
+  for (const v of unassigned) {
+    for (const s of staff) {
+      await once(s.id, `unassigned:${v.id}`, {
+        title: `Visita sem consultora: ${dateFmt.format(v.scheduledStart)} às ${timeFmt.format(v.scheduledStart)}`,
+        body: `${v.propertyCode ? `Imóvel ${v.propertyCode}. ` : ""}Convide a consultora no evento da agenda${s.role === "MANAGER" ? " ou atribua em Revisão" : ""}.`,
+        url: s.role === "MANAGER" ? "/revisao" : "/pre-analises",
+        tag: `sem-consultora-${v.id}`,
+      });
+    }
+  }
+
+  if (quietHours(now)) return { sent };
+
+  // pré-análise sem resposta
+  const waiting = await db.preAnalysis.findMany({ where: { status: "AWAITING", createdAt: { lte: new Date(now.getTime() - 2 * H) } }, select: { id: true, createdAt: true, consultantId: true, createdById: true } });
+  for (const p of waiting) {
+    await once(p.consultantId, `pre_remind:${p.id}`, { title: "Pré-análise esperando sua resposta", body: "Enviada há mais de 2 h pelo pré-atendimento. Toque para responder.", url: `/pre-analises/${p.id}`, tag: `pre-${p.id}` });
+    if (now.getTime() - p.createdAt.getTime() > 24 * H) {
+      for (const uid of new Set([p.createdById, ...staff.filter((s) => s.role === "MANAGER").map((s) => s.id)])) {
+        await once(uid, `pre_late:${p.id}`, { title: "Pré-análise sem resposta há mais de 24 h", body: "A consultora ainda não respondeu. Toque para ver.", url: `/pre-analises/${p.id}`, tag: `pre-${p.id}` });
+      }
+    }
+  }
+
+  // aprovada há 3 dias e nenhuma visita marcada para o telefone do titular
+  const approved = await db.preAnalysis.findMany({
+    where: { status: "APPROVED", purgedAt: null, phoneEnc: { not: null }, resultAt: { lte: new Date(now.getTime() - 72 * H), gte: new Date(now.getTime() - 10 * 24 * H) } },
+    select: { id: true, createdAt: true, createdById: true, phoneEnc: true },
+  });
+  const lost = new Map<string, number>();
+  for (const p of approved) {
+    let phone: string | null = null;
+    try {
+      phone = decryptSecret(p.phoneEnc!);
+    } catch {}
+    if (!phone) continue;
+    const has = await db.visit.count({ where: { phoneNormalized: phone, createdAt: { gte: p.createdAt } } });
+    if (has) continue;
+    if (await claim(p.createdById, day, `pre_novisit:${p.id}`, 1)) lost.set(p.createdById, (lost.get(p.createdById) ?? 0) + 1);
+  }
+  for (const [uid, n] of lost) {
+    const [u] = await who([uid]);
+    if (!u) continue;
+    sent += await notify(u, { title: n === 1 ? "1 pré-análise aprovada sem visita marcada" : `${n} pré-análises aprovadas sem visita marcada`, body: "Aprovadas há mais de 3 dias e ainda sem visita na agenda. Vale retomar o contato.", url: "/pre-analises?aba=respondidas", tag: `pre-sem-visita-${day}` }, send, email);
+  }
+
+  // reagendamento sem o evento salvo no Google
+  const pendingLink = await db.visit.findMany({
+    where: { status: "SCHEDULED", linkCode: { not: null }, sourceEventId: null, consultantId: { not: null }, createdAt: { lte: new Date(now.getTime() - 45 * 60_000) }, scheduledStart: { gt: now } },
+    select: { id: true, scheduledStart: true, consultantId: true },
+  });
+  for (const v of pendingLink) {
+    await once(v.consultantId!, `link_pending:${v.id}`, { title: `Falta pôr na agenda a visita de ${dateFmt.format(v.scheduledStart)} às ${timeFmt.format(v.scheduledStart)}`, body: "Toque para abrir o Google Agenda já preenchido e salvar.", url: `/visitas/${v.id}/agenda`, tag: `agenda-${v.id}` });
+  }
+  if (sent) log.info("operational_alerts.sent", { notifications: sent });
+  return { sent };
 }

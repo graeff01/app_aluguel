@@ -416,6 +416,21 @@ export async function backupNowAction(_: ActionState, _fd: FormData) {
   }));
 }
 
+export async function setAwayAction(_: ActionState, fd: FormData) {
+  return done(await runAction(async (actor) => {
+    const target = await db.user.findUnique({ where: { id: str(fd, "userId") } });
+    if (!target) throw new AppError("NOT_FOUND", "Usuário não encontrado.");
+    assert(canManageUser(actor, target.role));
+    const raw = str(fd, "awayUntil");
+    if (raw && !isDayKey(raw)) throw new AppError("VALIDATION", "Data inválida.", { awayUntil: "Data inválida." });
+    await db.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: target.id }, data: { awayUntil: raw ? dateOnlyFromKey(raw) : null } });
+      await audit(tx, { actorId: actor.id, action: "user.away_set", entityType: "User", entityId: target.id, changes: { ate: raw || null } });
+    });
+    return raw ? `Ausente até ${raw.split("-").reverse().join("/")}: o rodízio da pré-análise pula ${target.name.split(" ")[0]}.` : "Ausência removida.";
+  }));
+}
+
 export async function resetOnboardingAction(_: ActionState, fd: FormData) {
   return done(await runAction(async (actor) => {
     const target = await db.user.findUnique({ where: { id: str(fd, "userId") } });

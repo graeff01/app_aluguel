@@ -136,6 +136,7 @@ export async function rescheduleAction(_: ActionState, fd: FormData): Promise<Ac
       mode,
       note: str(fd, "note"),
       propertyCode: str(fd, "propertyCode"),
+      allowOverlap: str(fd, "allowOverlap") === "1",
     });
     // dados do anúncio do imóvel (inclusive se trocou o código) já na hora, sem esperar o worker
     const prop = v.propertyCode ? await db.property.findUnique({ where: { code: v.propertyCode }, select: { neighborhood: true, rent: true, pageCheckedAt: true } }) : null;

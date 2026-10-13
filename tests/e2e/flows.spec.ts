@@ -536,3 +536,24 @@ test("admin: Regras e app salva (cor padrão não bloqueia) e guarda os e-mails 
   await page.reload();
   await expect(page.getByLabel(/E-mails em cópia/)).toHaveValue("pre@exemplo.test");
 });
+
+test("formulário com erro de validação mantém o que foi digitado", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  await page.goto("/login");
+  await page.getByLabel("E-mail").fill("jasmin@e2e.test");
+  await page.getByLabel("Senha").fill(PW);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.waitForURL(/\/pre-analises/);
+  await page.goto("/pre-analises/nova");
+  await page.getByLabel("Nome completo").fill("Pessoa Com Erro");
+  await page.getByRole("textbox", { name: "CPF" }).fill("11111111111");
+  await page.getByLabel("Data de nascimento").fill("1990-05-20");
+  await page.getByLabel("E-mail").fill("erro@exemplo.test");
+  await page.getByLabel("Telefone").fill("(51) 99876-1234");
+  await page.getByLabel(/Salário/).fill("3.000,00");
+  await page.getByLabel(/titular do CPF e que ele autorizou/).check();
+  await page.getByRole("button", { name: "Enviar para a consultora" }).click();
+  await expect(page.getByText(/CPF inválido/)).toBeVisible();
+  await expect(page.getByLabel("Nome completo")).toHaveValue("Pessoa Com Erro");
+  await expect(page.getByLabel("E-mail")).toHaveValue("erro@exemplo.test");
+});

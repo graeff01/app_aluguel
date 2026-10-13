@@ -6,6 +6,7 @@ import { ROLE_LABEL } from "@/lib/labels";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Badge, Field, Input, PageHeader, Section, Select } from "@/components/ui";
 import { createUserAction } from "@/app/actions/admin";
+import { isAway } from "@/server/pre-analysis";
 
 export const metadata = { title: "Usuários" };
 
@@ -15,7 +16,11 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   const showInactive = sp.desativados === "1";
   // desativados saem da lista (o histórico continua ligado a eles); ficam acessíveis só pelo link no rodapé
   const [users, inactive] = await Promise.all([
-    db.user.findMany({ where: { active: !showInactive }, include: { aliases: true }, orderBy: [{ role: "asc" }, { name: "asc" }] }),
+    db.user.findMany({
+      where: { active: !showInactive },
+      include: { aliases: true, _count: { select: { pushSubscriptions: true } }, sessions: { orderBy: { lastSeenAt: "desc" }, take: 1, select: { lastSeenAt: true } } },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    }),
     db.user.count({ where: { active: false } }),
   ]);
   return (
@@ -37,6 +42,11 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                   <span className="text-sm break-all text-ink-3">
                     {u.email}
                     {u.role === "CONSULTANT" && <> · agenda: {u.aliases.map((a) => a.email).join(", ") || <span className="text-warn">nenhum e-mail vinculado</span>}</>}
+                    {u.active && (
+                      <span className="block text-[12px]">
+                        {u.sessions[0] ? `Último acesso: ${u.sessions[0].lastSeenAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : "Nunca entrou (ou saiu de todos os aparelhos)"}
+                      </span>
+                    )}
                   </span>
                 </span>
                 <span className="flex gap-1">
@@ -44,6 +54,8 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                   {!u.active && <Badge tone="bad">Desativado</Badge>}
                   {!u.passwordHash && u.active && <Badge tone="warn">Sem senha</Badge>}
                   {u.mustChangePassword && u.active && <Badge tone="accent">Senha provisória</Badge>}
+                  {u.active && u.role !== "ADMIN" && u._count.pushSubscriptions === 0 && <Badge tone="warn">Sem notificações</Badge>}
+                  {u.active && u.awayUntil && isAway(u.awayUntil) && <Badge tone="info">Ausente até {u.awayUntil.toISOString().slice(0, 10).split("-").reverse().slice(0, 2).join("/")}</Badge>}
                 </span>
               </Link>
             </li>
