@@ -8,12 +8,16 @@ import { env } from "@/lib/env";
 import { audit } from "@/lib/audit";
 import { errorCode, log } from "@/lib/log";
 import { oauthClient, REQUIRED_CALENDAR_SCOPES } from "@/server/sync/google";
+import { handleLoginCallback, pendingLogin } from "@/server/google-login";
 
 function back(q: string) {
   return NextResponse.redirect(new URL(`/admin/google?${q}`, env.appUrl));
 }
 
 export async function GET(req: NextRequest) {
+  // mesmo endereço de retorno para o "Entrar com Google": o cookie de estado do login decide o fluxo
+  const login = await pendingLogin(req);
+  if (login) return handleLoginCallback(req, login);
   const actor = await getActor();
   if (!actor || !canManageIntegration(actor)) return NextResponse.redirect(new URL("/login", env.appUrl));
   const jar = await cookies();

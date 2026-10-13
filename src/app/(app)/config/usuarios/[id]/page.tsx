@@ -50,6 +50,15 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
               </Field>
               <SubmitButton>Salvar</SubmitButton>
             </ActionForm>
+            {u.active && u.id !== actor.id && (
+              <ActionForm action={updateUserAction} confirm={`Desativar ${u.name}? A pessoa perde o acesso na hora e sai da lista (o histórico continua).`} className="mt-3 max-w-xl">
+                <input type="hidden" name="userId" value={u.id} />
+                <input type="hidden" name="name" value={u.name} />
+                <input type="hidden" name="role" value={u.role} />
+                <input type="hidden" name="active" value="0" />
+                <SubmitButton variant="danger">Desativar usuário</SubmitButton>
+              </ActionForm>
+            )}
           </Section>
           <Section title="E-mails reconhecidos na agenda">
             <div className="max-w-xl rounded-3xl border border-line bg-surface p-5 shadow-card">

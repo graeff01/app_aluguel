@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 import { clientIp } from "@/lib/session";
 import { hitRateLimit } from "@/lib/ratelimit";
 import { googleConfigured } from "@/server/sync/google";
-import { LOGIN_COOKIE, loginClient } from "@/server/google-login";
+import { LOGIN_COOKIE, LOGIN_COOKIE_PATH, loginClient } from "@/server/google-login";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,7 @@ export async function GET() {
     httpOnly: true,
     secure: env.secureCookies,
     sameSite: "lax",
-    path: "/api/auth",
+    path: LOGIN_COOKIE_PATH,
     maxAge: 600,
   });
   const url = client.generateAuthUrl({

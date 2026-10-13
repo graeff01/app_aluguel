@@ -109,6 +109,13 @@ async function processEvent(ctx: Ctx, ev: GEvent, opts: { inWindowOnly: boolean;
   const key = { calendarId_googleEventId: { calendarId: ctx.calendarId, googleEventId: ev.id } };
   const existing = await db.sourceEvent.findUnique({ where: key, include: { visit: { include: { client: { select: { anonymizedAt: true } } } } } });
 
+  // evento descartado na limpeza dos dados de teste: nunca mais vira visita nem guarda conteúdo
+  if (existing?.ignoredAt) {
+    ctx.stats.ignored++;
+    await db.sourceEvent.update({ where: { id: existing.id }, data: { googleStatus: ev.status ?? "confirmed", lastSeenAt: ctx.now } });
+    return;
+  }
+
   if (ev.status === "cancelled") {
     if (!existing) {
       ctx.stats.ignored++;

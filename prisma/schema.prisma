@@ -311,6 +311,8 @@ model SourceEvent {
   attendeesOmitted  Boolean         @default(false)
   parsed            Json?
   missingSince      DateTime?
+  /// limpeza dos dados de teste: o evento nunca mais vira visita (conteúdo já removido)
+  ignoredAt         DateTime?
   firstSeenAt       DateTime        @default(now())
   lastSeenAt        DateTime        @default(now())
 

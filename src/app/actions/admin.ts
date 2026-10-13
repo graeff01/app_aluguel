@@ -1,5 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { runAction, str, type ActionState } from "@/lib/action";
 import { assert, canManageIntegration, canManageReasons, canManageSettings, canManageUser, isAdmin } from "@/lib/authz";
@@ -16,6 +17,7 @@ import { DETAIL_ROLES } from "@/server/sync/types";
 import { requestManualSync } from "@/server/sync/runner";
 import { createDemoData, removeDemoData } from "@/server/demo";
 import { backupConfig, runBackup } from "@/server/backup";
+import { wipeTestData } from "@/server/wipe";
 import { hitRateLimit } from "@/lib/ratelimit";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -44,20 +46,42 @@ export async function createUserAction(_: ActionState, fd: FormData) {
       const email = normalizeEmail(str(fd, "email"));
       if (!name) throw new AppError("VALIDATION", "Informe o nome.", { name: "Obrigatório." });
       if (!EMAIL_RE.test(email)) throw new AppError("VALIDATION", "E-mail inválido.", { email: "E-mail inválido." });
-      if (await db.user.findUnique({ where: { email } })) throw new AppError("VALIDATION", "Já existe usuário com este e-mail.", { email: "Já cadastrado." });
+      const existing = await db.user.findUnique({ where: { email } });
+      if (existing?.active) throw new AppError("VALIDATION", "Já existe usuário ativo com este e-mail.", { email: "Já cadastrado." });
+      // e-mail de alguém desativado: reativa a MESMA conta (histórico preservado) em vez de recusar
+      if (existing) assert(canManageUser(actor, existing.role), "Você não pode reativar este usuário.");
       const aliases = str(fd, "aliases")
         .split(/[\s,;]+/)
         .map(normalizeEmail)
         .filter(Boolean);
       for (const a of aliases) if (!EMAIL_RE.test(a)) throw new AppError("VALIDATION", `E-mail da agenda inválido: ${a}`);
-      const clash = await db.userEmailAlias.findFirst({ where: { email: { in: aliases } } });
-      if (clash) throw new AppError("VALIDATION", `O e-mail ${clash.email} já está vinculado a outro usuário.`);
+      const clash = await db.userEmailAlias.findFirst({ where: { email: { in: aliases }, userId: existing ? { not: existing.id } : undefined }, include: { user: { select: { active: true } } } });
+      if (clash?.user.active) throw new AppError("VALIDATION", `O e-mail ${clash.email} já está vinculado a outro usuário.`);
       const temp = str(fd, "tempPassword");
       if (temp) {
         const problem = passwordProblem(temp);
         if (problem) throw new AppError("VALIDATION", problem, { tempPassword: problem });
       }
       const user = await db.$transaction(async (tx) => {
+        // e-mails da agenda que estavam com pessoas desativadas passam para esta pessoa
+        await tx.userEmailAlias.deleteMany({ where: { email: { in: aliases }, user: { active: false }, ...(existing ? { userId: { not: existing.id } } : {}) } });
+        if (existing) {
+          const have = new Set((await tx.userEmailAlias.findMany({ where: { userId: existing.id } })).map((a) => a.email));
+          const u = await tx.user.update({
+            where: { id: existing.id },
+            data: {
+              name,
+              role,
+              active: true,
+              deactivatedAt: null,
+              onboardedAt: null, // guia de primeiro acesso de novo
+              ...(temp ? { passwordHash: await hashPassword(temp), mustChangePassword: true } : {}),
+              aliases: { create: aliases.filter((e) => !have.has(e)).map((e) => ({ email: e })) },
+            },
+          });
+          await audit(tx, { actorId: actor.id, action: "user.reactivated", entityType: "User", entityId: u.id, changes: { role, aliases } });
+          return u;
+        }
         const u = await tx.user.create({
           data: {
             name,
@@ -70,9 +94,11 @@ export async function createUserAction(_: ActionState, fd: FormData) {
         await audit(tx, { actorId: actor.id, action: "user.created", entityType: "User", entityId: u.id, changes: { role, aliases } });
         return u;
       });
-      if (temp) return "Usuário criado com senha provisória. No primeiro acesso será obrigatório definir uma senha pessoal.";
+      const verb = existing ? "Conta reativada (histórico preservado)" : "Usuário criado";
+      if (temp) return `${verb} com senha provisória. No primeiro acesso será obrigatório definir uma senha pessoal.`;
+      if (existing?.passwordHash && !temp) return `${verb}. A pessoa entra com a senha que já tinha (ou com Google).`;
       const link = await issueResetLink(user.id, actor.id);
-      return `Usuário criado. Envie este link para a pessoa definir a senha (vale 24 h, uso único): ${link}`;
+      return `${verb}. Envie este link para a pessoa definir a senha (vale 24 h, uso único): ${link}`;
     }),
   );
 }
@@ -100,6 +126,7 @@ export async function updateUserAction(_: ActionState, fd: FormData) {
         if (!active) await tx.session.deleteMany({ where: { userId: id } });
         await audit(tx, { actorId: actor.id, action: "user.updated", entityType: "User", entityId: id, changes: { name, role, active } });
       });
+      if (!active && target.active) redirect("/config/usuarios?desativado=1"); // sai da lista na hora
       return active ? "Usuário atualizado." : "Usuário desativado. Sessões encerradas; histórico preservado.";
     }),
   );
@@ -358,6 +385,13 @@ export async function tempPasswordAction(_: ActionState, fd: FormData) {
     });
     return "Senha provisória definida. A pessoa vai criar a própria senha no próximo acesso.";
   });
+}
+
+export async function wipeTestDataAction(_: ActionState, fd: FormData) {
+  return done(await runAction(async (actor) => {
+    const d = await wipeTestData(actor, str(fd, "confirm"));
+    return `Dados de teste apagados: ${d.visitas} visitas, ${d.clientes} clientes, ${d.oportunidades} oportunidades. ${d.eventosIgnorados} eventos da agenda ficam ignorados.`;
+  }));
 }
 
 export async function backupNowAction(_: ActionState, _fd: FormData) {

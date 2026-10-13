@@ -4,7 +4,9 @@ import { fmt } from "@/lib/time";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Alert, Badge, Field, KeyValue, PageHeader, Panel, Section, Select } from "@/components/ui";
 import { SyncButton } from "@/components/sync-button";
-import { backupNowAction, createDemoDataAction, fullSyncAction, removeDemoDataAction } from "@/app/actions/admin";
+import { backupNowAction, createDemoDataAction, fullSyncAction, removeDemoDataAction, wipeTestDataAction } from "@/app/actions/admin";
+import { WIPE_LIMIT, WIPE_PHRASE, wipeAvailable } from "@/server/wipe";
+import { Input } from "@/components/ui";
 import { backupConfig } from "@/server/backup";
 import { countDemoVisits } from "@/server/demo";
 
@@ -24,6 +26,8 @@ export default async function DiagnosticsPage() {
     Promise.all([db.sourceEvent.count(), db.sourceEvent.count({ where: { classification: "AMBIGUOUS", reviewDecision: null } }), db.visit.count({ where: { origin: "GOOGLE" } }), db.visit.count({ where: { origin: "MANUAL" } })]),
   ]);
   const demoVisits = await countDemoVisits();
+  const canWipe = await wipeAvailable();
+  const totalVisits = await db.visit.count();
   const backups = await db.backupRun.findMany({ orderBy: { startedAt: "desc" }, take: 6 });
   let backupReady = false;
   try {
@@ -181,6 +185,31 @@ export default async function DiagnosticsPage() {
           )}
         </Panel>
       </Section>
+      {canWipe && (
+        <Section title="Começar do zero" hint={`Disponível só antes do uso real (até ${WIPE_LIMIT} visitas no sistema).`}>
+          <Panel>
+            <p className="text-ink-2">
+              Apaga <strong className="text-ink">todas</strong> as visitas ({totalVisits}), resultados, oportunidades, clientes, imóveis em cache, lembretes e erros registrados — inclusive as de demonstração. Mantém
+              usuários, configurações, motivos, padrões, a conexão com a agenda e a auditoria. Eventos da agenda já importados ficam ignorados e não voltam.{" "}
+              <strong className="text-bad">Não dá para desfazer.</strong>
+            </p>
+            <ActionForm action={wipeTestDataAction} confirm="Apagar todos os dados de teste? Não dá para desfazer." className="mt-4">
+              {(st) => (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="sm:w-64">
+                    <label htmlFor="wipe-confirm" className="mb-1.5 block text-sm font-semibold">
+                      Digite {WIPE_PHRASE} para confirmar
+                    </label>
+                    <Input id="wipe-confirm" name="confirm" autoComplete="off" required />
+                    {st.fieldErrors?.confirm && <p className="mt-1.5 text-[13px] font-semibold text-bad">{st.fieldErrors.confirm}</p>}
+                  </div>
+                  <SubmitButton variant="danger">Apagar dados de teste</SubmitButton>
+                </div>
+              )}
+            </ActionForm>
+          </Panel>
+        </Section>
+      )}
     </>
   );
 }

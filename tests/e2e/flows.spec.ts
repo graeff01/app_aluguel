@@ -375,3 +375,24 @@ test("primeiro acesso guiado: passos, como usar e entra no app", async ({ page }
   await page.reload();
   await expect(page.getByRole("heading", { name: "Olá, Gisele!" })).toHaveCount(0);
 });
+
+test("admin: desativar tira da lista e cadastrar de novo reativa a mesma conta", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  await login(page, "admin@e2e.test");
+  await page.goto("/config/usuarios");
+  await page.getByRole("link", { name: /Pessoa Nova/ }).click();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Desativar usuário" }).click();
+  await expect(page.getByText("Usuário desativado e removido da lista.")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Pessoa Nova/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Ver desativados \(1\)/ })).toBeVisible();
+  // cadastrar de novo com o mesmo e-mail reativa (histórico preservado)
+  await page.getByText("+ Novo usuário").click();
+  await page.getByLabel("Nome").fill("Pessoa Nova");
+  await page.getByLabel("E-mail de login").fill("privacidade@e2e.test");
+  await page.getByLabel(/Senha provisória/).fill("provisoria-segura-1");
+  await page.getByRole("button", { name: "Criar usuário" }).click();
+  await expect(page.getByText(/Conta reativada \(histórico preservado\)/)).toBeVisible();
+  await page.goto("/config/usuarios");
+  await expect(page.getByRole("link", { name: /Pessoa Nova/ })).toBeVisible();
+});

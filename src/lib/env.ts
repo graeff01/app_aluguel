@@ -27,9 +27,9 @@ export const env = {
   get googleRedirectUri() {
     return process.env.GOOGLE_REDIRECT_URI ?? `${this.appUrl}/api/google/callback`;
   },
-  /** retorno do "Entrar com Google" (cadastre também no Google Cloud Console) */
+  /** retorno do "Entrar com Google": por padrão o MESMO já cadastrado para a agenda (o callback separa pelo cookie de estado) */
   get googleLoginRedirectUri() {
-    return process.env.GOOGLE_LOGIN_REDIRECT_URI ?? `${this.appUrl}/api/auth/google/callback`;
+    return process.env.GOOGLE_LOGIN_REDIRECT_URI ?? this.googleRedirectUri;
   },
   get setupToken() {
     return process.env.SETUP_TOKEN ?? "";
