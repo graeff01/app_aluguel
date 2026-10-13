@@ -490,8 +490,10 @@ test("reagendar pela consultora: nova data e botão do Google Agenda preenchido"
   await page.getByRole("link", { name: /Cliente Rota/ }).first().click();
   await page.getByRole("link", { name: /Reagendar \(já coloca na agenda\)/ }).click();
   await expect(page.getByRole("heading", { name: "Reagendar visita" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "O que aconteceu com esta visita?" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: /Remarcada/ })).toHaveAttribute("aria-checked", "true");
   await page.getByLabel("Horário").fill("15:00");
-  await page.getByRole("button", { name: "Remarcar e preparar a agenda" }).click();
+  await page.getByRole("button", { name: "Salvar e preparar a agenda" }).click();
   await expect(page.getByText(/✓ Visita remarcada para/)).toBeVisible();
   const g = page.getByRole("link", { name: "Colocar na agenda Google" });
   await expect(g).toHaveAttribute("href", /^https:\/\/calendar\.google\.com\/calendar\/render\?action=TEMPLATE/);
@@ -515,7 +517,7 @@ test("registrar resultado e já marcar nova visita para o mesmo cliente", async 
   await expect(page.getByText("✓ Resultado salvo. Agora marque a nova visita.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Nova visita para o cliente" })).toBeVisible();
   await page.getByLabel("Código do imóvel").fill("761739");
-  await page.getByRole("button", { name: "Marcar e preparar a agenda" }).click();
+  await page.getByRole("button", { name: "Salvar e preparar a agenda" }).click();
   await expect(page.getByText(/✓ Nova visita marcada para/)).toBeVisible();
   const g = page.getByRole("link", { name: "Colocar na agenda Google" });
   const text = new URL((await g.getAttribute("href"))!).searchParams.get("text")!;

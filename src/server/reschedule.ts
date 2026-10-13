@@ -12,7 +12,7 @@ import { AppError, notFound } from "@/lib/errors";
 import { assert, canConcludeVisit, type AuthzActor } from "@/lib/authz";
 import { fromLocalInput, fmt } from "@/lib/time";
 import { getPatternConfig, getSettings } from "@/lib/settings";
-import { ensureProperty } from "./visits";
+import { concludeVisit, ensureProperty } from "./visits";
 import { cleanAddress } from "@/lib/address";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem 0/O/1/I
@@ -23,7 +23,14 @@ function newLinkCode() {
   return "VL-" + Array.from(b, (x) => CODE_ALPHABET[x % CODE_ALPHABET.length]).join("");
 }
 
-export type RescheduleInput = { requestId: string; scheduledStart: string; durationMinutes: number; mode: "reschedule" | "new"; note?: string; propertyCode?: string };
+/**
+ * outcome: o que aconteceu com a visita ATUAL (obrigatório quando ela ainda está em aberto):
+ * - RESCHEDULED: não aconteceu, o cliente pediu outra data → a nova é "REAGENDADA";
+ * - NO_SHOW: o cliente não compareceu → a nova também é remarcação;
+ * - DONE: aconteceu e o cliente quer outra visita (avaliação + observação) → a nova é revisita.
+ */
+export type RescheduleOutcome = { status: "RESCHEDULED" | "NO_SHOW" | "DONE"; evaluation?: "POSITIVE" | "NEGATIVE" | "UNDECIDED" | null; negativeReasonId?: string | null; note?: string };
+export type RescheduleInput = { requestId: string; scheduledStart: string; durationMinutes: number; mode: "reschedule" | "new"; note?: string; propertyCode?: string; outcome?: RescheduleOutcome };
 
 export async function rescheduleVisit(actor: AuthzActor, visitId: string, input: RescheduleInput, now = new Date()) {
   const old = await db.visit.findUnique({ where: { id: visitId } });
@@ -38,14 +45,28 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
   if (!/^[0-9A-Za-z-]{2,40}$/.test(code)) throw new AppError("VALIDATION", "Código do imóvel inválido.", { propertyCode: "Confira o código." });
   const otherProperty = code !== old.propertyCode;
   const minutes = Math.min(600, Math.max(15, Math.round(input.durationMinutes || 60)));
-  // remarcar = a visita ainda não aconteceu; nova visita = só depois de registrar o resultado da atual
-  if (input.mode === "new" && old.status === "SCHEDULED") throw new AppError("INVALID_STATE", "Registre primeiro o resultado desta visita; depois marque a nova.");
-  const reschedule = input.mode === "reschedule" && old.status === "SCHEDULED";
   const requestId = `resched-${input.requestId}`.slice(0, 100);
-
   // idempotência: mesmo envio repetido devolve a visita já criada
   const dup = await db.visit.findUnique({ where: { createRequestId: requestId } });
   if (dup) return dup;
+
+  // visita atual em aberto: o status dela é registrado aqui mesmo (ela nunca fica "em aberto")
+  const outcome: RescheduleOutcome | null = old.status === "SCHEDULED" ? (input.outcome ?? (input.mode === "reschedule" ? { status: "RESCHEDULED" } : null)) : null;
+  if (old.status === "SCHEDULED" && !outcome) throw new AppError("INVALID_STATE", "Registre primeiro o resultado desta visita; depois marque a nova.");
+  if (outcome && outcome.status !== "RESCHEDULED") {
+    // aconteceu / não compareceu: mesmo registro de resultado de sempre (validações, oportunidade, histórico)
+    await concludeVisit(actor, old.id, {
+      requestId: `${requestId}-atual`.slice(0, 100),
+      expectedVersion: old.version,
+      status: outcome.status,
+      evaluation: outcome.status === "DONE" ? (outcome.evaluation ?? null) : null,
+      negativeReasonId: outcome.status === "DONE" && outcome.evaluation === "NEGATIVE" ? (outcome.negativeReasonId ?? null) : null,
+      note: outcome.note ?? "",
+    }, now);
+  }
+  const reschedule = outcome?.status === "RESCHEDULED";
+  // remarcação (inclui não compareceu) leva "REAGENDADA"; depois de uma visita realizada é revisita
+  const asReschedule = reschedule || outcome?.status === "NO_SHOW";
 
   return db.$transaction(async (tx) => {
     if (reschedule) {
@@ -68,13 +89,13 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
         clientMatch: old.clientMatch,
         consultantId: old.consultantId,
         assignmentStatus: "MANUAL",
-        assignmentNote: reschedule ? "REAGENDADA" : "NOVA_VISITA_MESMO_CLIENTE",
+        assignmentNote: asReschedule ? "REAGENDADA" : "NOVA_VISITA_MESMO_CLIENTE",
         scheduledById: actor.role === "CONSULTANT" ? actor.id : old.consultantId,
         rescheduledFromId: old.id,
         linkCode: newLinkCode(),
       },
     });
-    await audit(tx, { actorId: actor.id, action: reschedule ? "visit.rescheduled" : "visit.revisit_scheduled", entityType: "Visit", entityId: created.id, changes: { anterior: old.id, inicio: start.toISOString(), ...(otherProperty ? { imovelAnterior: old.propertyCode, imovelNovo: code } : {}) } });
+    await audit(tx, { actorId: actor.id, action: asReschedule ? "visit.rescheduled" : "visit.revisit_scheduled", entityType: "Visit", entityId: created.id, changes: { anterior: old.id, inicio: start.toISOString(), ...(otherProperty ? { imovelAnterior: old.propertyCode, imovelNovo: code } : {}) } });
     return created;
   });
 }

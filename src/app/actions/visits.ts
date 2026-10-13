@@ -7,6 +7,9 @@ import { confirmVisitClientAsDistinct, linkVisitToClient, mergeClients } from "@
 import { updateOpportunity, transferOpportunity } from "@/server/opportunities";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
 import { rescheduleVisit } from "@/server/reschedule";
+import { refreshPropertyNow } from "@/server/property-preview";
+import { ensurePropertyCoords } from "@/server/geo";
+import { db } from "@/lib/db";
 import { getActor } from "@/lib/session";
 import { toState } from "@/lib/action";
 import { hasGlobalView } from "@/lib/authz";
@@ -115,7 +118,18 @@ export async function rescheduleAction(_: ActionState, fd: FormData): Promise<Ac
   let target = "";
   const s = await runAction(async (a) => {
     const mode = str(fd, "mode") === "new" ? "new" : "reschedule";
+    const os = str(fd, "outcomeStatus");
+    const outcome =
+      os === "RESCHEDULED" || os === "NO_SHOW" || os === "DONE"
+        ? {
+            status: os as "RESCHEDULED" | "NO_SHOW" | "DONE",
+            evaluation: (["POSITIVE", "NEGATIVE", "UNDECIDED"].includes(str(fd, "evaluation")) ? str(fd, "evaluation") : null) as "POSITIVE" | "NEGATIVE" | "UNDECIDED" | null,
+            negativeReasonId: str(fd, "negativeReasonId") || null,
+            note: str(fd, "outcomeNote"),
+          }
+        : undefined;
     const v = await rescheduleVisit(a, str(fd, "visitId"), {
+      outcome,
       requestId: str(fd, "requestId"),
       scheduledStart: `${str(fd, "date")}T${str(fd, "time")}`,
       durationMinutes: Number(str(fd, "duration")) || 60,
@@ -123,7 +137,16 @@ export async function rescheduleAction(_: ActionState, fd: FormData): Promise<Ac
       note: str(fd, "note"),
       propertyCode: str(fd, "propertyCode"),
     });
-    target = `/visitas/${v.id}/agenda?${mode === "new" ? "nova" : "remarcada"}=1`;
+    // dados do anúncio do imóvel (inclusive se trocou o código) já na hora, sem esperar o worker
+    const prop = v.propertyCode ? await db.property.findUnique({ where: { code: v.propertyCode }, select: { neighborhood: true, rent: true, pageCheckedAt: true } }) : null;
+    if (v.propertyCode && (!prop?.pageCheckedAt || (!prop.neighborhood && !prop.rent))) {
+      // em segundo plano: a tela avança na hora; foto, bairro e valores chegam em seguida
+      const code = v.propertyCode;
+      void refreshPropertyNow(code)
+        .then(() => ensurePropertyCoords([code], { maxCalls: 2 }))
+        .catch(() => undefined);
+    }
+    target = `/visitas/${v.id}/agenda?${v.assignmentNote === "REAGENDADA" ? "remarcada" : "nova"}=1`;
   });
   if (s.ok && target) redirect(target);
   return s;

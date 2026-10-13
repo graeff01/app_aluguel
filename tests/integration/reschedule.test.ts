@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { calendarLinkFor, LINK_CODE_RE, rescheduleVisit } from "@/server/reschedule";
 import { concludeVisit, createManualVisit } from "@/server/visits";
+import { refreshPropertyNow } from "@/server/property-preview";
 import { runSync } from "@/server/sync/engine";
 import { toLocalInput } from "@/lib/time";
 import { makeConnection, makeUsers, resetDb } from "../helpers/db";
@@ -104,5 +105,34 @@ describe("reagendar para outro imóvel e cópia configurada", () => {
     const url = new URL((await calendarLinkFor(u.a, nv.id)).url);
     expect(url.searchParams.get("text")).toContain("cod 222222");
     expect(url.searchParams.get("add")).toBe(`${conn.calendarId},pre@exemplo.test,outra@exemplo.test`);
+  });
+});
+
+describe("status da visita atual ao reagendar", () => {
+  it("aconteceu → registra o resultado da atual e cria revisita; não compareceu → remarcação", async () => {
+    const a1 = await createManualVisit(u.admin, { requestId: "out-done-req", scheduledStart: local("2026-10-13T13:00:00Z"), clientName: "Cliente Aconteceu", phoneRaw: "(51) 99876-1212", propertyCode: "761739", consultantId: u.a.id });
+    await expect(rescheduleVisit(u.a, a1.id, { requestId: "o1x", scheduledStart: local("2026-10-15T18:00:00Z"), durationMinutes: 60, mode: "reschedule", outcome: { status: "DONE", evaluation: "UNDECIDED", note: "" } }, NOW)).rejects.toMatchObject({ code: "VALIDATION" }); // observação obrigatória
+    const n1 = await rescheduleVisit(u.a, a1.id, { requestId: "o1", scheduledStart: local("2026-10-15T18:00:00Z"), durationMinutes: 60, mode: "reschedule", propertyCode: "222222", outcome: { status: "DONE", evaluation: "UNDECIDED", note: "Quer ver outro no mesmo bairro" } }, NOW);
+    expect(await db.visit.findUniqueOrThrow({ where: { id: a1.id } })).toMatchObject({ status: "DONE", evaluation: "UNDECIDED", note: "Quer ver outro no mesmo bairro" });
+    expect(n1).toMatchObject({ assignmentNote: "NOVA_VISITA_MESMO_CLIENTE", propertyCode: "222222" });
+
+    const a2 = await createManualVisit(u.admin, { requestId: "out-ns-req", scheduledStart: local("2026-10-13T13:00:00Z"), clientName: "Cliente Faltou", phoneRaw: "", propertyCode: "761739", consultantId: u.a.id });
+    const n2 = await rescheduleVisit(u.a, a2.id, { requestId: "o2", scheduledStart: local("2026-10-15T18:00:00Z"), durationMinutes: 60, mode: "reschedule", outcome: { status: "NO_SHOW", note: "Não atendeu" } }, NOW);
+    expect((await db.visit.findUniqueOrThrow({ where: { id: a2.id } })).status).toBe("NO_SHOW");
+    expect(n2.assignmentNote).toBe("REAGENDADA");
+  });
+
+  it("visita que ainda não começou só pode ser remarcada", async () => {
+    const fut = await createManualVisit(u.admin, { requestId: "out-fut-req", scheduledStart: local("2026-10-13T20:00:00Z"), clientName: "Cliente Futuro", phoneRaw: "", propertyCode: "761739", consultantId: u.a.id });
+    await expect(rescheduleVisit(u.a, fut.id, { requestId: "o3", scheduledStart: local("2026-10-15T18:00:00Z"), durationMinutes: 60, mode: "reschedule", outcome: { status: "DONE", evaluation: "POSITIVE", note: "x" } }, NOW)).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+});
+
+describe("dados do imóvel na hora", () => {
+  it("busca e salva foto, título, bairro e valores do anúncio", async () => {
+    const html = `<html><head><meta property="og:title" content="Apartamento para alugar em Igara, Canoas."><meta property="og:image" content="https://img.test/9.jpg"><script type="application/ld+json">${JSON.stringify({ offers: [{ price: 1800, itemOffered: { name: "Apartamento - Igara - Canoas" }, priceSpecification: [{ name: "Total", price: 2300 }] }] })}</script></head></html>`;
+    const f = (async () => new Response(html, { status: 200, headers: { "content-type": "text/html" } })) as typeof fetch;
+    await refreshPropertyNow("333333", { fetchImpl: f });
+    expect(await db.property.findUniqueOrThrow({ where: { code: "333333" } })).toMatchObject({ photoUrl: "https://img.test/9.jpg", neighborhood: "Igara", rent: 1800, totalPrice: 2300, pageStatus: "OK" });
   });
 });

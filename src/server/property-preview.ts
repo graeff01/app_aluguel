@@ -172,3 +172,14 @@ export async function refreshPropertyPreviews(opts: { limit?: number; fetchImpl?
   if (updated) log.info("property_preview.refreshed", { updated });
   return { updated };
 }
+
+/** Busca agora (sem esperar o worker) os dados do anúncio de um imóvel e salva tudo (foto, título, bairro, valores). */
+export async function refreshPropertyNow(code: string, opts: { fetchImpl?: typeof fetch } = {}) {
+  const settings = await getSettings();
+  if (!settings.propertyUrlTemplate.includes("{codigo}")) return null;
+  const pv = await fetchPreview(propertyUrl(settings.propertyUrlTemplate, code), opts.fetchImpl);
+  if (pv.status === "ERROR") return pv; // falha temporária: o worker tenta de novo
+  const data = { pageStatus: pv.status, pageCheckedAt: new Date(), photoUrl: pv.photoUrl, title: pv.title, ...(pv.listing ?? EMPTY_LISTING) };
+  await db.property.upsert({ where: { code }, update: data, create: { code, ...data } });
+  return pv;
+}
