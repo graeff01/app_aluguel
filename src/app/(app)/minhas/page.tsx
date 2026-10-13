@@ -17,6 +17,7 @@ import { InstallHint } from "@/components/install-hint";
 import { historyWhere } from "@/server/queries";
 import { db } from "@/lib/db";
 import { countOpenFor } from "@/server/pre-analysis";
+import { PreAnalysisCard, RouteCard } from "@/components/feature-cards";
 
 export const metadata = { title: "Minhas visitas" };
 
@@ -145,17 +146,6 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
 
       <div className="mt-5 lg:mt-7 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
       <aside className="lg:sticky lg:top-24 lg:order-2" aria-label="Resumo do dia">
-        {preOpen > 0 && (
-          <Link href="/pre-analises" className="press animate-rise mb-4 flex items-center justify-between gap-3 rounded-[22px] border border-accent/30 bg-accent-soft px-5 py-4 shadow-card">
-            <span>
-              <span className="block text-[15px] font-bold text-accent-strong">
-                {preOpen === 1 ? "1 pré-análise para responder" : `${preOpen} pré-análises para responder`}
-              </span>
-              <span className="text-[13px] text-accent-strong/80">Enviadas pelo pré-atendimento</span>
-            </span>
-            <Icon name="arrow" className="size-5 text-accent-strong" />
-          </Link>
-        )}
       {todayTotal > 0 && (
         <div className="mb-4 rounded-[22px] border border-line bg-surface px-5 py-4 shadow-card">
           <div className="mb-2.5 flex items-baseline justify-between">
@@ -170,22 +160,11 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         </div>
       )}
 
-      {!team && todayTotal > 0 && !busca && (
-        <Link href="/rota" className="press animate-rise mb-4 flex items-center justify-between gap-3 rounded-[22px] border border-line bg-surface px-5 py-4 shadow-card">
-          <span className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-full bg-tint text-ink">
-              <Icon name="route" className="size-5" />
-            </span>
-            <span>
-              <span className="block text-[15px] font-semibold">Rota de hoje</span>
-              <span className="text-[13px] text-ink-3">
-                {todayTotal} {todayTotal === 1 ? "parada" : "paradas"}
-                {nextToday ? ` · próxima às ${fmt.time(nextToday.scheduledStart)}` : ""} · mapa, Google Maps ou Waze
-              </span>
-            </span>
-          </span>
-          <Icon name="arrow" className="size-5 text-ink-3" />
-        </Link>
+      {!team && !busca && (
+        <>
+          <RouteCard stops={todayTotal} next={nextToday ? fmt.time(nextToday.scheduledStart) : null} delay={60} />
+          <PreAnalysisCard open={preOpen} delay={140} />
+        </>
       )}
 
       <form role="search" className="mb-7 lg:mb-4" action="/minhas">

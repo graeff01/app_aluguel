@@ -19,7 +19,6 @@ import { Suspense } from "react";
 import { cx } from "@/components/ui";
 import { AppBadge } from "@/components/app-badge";
 import { countOpenFor } from "@/server/pre-analysis";
-import { Icon } from "@/components/icons";
 import { Onboarding } from "@/components/onboarding";
 
 export const dynamic = "force-dynamic";
@@ -165,10 +164,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <span className="text-[15px] font-bold tracking-[-0.02em]">{settings.productName}</span>
             </Link>
             <div className="flex items-center gap-2">
-              <Link href="/rota" className="press inline-flex min-h-10 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 text-[13px] font-semibold shadow-card">
-                <Icon name="route" className="size-[18px]" />
-                Rota
-              </Link>
               {showHealth && (
                 <span className="flex items-center gap-1.5 text-[12px] text-ink-2" title={health.message}>
                   <span aria-hidden className={cx("size-2 rounded-full", dot)} />

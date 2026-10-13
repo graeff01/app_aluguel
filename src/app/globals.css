@@ -248,3 +248,25 @@ body::after {
 .rm-me { width: 22px; height: 22px; border-radius: 999px; background: #2f6fde; border: 3px solid #fff; box-shadow: 0 0 0 6px rgb(47 111 222 / 0.25); }
 .rm-strip { scrollbar-width: none; }
 .rm-strip::-webkit-scrollbar { display: none; }
+
+/* ── Cartões de atalho (Rota de hoje, Pré-análises): ícones animados ── */
+.fc-route-path { stroke-dashoffset: 0; animation: fc-dash 1.2s linear infinite; }
+@keyframes fc-dash { to { stroke-dashoffset: -17; } }
+.fc-route-dot { offset-path: path("M9 31 C 9 20, 31 24, 31 12"); offset-rotate: 0deg; animation: fc-travel 2.8s cubic-bezier(.45,.05,.35,1) infinite; }
+@keyframes fc-travel { 0% { offset-distance: 0%; opacity: 0; } 12% { opacity: 1; } 78% { offset-distance: 100%; opacity: 1; } 100% { offset-distance: 100%; opacity: 0; } }
+.fc-route-pin { transform-box: fill-box; transform-origin: 50% 100%; animation: fc-bob 2.8s ease-in-out infinite; }
+@keyframes fc-bob { 0%, 70%, 100% { transform: translateY(0); } 80% { transform: translateY(-2.5px); } 90% { transform: translateY(0); } }
+.fc-pre-line { transform-box: fill-box; transform-origin: 0 50%; animation: fc-write 3.2s ease-out infinite; }
+.fc-pre-l2 { animation-delay: .35s; }
+@keyframes fc-write { 0% { transform: scaleX(0); } 25%, 100% { transform: scaleX(1); } }
+.fc-pre-check { stroke-dasharray: 14; stroke-dashoffset: 14; animation: fc-check 3.2s ease-out infinite; }
+@keyframes fc-check { 0%, 30% { stroke-dashoffset: 14; } 45%, 92% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 14; } }
+.fc-pulse { animation: fc-pulse 1.8s ease-out infinite; }
+@keyframes fc-pulse { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(1.9); opacity: 0; } }
+.fc-card:hover .fc-arrow { transform: translateX(3px); }
+.fc-arrow { transition: transform .2s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .fc-route-path, .fc-route-dot, .fc-route-pin, .fc-pre-line, .fc-pre-check, .fc-pulse { animation: none !important; }
+  .fc-pre-check { stroke-dashoffset: 0; }
+  .fc-route-dot { offset-distance: 100%; }
+}
