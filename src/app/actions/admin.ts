@@ -267,8 +267,10 @@ export async function settingsAction(_: ActionState, fd: FormData) {
       assert(canManageSettings(actor));
       const color = str(fd, "primaryColor").toLowerCase();
       if (!/^#[0-9a-f]{6}$/.test(color)) throw new AppError("VALIDATION", "Cor inválida.", { primaryColor: "Use o formato #RRGGBB." });
+      // a cor é só destaque (botões principais são grafite): valida apenas quando trocada, com mínimo para texto em negrito
+      const current = (await db.appSettings.findUniqueOrThrow({ where: { id: 1 } })).primaryColor.toLowerCase();
       const contrast = 1.05 / (luminance(color) + 0.05);
-      if (contrast < 4.5) throw new AppError("VALIDATION", "Cor muito clara: o texto branco sobre ela ficaria ilegível.", { primaryColor: `Contraste ${contrast.toFixed(1)}:1 — mínimo 4,5:1.` });
+      if (color !== current && contrast < 2.5) throw new AppError("VALIDATION", "Cor muito clara: o texto branco sobre ela ficaria ilegível.", { primaryColor: `Contraste ${contrast.toFixed(1)}:1 — mínimo 2,5:1.` });
       const int = (k: string, min: number, max: number) => {
         const n = Number(str(fd, k));
         if (!Number.isInteger(n) || n < min || n > max) throw new AppError("VALIDATION", `Valor inválido em ${k}.`, { [k]: `Entre ${min} e ${max}.` });

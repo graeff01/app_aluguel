@@ -106,7 +106,7 @@ export default async function SettingsPage() {
           <Field label="Nome do produto" htmlFor="productName">
             <Input id="productName" name="productName" defaultValue={s.productName} maxLength={60} />
           </Field>
-          <Field label="Cor principal" htmlFor="primaryColor" hint="Precisa de contraste mínimo 4,5:1 com texto branco.">
+          <Field label="Cor principal" htmlFor="primaryColor" hint="Cor de destaque (selos e realces). Uma cor nova precisa de contraste mínimo de 2,5:1 com texto branco.">
             <Input id="primaryColor" name="primaryColor" type="color" defaultValue={s.primaryColor} className="h-12 w-24 p-1" />
           </Field>
         </Section>

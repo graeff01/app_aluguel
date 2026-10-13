@@ -500,3 +500,14 @@ test("reagendar pela consultora: nova data e botão do Google Agenda preenchido"
   await expect(page.getByText("Falta pôr na agenda").first()).toBeVisible();
   await expect(page.getByText("↻ Remarcada").first()).toBeVisible();
 });
+
+test("admin: Regras e app salva (cor padrão não bloqueia) e guarda os e-mails em cópia", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  await login(page, "admin@e2e.test");
+  await page.goto("/admin/configuracoes");
+  await page.getByLabel(/E-mails em cópia/).fill("pre@exemplo.test");
+  await page.getByRole("button", { name: /Salvar/ }).last().click();
+  await expect(page.getByText("Configurações salvas.")).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel(/E-mails em cópia/)).toHaveValue("pre@exemplo.test");
+});
