@@ -31,7 +31,7 @@ const STATUS_OPTIONS: { value: Status; label: string; hint?: string }[] = [
   { value: "DONE", label: "Sim, aconteceu" },
   { value: "NO_SHOW", label: "Cliente não compareceu" },
   { value: "CANCELED", label: "Cancelada" },
-  { value: "RESCHEDULED", label: "Remarcada", hint: "A nova data deve ser agendada na agenda central." },
+  { value: "RESCHEDULED", label: "Remarcada", hint: "Prefira o botão “Reagendar”: já cria a nova visita e coloca na agenda." },
 ];
 const EVAL_OPTIONS: { value: Evaluation; label: string; hint: string }[] = [
   { value: "POSITIVE", label: "Positiva", hint: "Cliente quer avançar (ainda não é contrato fechado)" },

@@ -483,3 +483,20 @@ test("aparência: escolher claro ou escuro no menu da conta vale na hora e fica 
   await expect(page.locator("html")).not.toHaveAttribute("data-theme", /./);
   expect(await bg()).toBe(light);
 });
+
+test("reagendar pela consultora: nova data e botão do Google Agenda preenchido", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await login(page, "c@e2e.test");
+  await page.getByRole("link", { name: /Cliente Rota/ }).first().click();
+  await page.getByRole("link", { name: /Reagendar \(já coloca na agenda\)/ }).click();
+  await expect(page.getByRole("heading", { name: "Reagendar visita" })).toBeVisible();
+  await page.getByLabel("Horário").fill("15:00");
+  await page.getByRole("button", { name: "Remarcar e preparar a agenda" }).click();
+  await expect(page.getByText(/✓ Visita remarcada para/)).toBeVisible();
+  const g = page.getByRole("link", { name: "Colocar na agenda Google" });
+  await expect(g).toHaveAttribute("href", /^https:\/\/calendar\.google\.com\/calendar\/render\?action=TEMPLATE/);
+  expect(new URL((await g.getAttribute("href"))!).searchParams.get("text")).toContain("cod 00322");
+  await page.getByRole("link", { name: "Voltar para Minhas visitas" }).click();
+  await expect(page.getByText("Falta pôr na agenda").first()).toBeVisible();
+  await expect(page.getByText("↻ Remarcada").first()).toBeVisible();
+});

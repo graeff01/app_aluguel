@@ -78,8 +78,8 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
           </LinkButton>
         )}
         {canCreateManualVisit(actor, settings) && visit.clientName && (
-          <LinkButton href={`/visitas/nova?de=${visit.id}`} variant="secondary" className="flex-1 sm:flex-none">
-            Agendar nova visita
+          <LinkButton href={visit.propertyCode ? `/visitas/${visit.id}/reagendar` : `/visitas/nova?de=${visit.id}`} variant="secondary" className="flex-1 sm:flex-none">
+            {visit.status === "SCHEDULED" ? "Reagendar" : "Agendar nova visita"}
           </LinkButton>
         )}
       </div>

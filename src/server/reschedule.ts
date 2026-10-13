@@ -1,0 +1,99 @@
+/**
+ * Reagendamento e nova visita para o mesmo cliente, feitos pela consultora — sem retrabalho:
+ * 1) a consultora escolhe a nova data no app; a visita antiga vira "Remarcada" e a nova já existe no sistema;
+ * 2) um link abre o Google Agenda dela com o evento PREENCHIDO (título no padrão, data, endereço e a conta central em cópia);
+ * 3) a descrição leva o código VL-XXXXXX: a sincronização liga o evento à visita já criada, sem duplicar.
+ * O app continua só lendo o Google (nenhuma permissão de edição).
+ */
+import { randomBytes } from "node:crypto";
+import { db } from "@/lib/db";
+import { audit } from "@/lib/audit";
+import { AppError, notFound } from "@/lib/errors";
+import { assert, canConcludeVisit, type AuthzActor } from "@/lib/authz";
+import { fromLocalInput, fmt } from "@/lib/time";
+import { getPatternConfig } from "@/lib/settings";
+import { cleanAddress } from "@/lib/address";
+
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem 0/O/1/I
+export const LINK_CODE_RE = /\bVL-([A-HJ-NP-Z2-9]{6})\b/;
+
+function newLinkCode() {
+  const b = randomBytes(6);
+  return "VL-" + Array.from(b, (x) => CODE_ALPHABET[x % CODE_ALPHABET.length]).join("");
+}
+
+export type RescheduleInput = { requestId: string; scheduledStart: string; durationMinutes: number; mode: "reschedule" | "new"; note?: string };
+
+export async function rescheduleVisit(actor: AuthzActor, visitId: string, input: RescheduleInput, now = new Date()) {
+  const old = await db.visit.findUnique({ where: { id: visitId } });
+  if (!old) throw notFound();
+  assert(canConcludeVisit(actor, old));
+  if (!old.consultantId) throw new AppError("INVALID_STATE", "Visita sem consultora responsável.");
+  if (!old.clientName || !old.propertyCode) throw new AppError("MISSING_DATA", "Complete nome do cliente e código do imóvel antes de reagendar.");
+  const start = fromLocalInput(input.scheduledStart);
+  if (!start) throw new AppError("VALIDATION", "Informe data e horário.", { scheduledStart: "Data inválida." });
+  if (start.getTime() < now.getTime() - 5 * 60_000) throw new AppError("VALIDATION", "Escolha um horário a partir de agora.", { scheduledStart: "Horário já passou." });
+  const minutes = Math.min(600, Math.max(15, Math.round(input.durationMinutes || 60)));
+  const reschedule = input.mode === "reschedule" && old.status === "SCHEDULED";
+  const requestId = `resched-${input.requestId}`.slice(0, 100);
+
+  // idempotência: mesmo envio repetido devolve a visita já criada
+  const dup = await db.visit.findUnique({ where: { createRequestId: requestId } });
+  if (dup) return dup;
+
+  return db.$transaction(async (tx) => {
+    if (reschedule) {
+      const note = `Remarcada para ${fmt.shortDate(start)} às ${fmt.time(start)}${input.note?.trim() ? ` — ${input.note.trim().slice(0, 300)}` : ""}`;
+      await tx.visit.update({ where: { id: old.id }, data: { status: "RESCHEDULED", note, concludedAt: now, concludedById: actor.id, version: { increment: 1 } } });
+      await tx.visitOutcomeHistory.create({ data: { visitId: old.id, status: "RESCHEDULED", note, authorId: actor.id } });
+    }
+    const created = await tx.visit.create({
+      data: {
+        origin: "MANUAL",
+        createRequestId: requestId,
+        scheduledStart: start,
+        scheduledEnd: new Date(start.getTime() + minutes * 60_000),
+        clientName: old.clientName,
+        phoneRaw: old.phoneRaw,
+        phoneNormalized: old.phoneNormalized,
+        propertyCode: old.propertyCode,
+        propertyId: old.propertyId,
+        clientId: old.clientId,
+        clientMatch: old.clientMatch,
+        consultantId: old.consultantId,
+        assignmentStatus: "MANUAL",
+        assignmentNote: reschedule ? "REAGENDADA" : "NOVA_VISITA_MESMO_CLIENTE",
+        scheduledById: actor.role === "CONSULTANT" ? actor.id : old.consultantId,
+        rescheduledFromId: old.id,
+        linkCode: newLinkCode(),
+      },
+    });
+    await audit(tx, { actorId: actor.id, action: reschedule ? "visit.rescheduled" : "visit.revisit_scheduled", entityType: "Visit", entityId: created.id, changes: { anterior: old.id, inicio: start.toISOString() } });
+    return created;
+  });
+}
+
+/** Link "adicionar evento" do Google Agenda, já preenchido. */
+export async function calendarLinkFor(actor: AuthzActor, visitId: string) {
+  const v = await db.visit.findUnique({
+    where: { id: visitId },
+    include: { property: { select: { address: true, neighborhood: true, city: true } }, consultant: { select: { aliases: { select: { email: true } } } } },
+  });
+  if (!v) throw notFound();
+  assert(canConcludeVisit(actor, v));
+  const [patterns, conn] = await Promise.all([getPatternConfig(), db.googleConnection.findFirst({ where: { status: { not: "DISCONNECTED" } }, orderBy: { connectedAt: "desc" } })]);
+  const prefix = patterns.visitPrefixes[0] ?? "visita clt";
+  const label = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+  const title = [label, v.clientName, v.propertyCode ? `cod ${v.propertyCode}` : null, v.phoneRaw].filter(Boolean).join(" - ");
+  const utc = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const guests = [conn?.calendarId?.includes("@") ? conn.calendarId : conn?.googleEmail].filter(Boolean) as string[];
+  const details = [
+    v.rescheduledFromId ? "Visita remarcada pela consultora no app Visitas Locação." : "Visita marcada pela consultora no app Visitas Locação.",
+    `Ref.: ${v.linkCode ?? ""} (não apague esta linha: liga o evento à visita no app)`,
+  ].join("\n");
+  const location = cleanAddress(v.property?.address) ?? (v.property?.neighborhood ? `${v.property.neighborhood}, ${v.property.city ?? "Canoas"} - RS` : "");
+  const params = new URLSearchParams({ action: "TEMPLATE", text: title, dates: `${utc(v.scheduledStart)}/${utc(v.scheduledEnd)}`, details, ctz: "America/Sao_Paulo" });
+  if (location) params.set("location", location);
+  if (guests.length) params.set("add", guests.join(","));
+  return { url: `https://calendar.google.com/calendar/render?${params.toString()}`, linked: !!v.sourceEventId, code: v.linkCode, title, guests };
+}

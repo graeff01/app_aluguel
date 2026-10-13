@@ -24,6 +24,7 @@ import { audit } from "@/lib/audit";
 import { resolveClient, cleanupOrphanClient } from "../clients";
 import { ensureProperty } from "../visits";
 import { cleanAddress } from "@/lib/address";
+import { LINK_CODE_RE } from "../reschedule";
 import { htmlToText } from "./sanitize";
 import { DETAIL_ROLES, GoogleApiError, type CalendarApi, type GEvent } from "./types";
 
@@ -250,6 +251,18 @@ async function upsertVisit(
   const scheduledById = scheduledByConsultant(ev, ctx.aliases);
   let visit = await tx.visit.findUnique({ where: { sourceEventId } });
 
+  // Evento criado pela consultora a partir do app (reagendamento/nova visita): o código VL-XXXXXX liga à visita já existente
+  if (!visit) {
+    const code = `${ev.summary ?? ""}\n${ev.description ?? ""}`.match(LINK_CODE_RE)?.[0];
+    const linked = code ? await tx.visit.findUnique({ where: { linkCode: code } }) : null;
+    if (linked && !linked.sourceEventId) {
+      visit = await tx.visit.update({ where: { id: linked.id }, data: { sourceEventId, scheduledStart: t.start, scheduledEnd: t.end, ...(scheduledById ? { scheduledById } : {}) } });
+      await audit(tx, { actorId: null, action: "sync.visit_linked_by_code", entityType: "Visit", entityId: linked.id, changes: { codigo: code } });
+      ctx.stats.updated++;
+      return;
+    }
+  }
+
   if (!visit) {
     // Evento recriado: só reaproveita visita antiga com evidência forte (mesmo iCalUID + mesma ocorrência original).
     if (ev.iCalUID) {
@@ -456,6 +469,8 @@ async function handleCancellation(tx: Tx, visitId: string, ctx: Ctx) {
     });
     await tx.visitOutcomeHistory.create({ data: { visitId: v.id, status: "CANCELED", note: "Cancelada/excluída na agenda Google" } });
     ctx.stats.canceled++;
+  } else if (v.status === "CANCELED" || v.status === "RESCHEDULED") {
+    // já cancelada/remarcada no app (ex.: a consultora reagendou): apagar o evento antigo é o esperado, sem conflito
   } else if (!v.autoCanceled && v.syncConflict !== "CANCELED_IN_GOOGLE") {
     await setConflict(tx, v.id, "CANCELED_IN_GOOGLE", {}, ctx);
   }

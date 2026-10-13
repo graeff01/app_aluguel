@@ -1,0 +1,83 @@
+// Reagendamento pela consultora: nova visita no app, link do Google preenchido e ligação pelo código (sem duplicar).
+import { beforeEach, describe, expect, it } from "vitest";
+import { db } from "@/lib/db";
+import { calendarLinkFor, LINK_CODE_RE, rescheduleVisit } from "@/server/reschedule";
+import { concludeVisit, createManualVisit } from "@/server/visits";
+import { runSync } from "@/server/sync/engine";
+import { toLocalInput } from "@/lib/time";
+import { makeConnection, makeUsers, resetDb } from "../helpers/db";
+import { MockCalendar, visitEvent } from "../helpers/mock-calendar";
+
+let u: Awaited<ReturnType<typeof makeUsers>>;
+const NOW = new Date("2026-10-13T15:00:00Z"); // 12:00 SP
+const local = (iso: string) => toLocalInput(new Date(iso));
+
+beforeEach(async () => {
+  await resetDb();
+  u = await makeUsers();
+});
+
+describe("reagendar", () => {
+  it("remarca a atual, cria a nova com os mesmos dados e é idempotente", async () => {
+    const old = await createManualVisit(u.admin, { requestId: "resch-old-req", scheduledStart: local("2026-10-13T17:00:00Z"), clientName: "Cliente Remarca", phoneRaw: "(51) 99876-5555", propertyCode: "761739", consultantId: u.a.id });
+    await expect(rescheduleVisit(u.b, old.id, { requestId: "x1", scheduledStart: local("2026-10-14T18:00:00Z"), durationMinutes: 60, mode: "reschedule" }, NOW)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(rescheduleVisit(u.a, old.id, { requestId: "x2", scheduledStart: local("2026-10-12T18:00:00Z"), durationMinutes: 60, mode: "reschedule" }, NOW)).rejects.toMatchObject({ code: "VALIDATION" });
+    const input = { requestId: "abc", scheduledStart: local("2026-10-14T18:00:00Z"), durationMinutes: 45, mode: "reschedule" as const, note: "cliente pediu" };
+    const nv = await rescheduleVisit(u.a, old.id, input, NOW);
+    expect(nv).toMatchObject({ clientName: "Cliente Remarca", propertyCode: "761739", consultantId: u.a.id, rescheduledFromId: old.id, scheduledById: u.a.id, status: "SCHEDULED", origin: "MANUAL" });
+    expect(nv.linkCode).toMatch(LINK_CODE_RE);
+    expect(nv.scheduledEnd.getTime() - nv.scheduledStart.getTime()).toBe(45 * 60_000);
+    const o = await db.visit.findUniqueOrThrow({ where: { id: old.id } });
+    expect(o.status).toBe("RESCHEDULED");
+    expect(o.note).toMatch(/^Remarcada para .* — cliente pediu$/);
+    expect((await rescheduleVisit(u.a, old.id, input, NOW)).id).toBe(nv.id); // reenvio não duplica
+    expect(await db.visit.count()).toBe(2);
+  });
+
+  it("nova visita para o mesmo cliente mantém a anterior", async () => {
+    const old = await createManualVisit(u.admin, { requestId: "resch-done-req", scheduledStart: local("2026-10-12T17:00:00Z"), clientName: "Cliente Volta", phoneRaw: "(51) 99876-6666", propertyCode: "761739", consultantId: u.a.id });
+    await concludeVisit(u.a, old.id, { requestId: "resch-done-c", expectedVersion: 1, status: "DONE", evaluation: "UNDECIDED", note: "vai pensar" }, NOW);
+    const nv = await rescheduleVisit(u.a, old.id, { requestId: "new1", scheduledStart: local("2026-10-15T18:00:00Z"), durationMinutes: 60, mode: "reschedule" }, NOW);
+    expect((await db.visit.findUniqueOrThrow({ where: { id: old.id } })).status).toBe("DONE"); // já tinha resultado: não muda
+    expect(nv.clientId).toBe(old.clientId);
+  });
+});
+
+describe("agenda Google", () => {
+  it("link preenchido no padrão, com a conta central e o código; evento com o código liga sem duplicar", async () => {
+    const conn = await makeConnection();
+    const old = await createManualVisit(u.admin, { requestId: "resch-cal-req", scheduledStart: local("2026-10-13T17:00:00Z"), clientName: "Cliente Agenda", phoneRaw: "(51) 99876-7777", propertyCode: "654321", consultantId: u.a.id });
+    const nv = await rescheduleVisit(u.a, old.id, { requestId: "cal1", scheduledStart: local("2026-10-14T18:00:00Z"), durationMinutes: 60, mode: "reschedule" }, NOW);
+    const cal = await calendarLinkFor(u.a, nv.id);
+    const url = new URL(cal.url);
+    expect(url.hostname).toBe("calendar.google.com");
+    expect(url.searchParams.get("text")).toBe("Visita clt - Cliente Agenda - cod 654321 - (51) 99876-7777");
+    expect(url.searchParams.get("dates")).toBe("20261014T180000Z/20261014T190000Z");
+    expect(url.searchParams.get("add")).toBe(conn.calendarId);
+    expect(url.searchParams.get("details")).toContain(nv.linkCode!);
+    expect(cal.linked).toBe(false);
+
+    // a consultora salva no Google (organizadora = ela); a conta central recebe o convite
+    const api = new MockCalendar();
+    api.put(visitEvent("novo", { title: url.searchParams.get("text")!, start: "2026-10-14T18:30:00Z", description: url.searchParams.get("details")!, organizer: "consultora.a@exemplo.test", attendees: ["agenda.central@exemplo.test"] }));
+    await runSync({ api, now: NOW, sleep: async () => {} });
+    expect(await db.visit.count()).toBe(2); // não duplicou
+    const linked = await db.visit.findUniqueOrThrow({ where: { id: nv.id } });
+    expect(linked.sourceEventId).not.toBeNull();
+    expect(linked.scheduledStart.toISOString()).toBe("2026-10-14T18:30:00.000Z"); // horário que ela salvou
+    expect(linked.consultantId).toBe(u.a.id);
+    expect((await calendarLinkFor(u.a, nv.id)).linked).toBe(true);
+  });
+
+  it("apagar no Google o evento de uma visita já remarcada não gera conflito", async () => {
+    await makeConnection();
+    const api = new MockCalendar();
+    api.put(visitEvent("velho", { start: "2026-10-13T17:00:00Z" }));
+    await runSync({ api, now: NOW, sleep: async () => {} });
+    const old = await db.visit.findFirstOrThrow();
+    await rescheduleVisit(u.a, old.id, { requestId: "del1", scheduledStart: local("2026-10-14T18:00:00Z"), durationMinutes: 60, mode: "reschedule" }, NOW);
+    api.cancel("velho");
+    await runSync({ api, now: NOW, sleep: async () => {} });
+    expect(await db.visit.findUniqueOrThrow({ where: { id: old.id } })).toMatchObject({ status: "RESCHEDULED", syncConflict: "NONE" });
+  });
+});

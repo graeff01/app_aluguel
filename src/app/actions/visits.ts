@@ -6,6 +6,7 @@ import { assignVisit, correctVisitData, createManualVisit, resolveConflict, setV
 import { confirmVisitClientAsDistinct, linkVisitToClient, mergeClients } from "@/server/clients";
 import { updateOpportunity, transferOpportunity } from "@/server/opportunities";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
+import { rescheduleVisit } from "@/server/reschedule";
 import { getActor } from "@/lib/session";
 import { toState } from "@/lib/action";
 import { hasGlobalView } from "@/lib/authz";
@@ -108,4 +109,21 @@ function done(s: ActionState) {
 export async function anonymizeClientAction(_: ActionState, fd: FormData) {
   const { anonymizeClient } = await import("@/server/privacy");
   return done(await runAction((a) => anonymizeClient(a, str(fd, "clientId"), str(fd, "reason")).then((ok) => (ok ? "Dados pessoais removidos. Os indicadores foram preservados." : "Este cliente já estava anonimizado."))));
+}
+
+export async function rescheduleAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  let target = "";
+  const s = await runAction(async (a) => {
+    const mode = str(fd, "mode") === "new" ? "new" : "reschedule";
+    const v = await rescheduleVisit(a, str(fd, "visitId"), {
+      requestId: str(fd, "requestId"),
+      scheduledStart: `${str(fd, "date")}T${str(fd, "time")}`,
+      durationMinutes: Number(str(fd, "duration")) || 60,
+      mode,
+      note: str(fd, "note"),
+    });
+    target = `/visitas/${v.id}/agenda?${mode === "new" ? "nova" : "remarcada"}=1`;
+  });
+  if (s.ok && target) redirect(target);
+  return s;
 }

@@ -61,6 +61,14 @@ export default async function RegisterPage({ params, searchParams }: { params: P
           </Link>
         </div>
       )}
+      {visit.linkCode && !visit.sourceEventId && visit.status === "SCHEDULED" && (
+        <Link href={`/visitas/${visit.id}/agenda`} className="press mb-5 flex items-center justify-between gap-3 rounded-2xl border border-warn/25 bg-warn-soft px-4 py-3 text-sm text-warn">
+          <span>
+            <strong>Falta colocar na agenda Google.</strong> Um toque abre o evento já preenchido.
+          </span>
+          <span aria-hidden className="text-lg">→</span>
+        </Link>
+      )}
       <h1 className="mb-3 text-[28px] leading-tight font-bold tracking-[-0.03em]">{isEdit ? "Alterar resultado" : future ? "Próxima visita" : "Registrar resultado"}</h1>
       {visit.excluded && <Alert tone="warn" title="Esta visita foi excluída dos indicadores pela gestão." />}
       <div className="lg:grid lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start lg:gap-8 xl:grid-cols-[400px_minmax(0,1fr)]">
@@ -83,6 +91,15 @@ export default async function RegisterPage({ params, searchParams }: { params: P
         )}
         {scheduledByConsultant(visit) && <p className="text-ink-2">Agendada pela consultora{visit.scheduledBy && visit.scheduledBy.id !== visit.consultantId ? ` ${visit.scheduledBy.name}` : ""}.</p>}
         <ContactButtons phone={visit.phoneNormalized} name={visit.clientName} compact className="mt-3" />
+        {!visit.excluded && visit.clientName && visit.propertyCode && (
+          <Link href={`/visitas/${visit.id}/reagendar`} className="press mt-3 flex min-h-11 items-center justify-center gap-2 rounded-full border border-line-strong bg-surface text-[14px] font-semibold">
+            <svg aria-hidden viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+              <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+              <path d="M8 3v4M16 3v4M3.5 10h17M9.5 15.5l2 2 3.5-4" />
+            </svg>
+            {visit.status === "SCHEDULED" ? "Reagendar (já coloca na agenda)" : "Marcar nova visita para este cliente"}
+          </Link>
+        )}
         {canCorrectVisitData(actor, visit, settings) && (
           <Link href={`/visitas/${visit.id}/corrigir?voltar=registrar`} className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-primary">
             Dados errados? Corrigir

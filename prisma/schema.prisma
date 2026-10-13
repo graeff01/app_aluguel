@@ -518,6 +518,12 @@ model Visit {
   lastRequestId    String?
   /// chave de idempotência do cadastro manual
   createRequestId  String?          @unique
+  /// visita que esta substitui (reagendamento pela consultora)
+  rescheduledFromId String?
+  rescheduledFrom   Visit?          @relation("VisitRescheduled", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
+  rescheduledTo     Visit[]         @relation("VisitRescheduled")
+  /// código "VL-XXXXXX" levado no evento do Google criado pela consultora: liga o evento a esta visita sem duplicar
+  linkCode          String?         @unique
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
