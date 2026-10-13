@@ -1,7 +1,7 @@
 // Pré-análise (LGPD: criptografia, escopo, retenção) e cancelamento por evento movido para depois das 21h.
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { ageOn, createPreAnalysis, incomeBand, isValidCpf, listPreAnalyses, parseMoney, preAnalysisDetail, preAnalysisStats, resolvePreAnalysis, runPreAnalysisRetention } from "@/server/pre-analysis";
+import { ageOn, assignmentQueue, createPreAnalysis, incomeBand, isValidCpf, listPreAnalyses, parseMoney, preAnalysisDetail, preAnalysisStats, resolvePreAnalysis, runPreAnalysisRetention } from "@/server/pre-analysis";
 import { canCreateManualVisit } from "@/lib/authz";
 import { runSync, LATE_CANCEL_NOTE } from "@/server/sync/engine";
 import { concludeVisit } from "@/server/visits";
@@ -95,6 +95,22 @@ describe("pré-análise", () => {
     expect(gone.purgedAt).not.toBeNull();
     expect((await db.preAnalysis.findUniqueOrThrow({ where: { id: fresh.id } })).cpfEnc).not.toBeNull();
     await expect(resolvePreAnalysis(u.a, p.id, { status: "APPROVED", note: "tentativa" })).rejects.toMatchObject({ code: "INVALID_STATE" });
+  });
+
+  it("rodízio: alterna entre as consultoras e marca a última a receber", async () => {
+    const q0 = await assignmentQueue(NOW);
+    expect(q0.find((c) => c.isNext)?.id).toBe(u.a.id); // ninguém recebeu: ordem alfabética
+    expect(q0.some((c) => c.isLast)).toBe(false);
+    await createPreAnalysis(jasmin, valid({ consultantId: u.a.id }), NOW);
+    const q1 = await assignmentQueue(NOW);
+    expect(q1.find((c) => c.isNext)?.id).toBe(u.b.id);
+    expect(q1.find((c) => c.isLast)?.id).toBe(u.a.id);
+    await new Promise((r) => setTimeout(r, 5));
+    await createPreAnalysis(jasmin, valid({ consultantId: u.b.id, cpf: "168.995.350-09" }), NOW);
+    const q2 = await assignmentQueue(NOW);
+    expect(q2.find((c) => c.isNext)?.id).toBe(u.a.id);
+    expect(q2.find((c) => c.isLast)?.id).toBe(u.b.id);
+    expect(q2.find((c) => c.id === u.a.id)?.monthCount).toBe(1);
   });
 
   it("pré-atendimento não cria visita manual", async () => {

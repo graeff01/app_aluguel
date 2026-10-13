@@ -444,7 +444,9 @@ test("pré-análise: pré-atendimento envia, consultora responde e pré-atendime
   await page.getByLabel("E-mail").fill("maria@exemplo.test");
   await page.getByLabel("Telefone").fill("(51) 99876-1234");
   await page.getByLabel(/Salário/).fill("4.500,00");
-  await page.getByLabel("Encaminhar para a consultora").selectOption({ label: "Consultora A" });
+  // rodízio: cartões com "Próxima da vez"
+  await expect(page.getByText("Próxima da vez", { exact: true })).toBeVisible();
+  await page.locator("label", { hasText: "Consultora A" }).first().click();
   await page.getByLabel(/titular do CPF e que ele autorizou/).check();
   await page.getByRole("button", { name: "Enviar para a consultora" }).click();
   await expect(page.getByText("✓ Enviada para Consultora A")).toBeVisible();

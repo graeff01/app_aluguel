@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireActor } from "@/lib/require";
 import { canCreatePreAnalysis } from "@/lib/authz";
-import { db } from "@/lib/db";
+import { assignmentQueue } from "@/server/pre-analysis";
 import { PageHeader } from "@/components/ui";
 import { PreAnalysisForm } from "./form";
 
@@ -11,7 +11,7 @@ export const metadata = { title: "Nova pré-análise" };
 export default async function NewPreAnalysisPage() {
   const actor = await requireActor({ preService: true });
   if (!canCreatePreAnalysis(actor)) notFound();
-  const consultants = await db.user.findMany({ where: { role: "CONSULTANT", active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  const consultants = await assignmentQueue();
   return (
     <>
       <Link href="/pre-analises" className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">

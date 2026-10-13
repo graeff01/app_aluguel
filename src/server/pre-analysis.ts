@@ -305,3 +305,26 @@ async function notifyUser(userId: string, payload: { title: string; body: string
     if (r === "gone") await db.pushSubscription.delete({ where: { id: s.id } }).catch(() => undefined);
   }
 }
+
+// ─────────────── rodízio entre consultoras ───────────────
+
+/**
+ * Fila de encaminhamento: a próxima da vez é quem está há mais tempo sem receber (quem nunca recebeu vem primeiro);
+ * a última a receber fica marcada. Com duas consultoras, isso alterna entre elas.
+ */
+export async function assignmentQueue(now = new Date()) {
+  const consultants = await db.user.findMany({ where: { role: "CONSULTANT", active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  if (!consultants.length) return [];
+  const ids = consultants.map((c) => c.id);
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 3));
+  const [last, month] = await Promise.all([
+    db.preAnalysis.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids } }, _max: { createdAt: true } }),
+    db.preAnalysis.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids }, createdAt: { gte: monthStart } }, _count: { _all: true } }),
+  ]);
+  const lastAt = new Map(last.map((l) => [l.consultantId, l._max.createdAt]));
+  const monthCount = new Map(month.map((m) => [m.consultantId, m._count._all]));
+  const rows = consultants.map((c) => ({ ...c, lastAt: lastAt.get(c.id) ?? null, monthCount: monthCount.get(c.id) ?? 0 }));
+  const byOldest = [...rows].sort((a, b) => (a.lastAt?.getTime() ?? 0) - (b.lastAt?.getTime() ?? 0) || a.name.localeCompare(b.name));
+  const latest = [...rows].filter((r) => r.lastAt).sort((a, b) => b.lastAt!.getTime() - a.lastAt!.getTime())[0];
+  return rows.map((r) => ({ ...r, isNext: r.id === byOldest[0].id, isLast: !!latest && r.id === latest.id && rows.length > 1 }));
+}

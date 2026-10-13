@@ -7,8 +7,14 @@ import { BrandLogo } from "./brand";
 
 export type NavItem = { href: string; label: string; icon: IconName; badge?: number };
 
-function isActive(path: string, href: string) {
+function matches(path: string, href: string) {
   return path === href || path.startsWith(href + "/");
+}
+
+/** Só o item mais específico fica aceso (ex.: em /pre-analises/nova, "Nova" e não "Pré-análises"). */
+function isActive(path: string, href: string, all: string[] = []) {
+  if (!matches(path, href)) return false;
+  return !all.some((other) => other !== href && other.length > href.length && matches(path, other));
 }
 
 /** Barra inferior flutuante (celular). */
@@ -23,7 +29,7 @@ export function BottomNav({ items }: { items: NavItem[] }) {
         style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
       >
         {items.map((it) => {
-          const active = isActive(path, it.href);
+          const active = isActive(path, it.href, items.map((x) => x.href));
           return (
             <li key={it.href}>
               <Link
@@ -65,7 +71,7 @@ export function SideNav({ groups, productName }: { groups: { title?: string; ite
           {g.title && <p className="mb-2 px-3 text-[11px] font-semibold tracking-[0.14em] text-white/40 uppercase">{g.title}</p>}
           <ul className="space-y-0.5">
             {g.items.map((it) => {
-              const active = isActive(path, it.href);
+              const active = isActive(path, it.href, groups.flatMap((x) => x.items.map((i) => i.href)));
               return (
                 <li key={it.href}>
                   <Link
