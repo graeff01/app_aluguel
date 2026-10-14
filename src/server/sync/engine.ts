@@ -287,7 +287,7 @@ async function syncCompanions(tx: Tx, ctx: Ctx, sourceEventId: string, codes: st
       if (comp.scheduledStart.getTime() !== shared.scheduledStart.getTime()) data.scheduledStart = shared.scheduledStart;
       if (comp.scheduledEnd.getTime() !== shared.scheduledEnd.getTime()) data.scheduledEnd = shared.scheduledEnd;
       if (!manual.has("clientName") && comp.clientName !== shared.clientName) data.clientName = shared.clientName;
-      if (!manual.has("phone") && comp.phoneRaw !== shared.phoneRaw) Object.assign(data, { phoneRaw: shared.phoneRaw, phoneNormalized: shared.phoneNormalized });
+      if (!manual.has("phone") && (comp.phoneRaw !== shared.phoneRaw || comp.phoneNormalized !== shared.phoneNormalized)) Object.assign(data, { phoneRaw: shared.phoneRaw, phoneNormalized: shared.phoneNormalized });
       if (comp.clientMatch !== "CONFIRMED_MANUAL" && comp.clientId !== shared.clientId) Object.assign(data, { clientId: shared.clientId, clientMatch: shared.clientMatch, clientCandidates: shared.clientCandidates });
       if (comp.assignmentStatus !== "MANUAL" && !manual.has("consultantId") && comp.consultantId !== assignment.consultantId) Object.assign(data, assignment);
     }
@@ -456,6 +456,10 @@ async function upsertVisit(
 
   const manual = new Set(visit.manualFields);
   const concluded = visit.status !== "SCHEDULED" && !visit.autoCanceled;
+  // mesmo texto, regra de telefone nova (ex.: celular antigo ganha o 9): só a forma normalizada muda
+  if (!manual.has("phone") && parsed.phoneRaw === visit.phoneRaw && parsed.phoneNormalized !== visit.phoneNormalized) {
+    visit = await tx.visit.update({ where: { id: visit.id }, data: { phoneNormalized: parsed.phoneNormalized } });
+  }
 
   // Evento voltou a existir após cancelamento automático
   if (t.wasCancelled && visit.autoCanceled) {
