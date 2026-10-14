@@ -146,6 +146,8 @@ model AppSettings {
   preAnalysisRetentionDays Int      @default(90)
   /// e-mails colocados em cópia nos eventos que as consultoras criam pelo app (reagendar/nova visita), separados por vírgula
   calendarCcEmails         String   @default("")
+  /// mensagem de confirmação de presença (WhatsApp aberto pela consultora). {cliente} {consultora} {dia} {hora} {codigo} {bairro}
+  confirmMessage           String   @default("Olá, {cliente}! Aqui é {consultora}, da Auxiliadora Predial. Confirmando sua visita {dia} às {hora} no imóvel {codigo}{bairro}. Posso contar com você?")
   /// LGPD: anonimizar clientes sem atividade há N meses (0 = desligado)
   retentionMonths          Int      @default(24)
   /// LGPD: contato para pedidos de titulares (exibido no aviso de privacidade)
@@ -528,6 +530,15 @@ model Visit {
   rescheduledTo     Visit[]         @relation("VisitRescheduled")
   /// código "VL-XXXXXX" levado no evento do Google criado pela consultora: liga o evento a esta visita sem duplicar
   linkCode          String?         @unique
+  /// pré-análise que originou esta visita (funil pré-análise → visita → locação)
+  preAnalysisId     String?
+  preAnalysis       PreAnalysis?    @relation(fields: [preAnalysisId], references: [id], onDelete: SetNull)
+  /// confirmação de presença com o cliente (WhatsApp aberto pela consultora): CONFIRMED | NO_REPLY
+  confirmStatus     String?
+  confirmedAt       DateTime?
+  /// "ainda decidindo": dia de ligar de volta; concluído quando a consultora marca feito
+  followUpOn        DateTime?       @db.Date
+  followUpDoneAt    DateTime?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
@@ -540,6 +551,8 @@ model Visit {
   @@index([propertyId])
   @@index([opportunityId])
   @@index([phoneNormalized])
+  @@index([consultantId, followUpOn])
+  @@index([preAnalysisId])
 }
 
 /// Histórico de conclusões/alterações de resultado (observações anteriores).
@@ -758,6 +771,7 @@ model PreAnalysis {
   resultBy     User?             @relation("PreAnalysisResolvedBy", fields: [resultById], references: [id])
   /// dados sensíveis apagados (retenção LGPD)
   purgedAt     DateTime?
+  visits       Visit[]
 
   @@index([consultantId, status])
   @@index([createdAt])

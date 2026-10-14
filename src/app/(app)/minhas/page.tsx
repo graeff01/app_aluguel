@@ -18,6 +18,11 @@ import { historyWhere } from "@/server/queries";
 import { db } from "@/lib/db";
 import { countOpenFor } from "@/server/pre-analysis";
 import { PreAnalysisCard, RouteCard } from "@/components/feature-cards";
+import { ConfirmPresence } from "@/components/confirm-presence";
+import { FollowUpButtons } from "@/components/follow-up-buttons";
+import { dueFollowUps } from "@/server/followups";
+import { buildConfirmMessage, whatsappUrl } from "@/lib/confirm";
+import { getSettings } from "@/lib/settings";
 
 export const metadata = { title: "Minhas visitas" };
 
@@ -35,7 +40,7 @@ function when(v: VisitListItem, today: string) {
 const TONE_LABEL = { overdue: "Atrasada", awaiting: "Aguardando resultado", live: "Em andamento", upcoming: "Agendada" } as const;
 
 /** Card da tela única: barra de status colorida + texto; foto do imóvel; ações na base. */
-function MineCard({ v, today, now, mode, index, team }: { v: VisitListItem & { note?: string | null }; today: string; now: Date; mode: "awaiting" | "live" | "upcoming" | "done"; index: number; team?: boolean }) {
+function MineCard({ v, today, now, mode, index, team, confirmTemplate }: { v: VisitListItem & { note?: string | null }; today: string; now: Date; mode: "awaiting" | "live" | "upcoming" | "done"; index: number; team?: boolean; confirmTemplate?: string }) {
   const tone = visitTone(v, now);
   const startsSoon = v.scheduledStart.getTime() <= now.getTime() + 15 * 60_000;
   const tappable = true; // futuras também abrem (cancelar/remarcar já disponíveis)
@@ -60,7 +65,7 @@ function MineCard({ v, today, now, mode, index, team }: { v: VisitListItem & { n
           <Icon name="home" className="size-4 text-ink-3" />
           {v.propertyCode ? <span className="num font-semibold text-ink">{v.propertyCode}</span> : <span className="text-warn">sem código</span>}
         </p>
-        {(v.revisit || scheduledByConsultant(v) || (v.rescheduledFromId && v.assignmentNote === "REAGENDADA")) && (
+        {(v.revisit || scheduledByConsultant(v) || (v.rescheduledFromId && v.assignmentNote === "REAGENDADA") || (v.linkCode && !v.sourceEventId) || v.confirmStatus === "CONFIRMED") && (
           <p className="mt-2 flex flex-wrap gap-1.5 text-[12px] font-semibold">
             {v.rescheduledFromId && v.assignmentNote === "REAGENDADA" && (
               <span className="rounded-full bg-[#e7effc] px-2 py-0.5 text-[#2357b3] dark:bg-[#1f2c44] dark:text-[#93b8ff]">
@@ -68,6 +73,7 @@ function MineCard({ v, today, now, mode, index, team }: { v: VisitListItem & { n
               </span>
             )}
             {v.linkCode && !v.sourceEventId && v.status === "SCHEDULED" && <span className="rounded-full bg-warn-soft px-2 py-0.5 text-warn">Falta pôr na agenda</span>}
+            {v.status === "SCHEDULED" && v.confirmStatus === "CONFIRMED" && <span className="rounded-full bg-good-soft px-2 py-0.5 text-good">✓ Confirmada</span>}
             {v.revisit && (
               <span className="rounded-full bg-tint px-2 py-0.5 text-ink-2">
                 ↺ {revisitLabel(v.revisit)}
@@ -110,6 +116,15 @@ function MineCard({ v, today, now, mode, index, team }: { v: VisitListItem & { n
           {hasPhone && <ContactButtons phone={v.phoneNormalized} name={v.clientName} compact />}
         </div>
       )}
+      {confirmTemplate && mode === "upcoming" && v.phoneNormalized && v.scheduledStart.getTime() - now.getTime() <= 36 * 3600_000 && (
+        <div className="-mt-1 pr-5 pb-5 pl-6">
+          <ConfirmPresence
+            visitId={v.id}
+            status={v.confirmStatus}
+            url={whatsappUrl(v.phoneNormalized, buildConfirmMessage(confirmTemplate, { clientName: v.clientName, consultantName: v.consultant?.name ?? null, scheduledStart: v.scheduledStart, propertyCode: v.propertyCode, neighborhood: v.property?.neighborhood ?? null }, now))}
+          />
+        </div>
+      )}
     </li>
   );
 }
@@ -122,6 +137,8 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
   const busca = sp.busca?.trim().slice(0, 80) ?? "";
   const { awaiting, upcoming, done, today } = await listMine(actor, now);
   const preOpen = team ? 0 : await countOpenFor(actor);
+  const confirmTemplate = (await getSettings()).confirmMessage;
+  const followUps = team ? [] : await dueFollowUps(actor.id, now);
   const results = busca
     ? await withRevisits(await db.visit.findMany({ where: historyWhere(actor, { q: busca }), select: { ...visitListSelect, note: true }, orderBy: { scheduledStart: "desc" }, take: 40 }), visitScope(actor))
     : [];
@@ -267,6 +284,40 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
       <InstallHint />
       <PushPrompt publicKey={pushConfig()?.publicKey ?? null} />
 
+      {followUps.length > 0 && !busca && (
+        <section aria-labelledby="t-fu" className="mb-9">
+          <h2 id="t-fu" className="mb-3 text-[12px] font-bold tracking-[0.12em] text-accent-strong uppercase">
+            Retornos de hoje · ligar de volta
+          </h2>
+          <ul className="grid gap-3 2xl:grid-cols-2">
+            {followUps.map((f, i) => (
+              <li key={f.id} className="animate-rise relative overflow-hidden rounded-[26px] border border-accent/30 bg-surface shadow-card" style={{ animationDelay: `${i * 55}ms` }}>
+                <span aria-hidden className="absolute inset-y-0 left-0 w-[5px] bg-accent" />
+                <div className="flex gap-4 pt-5 pr-5 pb-4 pl-6">
+                  <PropertyThumb photoUrl={f.property?.photoUrl} className="size-14" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-bold tracking-[0.06em] text-accent-strong uppercase">Ficou de pensar · visitou {fmt.shortDate(f.scheduledStart).replace(".", "")}</p>
+                    <p className="mt-0.5 text-[17px] font-bold">{f.clientName ?? "Cliente"}</p>
+                    <p className="text-sm text-ink-2">
+                      <span className="num font-semibold text-ink">{f.propertyCode}</span>
+                      {f.property?.neighborhood ? ` · ${f.property.neighborhood}` : ""}
+                    </p>
+                    {f.note && <p className="mt-1 line-clamp-2 text-[13px] text-ink-3">“{f.note}”</p>}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 pr-5 pb-5 pl-6">
+                  {f.phoneNormalized && <ContactButtons phone={f.phoneNormalized} name={f.clientName} compact />}
+                  <FollowUpButtons visitId={f.id} />
+                  <Link href={`/visitas/${f.id}/reagendar`} className="text-[13px] font-semibold text-ink underline underline-offset-4">
+                    Marcar nova visita
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {toRegister > 0 && (
         <section aria-labelledby="t-aw" className="mb-9">
           <h2 id="t-aw" className="mb-3 text-[12px] font-bold tracking-[0.12em] text-ink-3 uppercase">
@@ -292,7 +343,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         ) : (
           <ul className="grid gap-3 2xl:grid-cols-2">
             {future.map((v, i) => (
-              <MineCard key={v.id} v={v} today={today} now={now} mode="upcoming" index={toRegister + i} team={team} />
+              <MineCard key={v.id} v={v} today={today} now={now} mode="upcoming" index={toRegister + i} team={team} confirmTemplate={team ? undefined : confirmTemplate} />
             ))}
           </ul>
         )}

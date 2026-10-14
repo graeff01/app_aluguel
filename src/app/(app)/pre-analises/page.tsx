@@ -67,6 +67,28 @@ export default async function PreAnalysesPage({ searchParams }: { searchParams: 
               </div>
             ))}
           </div>
+          {stats.total > 0 && (
+            <div className="mt-3 rounded-3xl border border-line bg-surface p-4 shadow-card">
+              <p className="mb-3 text-sm font-semibold">Funil do mês</p>
+              <ol className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                {[
+                  ["Enviadas", stats.total],
+                  ["Aprovadas", stats.approved],
+                  ["Viraram visita", stats.withVisit],
+                  ["Visitaram", stats.visited],
+                  ["Locações", stats.leased],
+                ].map(([label, n], i, arr) => (
+                  <li key={String(label)} className="rounded-2xl bg-tint px-3 py-2.5">
+                    <p className="num text-[22px] leading-none font-bold">{n}</p>
+                    <p className="mt-1 text-[12px] text-ink-3">
+                      {label}
+                      {i > 0 && Number(arr[i - 1][1]) > 0 ? ` · ${Math.round((Number(n) / Number(arr[i - 1][1])) * 100)}%` : ""}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
           {stats.byConsultant.length > 0 && (
             <div className="mt-3 grid gap-3 lg:grid-cols-2">
               <div className="rounded-3xl border border-line bg-surface p-4 shadow-card">

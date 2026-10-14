@@ -298,6 +298,11 @@ export async function settingsAction(_: ActionState, fd: FormData) {
         managerAlertHours: int("managerAlertHours", 0, 72),
         cancelAfterHour: int("cancelAfterHour", 0, 23),
         preAnalysisRetentionDays: int("preAnalysisRetentionDays", 7, 365),
+        confirmMessage: (() => {
+          const t = str(fd, "confirmMessage").trim().slice(0, 600);
+          if (t.length < 10) throw new AppError("VALIDATION", "Escreva a mensagem de confirmação.", { confirmMessage: "Muito curta." });
+          return t;
+        })(),
         calendarCcEmails: (() => {
           const list = str(fd, "calendarCcEmails").split(/[\s,;]+/).map(normalizeEmail).filter(Boolean);
           for (const e of list) if (!EMAIL_RE.test(e)) throw new AppError("VALIDATION", `E-mail inválido: ${e}`, { calendarCcEmails: "Confira os e-mails." });

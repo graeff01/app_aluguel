@@ -2,7 +2,7 @@ import { requireAdmin } from "@/lib/require";
 import { getSettings } from "@/lib/settings";
 import { dateOnlyKey } from "@/lib/time";
 import { ActionForm, SubmitButton } from "@/components/action-form";
-import { Field, Input, PageHeader, Section, Select } from "@/components/ui";
+import { Field, Input, PageHeader, Section, Select, Textarea } from "@/components/ui";
 import { settingsAction } from "@/app/actions/admin";
 
 export const metadata = { title: "Regras e aplicativo" };
@@ -52,6 +52,9 @@ export default async function SettingsPage() {
         <Section title="Agenda e pré-análise">
           <Field label="Cancelar visita quando o evento for movido para depois das (hora)" htmlFor="cancelAfterHour" hint="O pré-atendimento cancela movendo o evento no Google para esse horário ou mais tarde; o app marca a visita como cancelada e mantém o horário original. 0 desliga.">
             <Input id="cancelAfterHour" name="cancelAfterHour" type="number" min={0} max={23} defaultValue={s.cancelAfterHour} />
+          </Field>
+          <Field label="Mensagem de confirmação de presença (WhatsApp)" htmlFor="confirmMessage" hint="Aberta pela consultora no WhatsApp, que ela mesma envia. Use {cliente}, {consultora}, {dia}, {hora}, {codigo} e {bairro}.">
+            <Textarea id="confirmMessage" name="confirmMessage" rows={3} defaultValue={s.confirmMessage} maxLength={600} />
           </Field>
           <Field label="E-mails em cópia nos agendamentos das consultoras" htmlFor="calendarCcEmails" hint="Vão como convidados no evento que a consultora cria pelo app (Reagendar / Nova visita), além da conta central. Separe por vírgula. Ex.: o e-mail do pré-atendimento.">
             <Input id="calendarCcEmails" name="calendarCcEmails" defaultValue={s.calendarCcEmails} maxLength={500} />

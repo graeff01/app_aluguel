@@ -18,7 +18,7 @@ import { cleanAddress } from "@/lib/address";
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem 0/O/1/I
 export const LINK_CODE_RE = /\bVL-([A-HJ-NP-Z2-9]{6})\b/;
 
-function newLinkCode() {
+export function newLinkCode() {
   const b = randomBytes(6);
   return "VL-" + Array.from(b, (x) => CODE_ALPHABET[x % CODE_ALPHABET.length]).join("");
 }
@@ -30,6 +30,17 @@ function newLinkCode() {
  * - DONE: aconteceu e o cliente quer outra visita (avaliação + observação) → a nova é revisita.
  */
 export type RescheduleOutcome = { status: "RESCHEDULED" | "NO_SHOW" | "DONE"; evaluation?: "POSITIVE" | "NEGATIVE" | "UNDECIDED" | null; negativeReasonId?: string | null; note?: string };
+/** Avisa quando o horário cai em cima de outra visita agendada da consultora (pode ser confirmado). */
+export async function assertNoOverlap(consultantId: string, start: Date, end: Date, excludeId?: string) {
+  const clash = await db.visit.findFirst({
+    where: { consultantId, status: "SCHEDULED", excluded: false, ...(excludeId ? { id: { not: excludeId } } : {}), scheduledStart: { lt: end }, scheduledEnd: { gt: start } },
+    orderBy: { scheduledStart: "asc" },
+  });
+  if (clash) {
+    throw new AppError("VALIDATION", `Conflito: já há visita das ${fmt.time(clash.scheduledStart)} às ${fmt.time(clash.scheduledEnd)}${clash.propertyCode ? ` (imóvel ${clash.propertyCode})` : ""} nesse horário. Mude o horário ou confirme.`, { allowOverlap: "Horário em conflito." });
+  }
+}
+
 export type RescheduleInput = { requestId: string; scheduledStart: string; durationMinutes: number; mode: "reschedule" | "new"; note?: string; propertyCode?: string; outcome?: RescheduleOutcome; allowOverlap?: boolean };
 
 export async function rescheduleVisit(actor: AuthzActor, visitId: string, input: RescheduleInput, now = new Date()) {
@@ -50,16 +61,7 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
   const dup = await db.visit.findUnique({ where: { createRequestId: requestId } });
   if (dup) return dup;
   // horário em cima de outra visita da mesma consultora: avisa (pode confirmar)
-  if (!input.allowOverlap) {
-    const end = new Date(start.getTime() + minutes * 60_000);
-    const clash = await db.visit.findFirst({
-      where: { consultantId: old.consultantId, status: "SCHEDULED", excluded: false, id: { not: old.id }, scheduledStart: { lt: end }, scheduledEnd: { gt: start } },
-      orderBy: { scheduledStart: "asc" },
-    });
-    if (clash) {
-      throw new AppError("VALIDATION", `Conflito: já há visita das ${fmt.time(clash.scheduledStart)} às ${fmt.time(clash.scheduledEnd)}${clash.propertyCode ? ` (imóvel ${clash.propertyCode})` : ""} nesse horário. Mude o horário ou confirme.`, { allowOverlap: "Horário em conflito." });
-    }
-  }
+  if (!input.allowOverlap) await assertNoOverlap(old.consultantId, start, new Date(start.getTime() + minutes * 60_000), old.id);
 
   // visita atual em aberto: o status dela é registrado aqui mesmo (ela nunca fica "em aberto")
   const outcome: RescheduleOutcome | null = old.status === "SCHEDULED" ? (input.outcome ?? (input.mode === "reschedule" ? { status: "RESCHEDULED" } : null)) : null;
@@ -129,7 +131,7 @@ export async function calendarLinkFor(actor: AuthzActor, visitId: string) {
   const cc = settings.calendarCcEmails.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e));
   const guests = [...new Set([conn?.calendarId?.includes("@") ? conn.calendarId : conn?.googleEmail, ...cc].filter(Boolean) as string[])];
   const details = [
-    v.rescheduledFromId ? "Visita remarcada pela consultora no app Visitas Locação." : "Visita marcada pela consultora no app Visitas Locação.",
+    v.rescheduledFromId ? "Visita remarcada pela consultora no app Visitas Locação." : v.preAnalysisId ? "Visita marcada a partir da pré-análise aprovada (app Visitas Locação)." : "Visita marcada pela consultora no app Visitas Locação.",
     `Ref.: ${v.linkCode ?? ""} (não apague esta linha: liga o evento à visita no app)`,
   ].join("\n");
   const location = cleanAddress(v.property?.address) ?? (v.property?.neighborhood ? `${v.property.neighborhood}, ${v.property.city ?? "Canoas"} - RS` : "");

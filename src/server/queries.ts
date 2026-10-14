@@ -37,7 +37,10 @@ export const visitListSelect = {
   sourceEventId: true,
   consultant: { select: { id: true, name: true } },
   scheduledBy: { select: { id: true, name: true, role: true } },
-  property: { select: { photoUrl: true, title: true } },
+  property: { select: { photoUrl: true, title: true, neighborhood: true } },
+  confirmStatus: true,
+  followUpOn: true,
+  followUpDoneAt: true,
 } satisfies Prisma.VisitSelect;
 
 export type VisitListItem = Prisma.VisitGetPayload<{ select: typeof visitListSelect }> & { revisit?: Revisit | null };

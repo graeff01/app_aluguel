@@ -3,13 +3,14 @@ import { useMemo, useState } from "react";
 import { ActionForm, FieldError, SubmitButton } from "@/components/action-form";
 import { Field, Input, Textarea, cx } from "@/components/ui";
 import { createPreAnalysisAction } from "@/app/actions/pre-analysis";
+import { extractClientData } from "@/lib/extract";
 
 const cpfMask = (v: string) => {
   const d = v.replace(/\D/g, "").slice(0, 11);
   return d.replace(/^(\d{3})(\d)/, "$1.$2").replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d{1,2})$/, ".$1-$2");
 };
 
-type QueueItem = { id: string; name: string; away: boolean; awayUntil: string | null; lastAt: Date | null; monthCount: number; isNext: boolean; isLast: boolean };
+type QueueItem = { id: string; name: string; away: boolean; awayUntil: string | null; lastAt: Date | null; monthCount: number; openCount: number; isNext: boolean; isLast: boolean };
 
 const ago = (d: Date) => {
   const min = Math.round((Date.now() - new Date(d).getTime()) / 60_000);
@@ -21,12 +22,58 @@ const ago = (d: Date) => {
 export function PreAnalysisForm({ consultants }: { consultants: QueueItem[] }) {
   const [cpf, setCpf] = useState("");
   const [chosen, setChosen] = useState(consultants.find((c) => c.isNext)?.id ?? "");
+  const [pasted, setPasted] = useState("");
+  const [filled, setFilled] = useState<string[] | null>(null);
+  function fillFromPaste() {
+    const d = extractClientData(pasted);
+    const got: string[] = [];
+    const set = (id: string, v: string | undefined, label: string) => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (el && v) {
+        el.value = v;
+        got.push(label);
+      }
+    };
+    set("fullName", d.fullName, "nome");
+    if (d.cpf) {
+      setCpf(cpfMask(d.cpf));
+      got.push("CPF");
+    }
+    set("birthDate", d.birthDate, "nascimento");
+    set("email", d.email, "e-mail");
+    set("phone", d.phone, "telefone");
+    set("salary", d.salary, "salário");
+    setFilled(got);
+  }
   const requestId = useMemo(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`), []);
   return (
     <ActionForm action={createPreAnalysisAction} className="max-w-2xl rounded-[26px] border border-line bg-surface p-5 shadow-card sm:p-7">
       {(st) => (
         <>
           <input type="hidden" name="requestId" value={requestId} />
+          <details className="group mb-5 rounded-2xl border border-line bg-surface-2">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 text-[14px] font-semibold">
+              Colar a mensagem do cliente e preencher sozinho
+              <span aria-hidden className="text-lg text-ink-3 transition-transform group-open:rotate-45">+</span>
+            </summary>
+            <div className="px-4 pb-4">
+              <textarea
+                value={pasted}
+                onChange={(e) => setPasted(e.target.value)}
+                rows={5}
+                aria-label="Mensagem do cliente"
+                placeholder={"Cole aqui a mensagem com os dados (ex.: do WhatsApp).\nNome, CPF, nascimento, e-mail, telefone e salário."}
+                className="block w-full rounded-2xl border border-line-strong bg-surface px-4 py-3 text-[15px] focus:border-ink focus:outline-none"
+              />
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <button type="button" onClick={fillFromPaste} disabled={!pasted.trim()} className="press min-h-10 rounded-full bg-primary px-4 text-[13px] font-semibold text-on-primary disabled:opacity-40">
+                  Preencher campos
+                </button>
+                {filled && <span className={filled.length ? "text-[13px] font-semibold text-good" : "text-[13px] font-semibold text-warn"}>{filled.length ? `Preenchido: ${filled.join(", ")}. Confira antes de enviar.` : "Não encontrei os dados — preencha à mão."}</span>}
+              </div>
+              <p className="mt-2 text-[12px] text-ink-3">A leitura acontece só neste aparelho; o texto colado não é salvo.</p>
+            </div>
+          </details>
           <p className="mb-5 rounded-2xl bg-accent-soft px-4 py-3 text-[14px] font-medium text-accent-strong">Todos os dados precisam ser do <strong>titular do CPF</strong>.</p>
           <Field label="Nome completo" htmlFor="fullName" error={st.fieldErrors?.fullName}>
             <Input id="fullName" name="fullName" autoComplete="off" required />
@@ -53,7 +100,7 @@ export function PreAnalysisForm({ consultants }: { consultants: QueueItem[] }) {
           </div>
           <fieldset className="mb-5">
             <legend className="mb-1 text-sm font-semibold text-ink">Encaminhar para a consultora</legend>
-            <p className="mb-3 text-[13px] text-ink-3">Rodízio: a próxima da vez já vem escolhida. Toque em outra se precisar.</p>
+            <p className="mb-3 text-[13px] text-ink-3">Rodízio: vai para quem tem menos pré-análises em aberto (no empate, a da vez). Toque em outra se precisar.</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {consultants.map((c) => {
                 const on = chosen === c.id;
@@ -77,7 +124,7 @@ export function PreAnalysisForm({ consultants }: { consultants: QueueItem[] }) {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[16px] font-bold">{c.name}</span>
                       <span className="block text-[12px] text-ink-3">
-                        {c.lastAt ? `Recebeu ${ago(c.lastAt)}` : "Ainda não recebeu"} · {c.monthCount} no mês
+                        {c.lastAt ? `Recebeu ${ago(c.lastAt)}` : "Ainda não recebeu"} · {c.openCount ? `${c.openCount} em aberto` : "nada em aberto"} · {c.monthCount} no mês
                       </span>
                       <span className="mt-1.5 flex flex-wrap gap-1.5">
                         {c.isNext && <span className="rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-bold text-white">Próxima da vez</span>}

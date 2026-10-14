@@ -28,22 +28,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 // ─────────────── validações ───────────────
 
-export function cpfDigits(raw: string) {
-  return raw.replace(/\D/g, "");
-}
-
-/** Dígitos verificadores do CPF (recusa sequências repetidas). */
-export function isValidCpf(raw: string) {
-  const d = cpfDigits(raw);
-  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
-  const calc = (len: number) => {
-    let sum = 0;
-    for (let i = 0; i < len; i++) sum += Number(d[i]) * (len + 1 - i);
-    const r = (sum * 10) % 11;
-    return r === 10 ? 0 : r;
-  };
-  return calc(9) === Number(d[9]) && calc(10) === Number(d[10]);
-}
+export { cpfDigits, isValidCpf } from "@/lib/cpf";
+import { cpfDigits, isValidCpf } from "@/lib/cpf";
 
 export function formatCpf(d: string) {
   return d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
@@ -191,7 +177,12 @@ const dec = (v: string | null) => {
 export async function preAnalysisDetail(actor: AuthzActor, id: string, now = new Date()) {
   const p = await db.preAnalysis.findUnique({
     where: { id },
-    include: { consultant: { select: { id: true, name: true } }, createdBy: { select: { id: true, name: true } }, resultBy: { select: { name: true } } },
+    include: {
+      consultant: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true } },
+      resultBy: { select: { name: true } },
+      visits: { orderBy: { scheduledStart: "asc" }, select: { id: true, scheduledStart: true, status: true, propertyCode: true, sourceEventId: true } },
+    },
   });
   if (!p) throw notFound();
   assert(canViewPreAnalysis(actor, p));
@@ -284,7 +275,14 @@ export async function preAnalysisStats(actor: AuthzActor, from: Date, to: Date) 
   assert(hasGlobalView(actor) || isPreService(actor));
   const rows = await db.preAnalysis.findMany({
     where: { createdAt: { gte: from, lt: to } },
-    select: { status: true, incomeBand: true, createdAt: true, resultAt: true, consultant: { select: { id: true, name: true } } },
+    select: {
+      status: true,
+      incomeBand: true,
+      createdAt: true,
+      resultAt: true,
+      consultant: { select: { id: true, name: true } },
+      visits: { select: { status: true, opportunity: { select: { status: true } } } },
+    },
   });
   const decided = rows.filter((r) => r.status === "APPROVED" || r.status === "REJECTED");
   const approved = rows.filter((r) => r.status === "APPROVED").length;
@@ -311,6 +309,10 @@ export async function preAnalysisStats(actor: AuthzActor, from: Date, to: Date) 
     pending: rows.filter((r) => r.status === "PENDING").length,
     awaiting: rows.filter((r) => r.status === "AWAITING").length,
     approvalRate: decided.length ? approved / decided.length : null,
+    // funil: pré-análise → visita (marcada pelo app) → visita realizada → locação
+    withVisit: rows.filter((r) => r.visits.length > 0).length,
+    visited: rows.filter((r) => r.visits.some((v) => v.status === "DONE")).length,
+    leased: rows.filter((r) => r.visits.some((v) => v.opportunity?.status === "CLOSED_WON")).length,
     avgResponseHours: hours.length ? hours.reduce((a, b) => a + b, 0) / hours.length : null,
     byConsultant: [...by((r) => r.consultant.name).entries()].sort((a, b) => b[1].total - a[1].total),
     byIncome: [...by((r) => r.incomeBand).entries()],
@@ -349,16 +351,19 @@ export async function assignmentQueue(now = new Date()) {
   if (!consultants.length) return [];
   const ids = consultants.map((c) => c.id);
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 3));
-  const [last, month] = await Promise.all([
+  const [last, month, open] = await Promise.all([
     db.preAnalysis.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids } }, _max: { createdAt: true } }),
     db.preAnalysis.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids }, createdAt: { gte: monthStart } }, _count: { _all: true } }),
+    db.preAnalysis.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids }, status: { in: ["AWAITING", "PENDING"] } }, _count: { _all: true } }),
   ]);
+  const openCount = new Map(open.map((o) => [o.consultantId, o._count._all]));
   const lastAt = new Map(last.map((l) => [l.consultantId, l._max.createdAt]));
   const monthCount = new Map(month.map((m) => [m.consultantId, m._count._all]));
-  const rows = consultants.map((c) => ({ id: c.id, name: c.name, away: isAway(c.awayUntil, now), awayUntil: c.awayUntil ? fmtDay(c.awayUntil) : null, lastAt: lastAt.get(c.id) ?? null, monthCount: monthCount.get(c.id) ?? 0 }));
+  const rows = consultants.map((c) => ({ id: c.id, name: c.name, away: isAway(c.awayUntil, now), awayUntil: c.awayUntil ? fmtDay(c.awayUntil) : null, lastAt: lastAt.get(c.id) ?? null, monthCount: monthCount.get(c.id) ?? 0, openCount: openCount.get(c.id) ?? 0 }));
   // ausentes saem da vez (se todas estiverem ausentes, segue o rodízio normal)
   const available = rows.some((r) => !r.away) ? rows.filter((r) => !r.away) : rows;
-  const byOldest = [...available].sort((a, b) => (a.lastAt?.getTime() ?? 0) - (b.lastAt?.getTime() ?? 0) || a.name.localeCompare(b.name));
+  // menos pré-análises em aberto primeiro (ninguém fica sobrecarregada); empate → quem está há mais tempo sem receber
+  const byOldest = [...available].sort((a, b) => a.openCount - b.openCount || (a.lastAt?.getTime() ?? 0) - (b.lastAt?.getTime() ?? 0) || a.name.localeCompare(b.name));
   const latest = [...rows].filter((r) => r.lastAt).sort((a, b) => b.lastAt!.getTime() - a.lastAt!.getTime())[0];
   return rows.map((r) => ({ ...r, isNext: r.id === byOldest[0].id, isLast: !!latest && r.id === latest.id && rows.length > 1 }));
 }

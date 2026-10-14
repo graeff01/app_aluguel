@@ -22,7 +22,7 @@ import {
 import { getSettings } from "@/lib/settings";
 import { normalizePhone } from "@/lib/phone";
 import { cleanOptional } from "@/lib/text";
-import { fromLocalInput } from "@/lib/time";
+import { addDays, dateOnlyFromKey, dayKey, fromLocalInput } from "@/lib/time";
 import { resolveClient, cleanupOrphanClient } from "./clients";
 import { applyDoneVisit, detachVisitFromOpportunity } from "./opportunities";
 
@@ -53,6 +53,8 @@ export const conclusionSchema = z
     evaluation: z.enum(["POSITIVE", "NEGATIVE", "UNDECIDED"]).nullable().optional(),
     negativeReasonId: z.string().nullable().optional(),
     note: z.string(),
+    /** "ainda decidindo": daqui a quantos dias ligar de volta (null = sem data) */
+    followUpDays: z.number().int().min(0).max(60).nullable().optional(),
   })
   .superRefine((v, ctx) => {
     if (v.status === "DONE" && !v.evaluation) ctx.addIssue({ code: "custom", path: ["evaluation"], message: "Selecione o resultado da visita." });
@@ -127,6 +129,12 @@ export async function concludeVisit(actor: AuthzActor, visitId: string, input: C
         propertyId,
         version: { increment: 1 },
         lastRequestId: data.requestId,
+        // retorno do "ainda decidindo" (outro resultado limpa)
+        ...(data.status === "DONE" && data.evaluation === "UNDECIDED"
+          ? data.followUpDays != null
+            ? { followUpOn: dateOnlyFromKey(addDays(dayKey(now), data.followUpDays)), followUpDoneAt: null }
+            : {}
+          : { followUpOn: null, followUpDoneAt: null }),
       },
     });
     await tx.visitOutcomeHistory.create({

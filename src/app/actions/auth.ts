@@ -18,7 +18,9 @@ export async function loginAction(_: ActionState, fd: FormData): Promise<ActionS
   const email = normalizeEmail(str(fd, "email"));
   const password = str(fd, "password");
   const ip = await clientIp();
-  const [byIp, byEmail] = await Promise.all([hitRateLimit(`login:ip:${ip}`, 30, 900), hitRateLimit(`login:email:${sha256(email)}`, 8, 900)]);
+  // limite por IP ajustável (ex.: testes automáticos fazem muitos logins seguidos da mesma máquina)
+  const ipLimit = Math.max(5, Number(process.env.LOGIN_IP_LIMIT) || 30);
+  const [byIp, byEmail] = await Promise.all([hitRateLimit(`login:ip:${ip}`, ipLimit, 900), hitRateLimit(`login:email:${sha256(email)}`, 8, 900)]);
   if (!byIp.allowed || !byEmail.allowed) {
     const wait = Math.ceil(Math.max(byIp.retryAfterSeconds, byEmail.retryAfterSeconds) / 60);
     return { ok: false, message: `Muitas tentativas. Aguarde cerca de ${wait} min e tente novamente.` };

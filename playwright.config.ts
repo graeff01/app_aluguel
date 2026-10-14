@@ -31,6 +31,7 @@ export default defineConfig({
       TOKEN_ENCRYPTION_KEY: "ZTJlLWtleS1lMmUta2V5LWUyZS1rZXktMTIzNDU2Nzg=",
       LOG_SILENT: "1",
       MAP_SERVICES: "off",
+      LOGIN_IP_LIMIT: "500",
     },
   },
 });

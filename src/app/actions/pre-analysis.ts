@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { runAction, str, type ActionState } from "@/lib/action";
 import { createPreAnalysis, deletePreAnalysis, resolvePreAnalysis } from "@/server/pre-analysis";
+import { scheduleFromPreAnalysis } from "@/server/pre-visit";
+import { refreshPropertyNow } from "@/server/property-preview";
+import { ensurePropertyCoords } from "@/server/geo";
 
 export async function createPreAnalysisAction(_: ActionState, fd: FormData): Promise<ActionState> {
   let id = "";
@@ -50,5 +53,23 @@ export async function deletePreAnalysisAction(_: ActionState, fd: FormData): Pro
     await deletePreAnalysis(a, str(fd, "id"));
   });
   if (s.ok) redirect("/pre-analises?excluida=1");
+  return s;
+}
+
+export async function schedulePreVisitAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  let target = "";
+  const s = await runAction(async (a) => {
+    const v = await scheduleFromPreAnalysis(a, str(fd, "id"), {
+      requestId: str(fd, "requestId"),
+      scheduledStart: `${str(fd, "date")}T${str(fd, "time")}`,
+      durationMinutes: Number(str(fd, "duration")) || 60,
+      propertyCode: str(fd, "propertyCode"),
+      allowOverlap: str(fd, "allowOverlap") === "1",
+    });
+    const code = v.propertyCode;
+    if (code) void refreshPropertyNow(code).then(() => ensurePropertyCoords([code], { maxCalls: 2 })).catch(() => undefined);
+    target = `/visitas/${v.id}/agenda?nova=1`;
+  });
+  if (s.ok && target) redirect(target);
   return s;
 }

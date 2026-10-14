@@ -56,6 +56,8 @@ export function OutcomeForm(p: Props) {
   const [version, setVersion] = useState(p.version);
   // depois de salvar, já abrir a marcação de uma nova visita para o mesmo cliente
   const [thenNew, setThenNew] = useState(false);
+  // "ainda decidindo": quando ligar de volta (padrão: em 3 dias)
+  const [followUpDays, setFollowUpDays] = useState<number | null>(3);
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
   // chave de idempotência estável enquanto a tela estiver aberta (retry não duplica)
   const requestId = useMemo(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`), []);
@@ -99,6 +101,7 @@ export function OutcomeForm(p: Props) {
           evaluation: status === "DONE" ? evaluation : null,
           negativeReasonId: status === "DONE" && evaluation === "NEGATIVE" ? reasonId : null,
           note,
+          followUpDays: status === "DONE" && evaluation === "UNDECIDED" ? followUpDays : null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -249,6 +252,26 @@ export function OutcomeForm(p: Props) {
         </p>
       </div>
 
+      {status === "DONE" && evaluation === "UNDECIDED" && (
+        <fieldset className="mb-4 rounded-2xl border border-line bg-surface p-4">
+          <legend className="px-1 text-[15px] font-bold">Ligar de volta</legend>
+          <div className="mt-1 grid grid-cols-4 gap-2">
+            {(
+              [
+                [1, "Amanhã"],
+                [3, "Em 3 dias"],
+                [7, "Em 1 semana"],
+                [null, "Sem data"],
+              ] as const
+            ).map(([d, l]) => (
+              <button key={String(d)} type="button" aria-pressed={followUpDays === d} onClick={() => setFollowUpDays(d)} className={cx("min-h-11 rounded-2xl border-2 text-[13px] font-semibold", followUpDays === d ? "border-accent bg-accent-soft" : "border-line")}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[12px] text-ink-3">No dia, a visita aparece em “Retornos de hoje” com o botão de ligar.</p>
+        </fieldset>
+      )}
       {status === "RESCHEDULED" && !p.isEdit && (
         <div className="mb-4 rounded-2xl border border-[#2f6fde]/25 bg-[#eef4ff] p-4 dark:bg-[#1a2436]">
           <p className="text-[15px] font-bold text-[#1f4fa3] dark:text-[#bcd3ff]">Já tem a nova data?</p>

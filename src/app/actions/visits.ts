@@ -7,6 +7,8 @@ import { confirmVisitClientAsDistinct, linkVisitToClient, mergeClients } from "@
 import { updateOpportunity, transferOpportunity } from "@/server/opportunities";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
 import { rescheduleVisit } from "@/server/reschedule";
+import { setPresence } from "@/server/presence";
+import { followUpAction } from "@/server/followups";
 import { refreshPropertyNow } from "@/server/property-preview";
 import { ensurePropertyCoords } from "@/server/geo";
 import { db } from "@/lib/db";
@@ -151,4 +153,20 @@ export async function rescheduleAction(_: ActionState, fd: FormData): Promise<Ac
   });
   if (s.ok && target) redirect(target);
   return s;
+}
+
+export async function setPresenceAction(visitId: string, status: "CONFIRMED" | "NO_REPLY" | null): Promise<ActionState> {
+  return runAction(async (a) => {
+    await setPresence(a, visitId, status);
+    revalidatePath("/minhas");
+    return status === "CONFIRMED" ? "Presença confirmada." : status === "NO_REPLY" ? "Marcado: sem resposta." : "Confirmação removida.";
+  });
+}
+
+export async function followUpDoneAction(visitId: string, action: "done" | "snooze"): Promise<ActionState> {
+  return runAction(async (a) => {
+    await followUpAction(a, visitId, action);
+    revalidatePath("/minhas");
+    return action === "done" ? "Retorno feito." : "Adiado para daqui a 2 dias.";
+  });
 }

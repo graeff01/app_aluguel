@@ -9,6 +9,9 @@ import { ContactButtons } from "@/components/contact-buttons";
 import { InlineAction } from "@/components/inline-action";
 import { deletePreAnalysisAction } from "@/app/actions/pre-analysis";
 import { ResultForm } from "./result-form";
+import { SchedulePreVisitForm } from "./schedule-form";
+import { STATUS_LABEL } from "@/lib/labels";
+import { addDays, dayKey } from "@/lib/time";
 
 export const metadata = { title: "Pré-análise" };
 
@@ -97,6 +100,30 @@ export default async function PreAnalysisPage({ params, searchParams }: { params
             {p.resultAt ? ` · ${fmt.dateTime(p.resultAt)}` : ""}
           </p>
           {p.resultNote && <p className="mt-2 text-sm text-ink-2">“{p.resultNote}”</p>}
+        </section>
+      )}
+
+      {p.visits.length > 0 && (
+        <section className="mb-6 rounded-[26px] border border-line bg-surface p-5 shadow-card sm:p-6">
+          <h2 className="mb-2 text-[15px] font-bold">Visitas desta pré-análise</h2>
+          <ul className="space-y-1.5 text-sm">
+            {p.visits.map((v) => (
+              <li key={v.id}>
+                <Link href={p.canResolve ? `/visitas/${v.id}/registrar` : "/agenda-do-dia"} className="underline underline-offset-4">
+                  {fmt.dateTime(v.scheduledStart)} · imóvel {v.propertyCode} · {STATUS_LABEL[v.status]}
+                </Link>
+                {!v.sourceEventId && v.status === "SCHEDULED" && <span className="ml-2 text-[12px] font-semibold text-warn">falta pôr na agenda</span>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {p.status === "APPROVED" && p.canResolve && !p.purgedAt && (
+        <section className="mb-6 rounded-[26px] border-2 border-good/30 bg-good-soft/40 p-5 shadow-card sm:p-6">
+          <h2 className="text-[17px] font-bold">{p.visits.length ? "Agendar outra visita" : "Agendar a visita"}</h2>
+          <p className="mb-4 text-[13px] text-ink-2">Cliente, telefone e imóvel já preenchidos. Depois, um toque coloca na agenda Google (conta central e cópias).</p>
+          <SchedulePreVisitForm id={p.id} propertyCode={p.propertyCode ?? ""} defaultDate={addDays(dayKey(new Date()), 1)} />
         </section>
       )}
 

@@ -124,6 +124,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const preNav: NavItem[] = [
     { href: "/pre-analises", label: "Pré-análises", icon: "clients", badge: preOpen },
     { href: "/pre-analises/nova", label: "Nova", icon: "plus" },
+    { href: "/agenda-do-dia", label: "Visitas", icon: "today" },
   ];
   const navGroups = preService ? [{ title: "Pré-atendimento", items: preNav }] : groups;
   const dot = { ok: "bg-good", stale: "bg-accent", error: "bg-bad", off: "bg-ink-3/50" }[health.level];

@@ -412,6 +412,7 @@ test("admin: desativar tira da lista e cadastrar de novo reativa a mesma conta",
 });
 
 test("admin: todas as telas de gestão e administração abrem sem erro", async ({ page }) => {
+  test.setTimeout(150_000); // 21 telas, cada uma esperando carregar por completo (inclusive mapas)
   await login(page, "admin@e2e.test");
   for (const path of ["/painel", "/ao-vivo", "/rota", "/relatorios", "/hoje", "/pendencias", "/revisao", "/historico", "/oportunidades", "/imoveis", "/clientes", "/mais", "/config/usuarios", "/admin/google", "/admin/padroes", "/config/motivos", "/admin/configuracoes", "/admin/sincronizacao", "/config/auditoria", "/pre-analises", "/pre-analises/nova"]) {
     await page.goto(path);
@@ -556,4 +557,37 @@ test("formulário com erro de validação mantém o que foi digitado", async ({ 
   await expect(page.getByText(/CPF inválido/)).toBeVisible();
   await expect(page.getByLabel("Nome completo")).toHaveValue("Pessoa Com Erro");
   await expect(page.getByLabel("E-mail")).toHaveValue("erro@exemplo.test");
+});
+
+test("pré-atendimento: colar a mensagem preenche os campos e a agenda do dia abre", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  await page.goto("/login");
+  await page.getByLabel("E-mail").fill("jasmin@e2e.test");
+  await page.getByLabel("Senha").fill(PW);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.waitForURL(/\/pre-analises/);
+  await page.goto("/pre-analises/nova");
+  await page.getByText("Colar a mensagem do cliente e preencher sozinho").click();
+  await page.getByLabel("Mensagem do cliente").fill("Nome: Carla Souza Lima\nCPF 390.533.447-05\nnasc 03/11/1985\ncarla@exemplo.test\n(51) 99876-5678\nrenda R$ 3.200,00");
+  await page.getByRole("button", { name: "Preencher campos" }).click();
+  await expect(page.getByText(/Preenchido: nome, CPF, nascimento, e-mail, telefone, salário/)).toBeVisible();
+  await expect(page.getByLabel("Nome completo")).toHaveValue("Carla Souza Lima");
+  await expect(page.getByRole("textbox", { name: "CPF" })).toHaveValue("390.533.447-05");
+  await expect(page.getByLabel("Data de nascimento")).toHaveValue("1985-11-03");
+  await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Visitas", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: /Visitas de hoje/ })).toBeVisible();
+});
+
+test("consultora: confirmar presença pelo WhatsApp e retorno do ainda decidindo", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await login(page, "c@e2e.test");
+  const card = page.locator("li", { hasText: "Cliente Rota" }).first();
+  const wa = card.getByRole("link", { name: "Confirmar presença" });
+  await expect(wa).toHaveAttribute("href", /^https:\/\/wa\.me\/5551998760322\?text=/);
+  expect(decodeURIComponent((await wa.getAttribute("href"))!.split("text=")[1])).toContain("Cliente");
+  // não abre o WhatsApp de verdade no teste: só o toque
+  await wa.evaluate((el) => el.addEventListener("click", (e) => e.preventDefault()));
+  await wa.click();
+  await card.getByRole("button", { name: "✓ Confirmou" }).click();
+  await expect(card.getByText("✓ Cliente confirmou presença")).toBeVisible();
 });

@@ -486,13 +486,40 @@ export async function sendOperationalAlerts(now = new Date(), opts: { send?: Sen
       await once(s.id, `unassigned:${v.id}`, {
         title: `Visita sem consultora: ${dateFmt.format(v.scheduledStart)} às ${timeFmt.format(v.scheduledStart)}`,
         body: `${v.propertyCode ? `Imóvel ${v.propertyCode}. ` : ""}Convide a consultora no evento da agenda${s.role === "MANAGER" ? " ou atribua em Revisão" : ""}.`,
-        url: s.role === "MANAGER" ? "/revisao" : "/pre-analises",
+        url: s.role === "MANAGER" ? "/revisao" : "/agenda-do-dia",
         tag: `sem-consultora-${v.id}`,
       });
     }
   }
 
   if (quietHours(now)) return { sent };
+
+  // retornos do "ainda decidindo" que vencem hoje (a partir da hora dos lembretes)
+  if (localHour(now) >= settings.reminderHour && localWeekday(now) !== 0) {
+    const due = await db.visit.groupBy({
+      by: ["consultantId"],
+      where: { ...notDemo, status: "DONE", evaluation: "UNDECIDED", excluded: false, consultantId: { not: null }, followUpOn: { lte: new Date(`${day}T00:00:00Z`) }, followUpDoneAt: null },
+      _count: { _all: true },
+    });
+    for (const g of due) {
+      const n = g._count._all;
+      await once(g.consultantId!, "followups", { title: n === 1 ? "1 cliente para ligar de volta hoje" : `${n} clientes para ligar de volta hoje`, body: "Ficaram de pensar. Toque para ver e ligar.", url: "/minhas", tag: `retornos-${day}` });
+    }
+  }
+
+  // 16h: confirmar com os clientes as visitas de amanhã (WhatsApp com mensagem pronta)
+  if (localHour(now) >= 16 && localWeekday(now) !== 0) {
+    const tomorrow = addDaysKey(day, 1);
+    const toConfirm = await db.visit.groupBy({
+      by: ["consultantId"],
+      where: { ...notDemo, status: "SCHEDULED", excluded: false, consultantId: { not: null }, phoneNormalized: { not: null }, confirmStatus: null, scheduledStart: { gte: startOfDayInTz(tomorrow), lt: startOfDayInTz(addDaysKey(tomorrow, 1)) } },
+      _count: { _all: true },
+    });
+    for (const g of toConfirm) {
+      const n = g._count._all;
+      await once(g.consultantId!, "confirm_tomorrow", { title: n === 1 ? "Confirme a visita de amanhã" : `Confirme as ${n} visitas de amanhã`, body: "Um toque abre o WhatsApp com a mensagem pronta para o cliente.", url: "/minhas", tag: `confirmar-${day}` });
+    }
+  }
 
   // pré-análise sem resposta
   const waiting = await db.preAnalysis.findMany({ where: { status: "AWAITING", createdAt: { lte: new Date(now.getTime() - 2 * H) } }, select: { id: true, createdAt: true, consultantId: true, createdById: true } });
