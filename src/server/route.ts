@@ -47,6 +47,7 @@ export async function dayRoute(actor: AuthzActor, opts: { day?: string; consulta
     orderBy: { scheduledStart: "asc" },
     select: {
       id: true,
+      companionOfId: true,
       scheduledStart: true,
       scheduledEnd: true,
       clientName: true,
@@ -69,6 +70,8 @@ export async function dayRoute(actor: AuthzActor, opts: { day?: string; consulta
     const loc = routeQuery(v.property);
     const gapMin = prev ? Math.round((v.scheduledStart.getTime() - prev.scheduledEnd.getTime()) / 60_000) : null;
     const sameProperty = !!prev && !!v.propertyCode && prev.propertyCode === v.propertyCode;
+    // mesmo evento com vários imóveis: o cliente vê um depois do outro, não é horário sobreposto
+    const sameVisit = !!prev && (v.companionOfId ?? v.id) === (prev.companionOfId ?? prev.id);
     const sameArea = !!prev && !!v.property?.neighborhood && prev.property?.neighborhood === v.property.neighborhood;
     const pending = v.status === "SCHEDULED" && v.scheduledEnd > now;
     // trajeto só vale quando a parada anterior também está no mapa (perna consecutiva)
@@ -78,10 +81,11 @@ export async function dayRoute(actor: AuthzActor, opts: { day?: string; consulta
       loc,
       gapMin,
       sameProperty,
+      sameVisit,
       sameArea,
       drive: leg,
-      tight: gapMin !== null && !sameProperty && (leg ? gapMin < leg.minutes + ARRIVAL_BUFFER_MIN : !sameArea && !!prev?.property?.neighborhood && !!v.property?.neighborhood && gapMin < TIGHT_GAP_MIN),
-      overlap: gapMin !== null && gapMin < 0,
+      tight: gapMin !== null && !sameProperty && !sameVisit && (leg ? gapMin < leg.minutes + ARRIVAL_BUFFER_MIN : !sameArea && !!prev?.property?.neighborhood && !!v.property?.neighborhood && gapMin < TIGHT_GAP_MIN),
+      overlap: gapMin !== null && gapMin < 0 && !sameVisit,
       pending,
     };
   });

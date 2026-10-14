@@ -218,8 +218,92 @@ async function processEvent(ctx: Ctx, ev: GEvent, opts: { inWindowOnly: boolean;
     if (!start || !end || !parsed) return;
     const wasCancelled = existing?.googleStatus === "cancelled";
     await upsertVisit(tx, ctx, source.id, ev, parsed, { start, end, wasCancelled });
+    await syncCompanions(tx, ctx, source.id, parsed.extraPropertyCodes ?? []);
     await applyEventLocation(tx, parsed.propertyCode, ev.location);
   });
+}
+
+export const COMPANION_GONE_NOTE = "Imóvel retirado do evento na agenda Google";
+
+/**
+ * Evento com vários imóveis ("cod 339541;835840"): o 1º imóvel fica na visita do evento e cada imóvel
+ * a mais vira uma visita acompanhante (mesmo cliente, horário e consultora), com resultado próprio.
+ * As acompanhantes seguem a principal enquanto não têm resultado; cancelamentos da agenda também valem para elas.
+ */
+async function syncCompanions(tx: Tx, ctx: Ctx, sourceEventId: string, codes: string[]) {
+  const primary = await tx.visit.findUnique({ where: { sourceEventId }, include: { companions: true } });
+  if (!primary) return;
+  const wanted = [...new Set(codes.map((c) => c.trim()).filter((c) => c && c !== primary.propertyCode))];
+  if (!wanted.length && !primary.companions.length) return;
+  const canceledBySync = primary.status === "CANCELED" && primary.autoCanceled;
+  const shared = {
+    scheduledStart: primary.scheduledStart,
+    scheduledEnd: primary.scheduledEnd,
+    clientName: primary.clientName,
+    phoneRaw: primary.phoneRaw,
+    phoneNormalized: primary.phoneNormalized,
+    externalRef: primary.externalRef,
+    clientId: primary.clientId,
+    clientMatch: primary.clientMatch,
+    clientCandidates: primary.clientCandidates,
+    scheduledById: primary.scheduledById,
+  };
+  const assignment = { consultantId: primary.consultantId, assignmentStatus: primary.assignmentStatus, assignmentNote: primary.assignmentNote };
+
+  for (const code of wanted) {
+    const comp = primary.companions.find((c) => c.propertyCode === code);
+    if (!comp) {
+      await tx.visit.create({
+        data: {
+          origin: primary.origin,
+          companionOfId: primary.id,
+          propertyCode: code,
+          propertyId: await ensureProperty(tx, code),
+          excluded: primary.excluded,
+          ...shared,
+          ...assignment,
+          ...(canceledBySync ? { status: "CANCELED" as const, autoCanceled: true, note: primary.note, concludedAt: ctx.now } : {}),
+        },
+      });
+      ctx.stats.created++;
+      continue;
+    }
+    if (comp.excluded) continue;
+    const data: Prisma.VisitUncheckedUpdateInput = {};
+    let open = comp.status === "SCHEDULED";
+    if (canceledBySync && open) {
+      Object.assign(data, { status: "CANCELED", autoCanceled: true, note: primary.note, concludedAt: ctx.now, concludedById: null });
+      await tx.visitOutcomeHistory.create({ data: { visitId: comp.id, status: "CANCELED", note: primary.note } });
+      ctx.stats.canceled++;
+      open = false;
+    } else if (!canceledBySync && comp.status === "CANCELED" && comp.autoCanceled) {
+      Object.assign(data, { status: "SCHEDULED", autoCanceled: false, note: null, concludedAt: null, concludedById: null });
+      await tx.visitOutcomeHistory.create({ data: { visitId: comp.id, status: "SCHEDULED", note: "Imóvel de volta no evento da agenda Google" } });
+      open = true;
+    }
+    if (open) {
+      // sem resultado: acompanha a principal (o que foi corrigido à mão na acompanhante é preservado)
+      const manual = new Set(comp.manualFields);
+      if (comp.scheduledStart.getTime() !== shared.scheduledStart.getTime()) data.scheduledStart = shared.scheduledStart;
+      if (comp.scheduledEnd.getTime() !== shared.scheduledEnd.getTime()) data.scheduledEnd = shared.scheduledEnd;
+      if (!manual.has("clientName") && comp.clientName !== shared.clientName) data.clientName = shared.clientName;
+      if (!manual.has("phone") && comp.phoneRaw !== shared.phoneRaw) Object.assign(data, { phoneRaw: shared.phoneRaw, phoneNormalized: shared.phoneNormalized });
+      if (comp.clientMatch !== "CONFIRMED_MANUAL" && comp.clientId !== shared.clientId) Object.assign(data, { clientId: shared.clientId, clientMatch: shared.clientMatch, clientCandidates: shared.clientCandidates });
+      if (comp.assignmentStatus !== "MANUAL" && !manual.has("consultantId") && comp.consultantId !== assignment.consultantId) Object.assign(data, assignment);
+    }
+    if (Object.keys(data).length) {
+      await tx.visit.update({ where: { id: comp.id }, data: { ...data, version: { increment: 1 } } });
+      ctx.stats.updated++;
+    }
+  }
+
+  // imóvel tirado do evento: a acompanhante sem resultado é cancelada (volta se o código voltar)
+  for (const comp of primary.companions) {
+    if (comp.excluded || comp.status !== "SCHEDULED" || wanted.includes(comp.propertyCode ?? "") || comp.manualFields.includes("propertyCode")) continue;
+    await tx.visit.update({ where: { id: comp.id }, data: { status: "CANCELED", autoCanceled: true, note: COMPANION_GONE_NOTE, concludedAt: ctx.now, concludedById: null, version: { increment: 1 } } });
+    await tx.visitOutcomeHistory.create({ data: { visitId: comp.id, status: "CANCELED", note: COMPANION_GONE_NOTE } });
+    ctx.stats.canceled++;
+  }
 }
 
 /** Campo "Local" do evento vira o endereço do imóvel (rota do dia), salvo se foi digitado no app. */
@@ -247,8 +331,8 @@ async function upsertVisit(
   parsed: Parsed,
   t: { start: Date; end: Date; wasCancelled: boolean },
 ) {
-  const assignment = assignConsultant(ev.attendees ?? [], !!ev.attendeesOmitted, ctx.aliases);
   const scheduledById = scheduledByConsultant(ev, ctx.aliases);
+  const assignment = assignConsultant(ev.attendees ?? [], !!ev.attendeesOmitted, ctx.aliases, scheduledById);
   let visit = await tx.visit.findUnique({ where: { sourceEventId } });
 
   // Evento criado pela consultora a partir do app (reagendamento/nova visita): o código VL-XXXXXX liga à visita já existente
@@ -475,7 +559,9 @@ async function setConflict(tx: Tx, visitId: string, conflict: "CANCELED_IN_GOOGL
 
 /** Cancelamento/exclusão no Google: visita sem resultado é cancelada automaticamente; com resultado vira conflito. */
 async function handleCancellation(tx: Tx, visitId: string, ctx: Ctx) {
-  const v = await tx.visit.findUniqueOrThrow({ where: { id: visitId } });
+  const v = await tx.visit.findUniqueOrThrow({ where: { id: visitId }, include: { companions: { select: { id: true } } } });
+  // evento com vários imóveis: o cancelamento vale para cada visita do evento
+  for (const c of v.companions) await handleCancellation(tx, c.id, ctx);
   if (v.status === "SCHEDULED") {
     await tx.visit.update({
       where: { id: v.id },

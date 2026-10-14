@@ -123,3 +123,26 @@ describe("atribuição pela consultora convidada (critérios 1 e 3)", () => {
     expect(assignConsultant([{ email: "consultora.a@exemplo.test", organizer: true }], false, aliases).status).toBe("NEEDS_REVIEW");
   });
 });
+
+describe("vários imóveis no mesmo evento", () => {
+  it("separa os códigos por ponto e vírgula (ou vírgula) e não confunde com o telefone", () => {
+    const p = parseVisitEvent("Visita clt - Cliente Exemplo 1234567 - cod 654321;765432 - (51) 99876-5432", null, "visita clt");
+    expect(p.propertyCode).toBe("654321");
+    expect(p.extraPropertyCodes).toEqual(["765432"]);
+    expect(p.phoneNormalized).toBe("+5551998765432");
+    expect(parseVisitEvent("Visita clt - Cliente Exemplo - cod 654321; 765432, 876543 - (51) 99876-5432", null, "visita clt").extraPropertyCodes).toEqual(["765432", "876543"]);
+    const glued = parseVisitEvent("Visita clt - Cliente Exemplo - cod 654321;765432-51 9876-5432", null, "visita clt");
+    expect(glued).toMatchObject({ propertyCode: "654321", extraPropertyCodes: ["765432"], phoneRaw: "51 9876-5432" });
+    expect(parseVisitEvent("Visita clt - Cliente Exemplo - cod 654321 - (51) 99876-5432", null, "visita clt").extraPropertyCodes).toEqual([]);
+  });
+});
+
+describe("atribuição pela consultora que agendou", () => {
+  it("sem consultora convidada, vale a consultora que criou o evento; convidada tem prioridade", () => {
+    const only = [{ email: "consultora.a@exemplo.test", organizer: true }, { email: "pre@exemplo.test" }];
+    expect(assignConsultant(only, false, aliases)).toMatchObject({ status: "NEEDS_REVIEW", note: "NENHUMA_CONSULTORA" });
+    expect(assignConsultant(only, false, aliases, "user-a")).toMatchObject({ status: "AUTO", consultantId: "user-a", note: "QUEM_AGENDOU" });
+    const forB = [...only, { email: "consultora.b@exemplo.test" }];
+    expect(assignConsultant(forB, false, aliases, "user-a")).toMatchObject({ status: "AUTO", consultantId: "user-b" });
+  });
+});

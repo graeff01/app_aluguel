@@ -528,6 +528,10 @@ model Visit {
   rescheduledFromId String?
   rescheduledFrom   Visit?          @relation("VisitRescheduled", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
   rescheduledTo     Visit[]         @relation("VisitRescheduled")
+  /// evento com vários imóveis ("cod 339541;835840"): visita do 2º imóvel em diante, acompanha a visita do 1º
+  companionOfId     String?
+  companionOf       Visit?          @relation("VisitCompanions", fields: [companionOfId], references: [id], onDelete: SetNull)
+  companions        Visit[]         @relation("VisitCompanions")
   /// código "VL-XXXXXX" levado no evento do Google criado pela consultora: liga o evento a esta visita sem duplicar
   linkCode          String?         @unique
   /// pré-análise que originou esta visita (funil pré-análise → visita → locação)
@@ -553,6 +557,7 @@ model Visit {
   @@index([phoneNormalized])
   @@index([consultantId, followUpOn])
   @@index([preAnalysisId])
+  @@index([companionOfId])
 }
 
 /// Histórico de conclusões/alterações de resultado (observações anteriores).

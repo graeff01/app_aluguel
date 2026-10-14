@@ -81,7 +81,7 @@ export default async function RoutePage({ searchParams }: { searchParams: Promis
       wazeUrl: x.loc ? wazeUrl(x.loc.query) : null,
       driveMin: x.drive?.minutes ?? null,
       driveKm: x.drive?.km ?? null,
-      gapMin: x.gapMin,
+      gapMin: x.sameVisit ? null : x.gapMin,
       tight: x.tight,
     };
   });
@@ -165,7 +165,9 @@ export default async function RoutePage({ searchParams }: { searchParams: Promis
                       s.overlap ? "bg-bad-soft text-bad" : s.tight ? "bg-accent-soft text-accent-strong" : "bg-tint text-ink-3",
                     )}
                   >
-                    {s.overlap
+                    {s.sameVisit
+                      ? "Mesma visita · outro imóvel"
+                      : s.overlap
                       ? "Horário sobreposto com a anterior"
                       : s.sameProperty
                         ? `Mesmo imóvel · ${gapText(s.gapMin)} de intervalo`

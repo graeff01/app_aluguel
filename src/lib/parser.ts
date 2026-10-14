@@ -59,6 +59,8 @@ export type ParseIssue =
 export type ParsedVisit = {
   clientName: string | null;
   propertyCode: string | null;
+  /** demais imóveis do mesmo evento ("cod 339541;835840"): cada um vira uma visita */
+  extraPropertyCodes: string[];
   phoneRaw: string | null;
   phoneNormalized: string | null;
   externalRef: string | null;
@@ -122,6 +124,7 @@ export function parseVisitEvent(title: string, description: string | null | unde
 
   let name: string | null = null;
   let code: string | null = null;
+  const extraCodes: string[] = [];
   let phone: string | null = null;
   let externalRef: string | null = null;
   const prefixTokens = prefix.split(" ").length;
@@ -141,14 +144,21 @@ export function parseVisitEvent(title: string, description: string | null | unde
     const cod = seg.match(COD_RE);
     if (cod && /\d/.test(cod[1])) {
       let c = cod[1];
+      let rest = seg.slice((cod.index ?? 0) + cod[0].length);
+      // vários imóveis no mesmo evento: "cod 339541;835840" (também aceita vírgula)
+      const more: string[] = [];
+      for (let m; (m = rest.match(/^\s*[;,]\s*([0-9A-Za-z][0-9A-Za-z\-\/]*)/)); rest = rest.slice(m[0].length)) if (/\d/.test(m[1])) more.push(m[1]);
       // telefone colado ao código sem " - ": "cod 487323-51 9851-5679" → código 487323, telefone 51 9851-5679
-      const rest = seg.slice((cod.index ?? 0) + cod[0].length);
-      const ddd = c.match(/^(\d{3,})-(\d{2})$/);
+      const ddd = (more.at(-1) ?? c).match(/^(\d{3,})-(\d{2})$/);
       if (ddd && /^\s+[\d\s.\-]+$/.test(rest) && rest.replace(/\D/g, "").length >= 8) {
-        c = ddd[1];
+        if (more.length) more[more.length - 1] = ddd[1];
+        else c = ddd[1];
         if (!phone) phone = `${ddd[2]} ${rest.trim()}`;
       } else if (PHONE_SEGMENT_RE.test(rest.trim()) && rest.replace(/\D/g, "").length >= 8 && !phone) phone = rest.trim();
-      if (!code) code = c;
+      if (!code) {
+        code = c;
+        for (const x of more) if (x !== code && !extraCodes.includes(x)) extraCodes.push(x);
+      }
       const before = seg.slice(0, cod.index ?? 0).trim();
       if (before && !name) takeName(before);
       return;
@@ -200,13 +210,13 @@ export function parseVisitEvent(title: string, description: string | null | unde
   if (!name) issues.push("MISSING_NAME");
   if (!code) issues.push("MISSING_CODE");
 
-  return { clientName: name, propertyCode: code, phoneRaw: phone, phoneNormalized: normalized, externalRef, issues };
+  return { clientName: name, propertyCode: code, extraPropertyCodes: extraCodes, phoneRaw: phone, phoneNormalized: normalized, externalRef, issues };
 }
 
 export type AttendeeInput = { email?: string | null; organizer?: boolean | null; resource?: boolean | null };
 
 export type Assignment =
-  | { status: "AUTO"; consultantId: string; note: null }
+  | { status: "AUTO"; consultantId: string; note: "QUEM_AGENDOU" | null }
   | { status: "NEEDS_REVIEW"; consultantId: null; note: "NENHUMA_CONSULTORA" | "MAIS_DE_UMA" | "CONVIDADOS_INACESSIVEIS" };
 
 /**
@@ -217,8 +227,10 @@ export function assignConsultant(
   attendees: AttendeeInput[] | null | undefined,
   attendeesOmitted: boolean,
   consultantAliases: Map<string, string>,
+  /** consultora que criou/organiza o evento: vale quando nenhuma consultora foi convidada */
+  scheduledById: string | null = null,
 ): Assignment {
-  if (attendeesOmitted) return { status: "NEEDS_REVIEW", consultantId: null, note: "CONVIDADOS_INACESSIVEIS" };
+  if (attendeesOmitted && !scheduledById) return { status: "NEEDS_REVIEW", consultantId: null, note: "CONVIDADOS_INACESSIVEIS" };
   const found = new Set<string>();
   for (const a of attendees ?? []) {
     if (!a.email || a.resource || a.organizer) continue;
@@ -226,6 +238,8 @@ export function assignConsultant(
     if (userId) found.add(userId);
   }
   if (found.size === 1) return { status: "AUTO", consultantId: [...found][0], note: null };
+  // a consultora marcou na própria agenda e convidou só o pré-atendimento/gestão: a visita é dela
+  if (found.size === 0 && scheduledById) return { status: "AUTO", consultantId: scheduledById, note: "QUEM_AGENDOU" };
   return { status: "NEEDS_REVIEW", consultantId: null, note: found.size === 0 ? "NENHUMA_CONSULTORA" : "MAIS_DE_UMA" };
 }
 
@@ -240,6 +254,7 @@ export const ISSUE_LABEL: Record<ParseIssue, string> = {
 
 export const ASSIGNMENT_NOTE_LABEL: Record<string, string> = {
   NENHUMA_CONSULTORA: "Nenhuma consultora reconhecida entre os convidados",
+  QUEM_AGENDOU: "Consultora que criou o evento na agenda",
   MAIS_DE_UMA: "Mais de uma consultora entre os convidados",
   CONVIDADOS_INACESSIVEIS: "Lista de convidados inacessível",
   CORRECAO_MANUAL: "Atribuição corrigida manualmente",

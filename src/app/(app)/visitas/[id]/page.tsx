@@ -21,7 +21,7 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
   const { id } = await params;
   const sp = await searchParams;
   const now = new Date();
-  const { visit, relatedVisits, awaiting, charged, settings } = await orNotFound(getVisitDetail(actor, id, now));
+  const { visit, relatedVisits, sameEvent, awaiting, charged, settings } = await orNotFound(getVisitDetail(actor, id, now));
   const global = hasGlobalView(actor);
   const canCorrect = canCorrectVisitData(actor, visit, settings);
   const consultants = global ? await db.user.findMany({ where: { role: "CONSULTANT", active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
@@ -88,6 +88,21 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
 
       <div className="mb-6 max-w-xl">
         <PropertyCard code={visit.propertyCode} photoUrl={visit.property?.photoUrl} title={visit.property?.title} template={settings.propertyUrlTemplate} statsHref={global && visit.propertyCode ? `/imoveis/${encodeURIComponent(visit.propertyCode)}` : undefined} />
+        {sameEvent.length > 0 && (
+          <p className="mt-2 text-[13px] text-ink-2">
+            Na mesma visita, o cliente também viu:{" "}
+            {sameEvent.map((s, i) => (
+              <span key={s.id}>
+                {i > 0 && ", "}
+                <Link href={`/visitas/${s.id}`} className="num font-semibold text-ink underline underline-offset-4">
+                  {s.propertyCode ?? "sem código"}
+                </Link>
+                {s.status === "SCHEDULED" ? "" : ` (${STATUS_LABEL[s.status].toLowerCase()})`}
+              </span>
+            ))}
+            . Registre o resultado de cada imóvel.
+          </p>
+        )}
       </div>
       <Tabs
         tabs={[

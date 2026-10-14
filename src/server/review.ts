@@ -24,7 +24,7 @@ export async function acceptAmbiguous(actor: AuthzActor, sourceEventId: string) 
     });
     if (!ev.visit && ev.startAt && ev.endAt) {
       const attendees = (ev.attendees ?? []) as { email: string | null; organizer: boolean; resource: boolean }[];
-      const assignment = assignConsultant(attendees, ev.attendeesOmitted, aliases);
+      const assignment = assignConsultant(attendees, ev.attendeesOmitted, aliases, (ev.organizerEmail && aliases.get(ev.organizerEmail)) || null);
       const link = await resolveClient(tx, { clientName: parsed.clientName, phoneRaw: parsed.phoneRaw });
       await tx.visit.create({
         data: {

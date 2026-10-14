@@ -199,10 +199,17 @@ export async function getVisitDetail(actor: AuthzActor, id: string, now = new Da
         take: 20,
       })
     : [];
+  // mesmo evento com vários imóveis: as outras visitas do mesmo horário
+  const groupId = visit.companionOfId ?? visit.id;
+  const sameEvent = await db.visit.findMany({
+    where: { excluded: false, id: { not: visit.id }, OR: [{ id: groupId }, { companionOfId: groupId }] },
+    select: { id: true, propertyCode: true, status: true },
+    orderBy: { createdAt: "asc" },
+  });
   const settings = await getSettings();
   const charged = visit.scheduledStart >= startOfDayInTz(dateOnlyKey(settings.resultsStartDate));
   const awaiting = visit.status === "SCHEDULED" && visit.scheduledEnd <= now && charged && !visit.excluded;
-  return { visit: { ...visit, revisit }, relatedVisits, awaiting, charged, settings };
+  return { visit: { ...visit, revisit }, relatedVisits, sameEvent, awaiting, charged, settings };
 }
 
 // ─────────────── Revisão (gestão) ───────────────

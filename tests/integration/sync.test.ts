@@ -287,3 +287,54 @@ describe("concorrência, falhas e reinício (critérios 5 e 12)", () => {
     expect(r1.ran && r2.ran).toBe(true);
   });
 });
+
+describe("evento com vários imóveis", () => {
+  const MULTI = "Visita clt - Cliente Exemplo 1234567 - cod 654321;765432 - (51) 99876-5432";
+
+  it("cada código vira uma visita com resultado próprio, e as acompanhantes seguem a principal", async () => {
+    api.put(visitEvent("multi", { start: "2026-10-07T13:00:00Z", title: MULTI }));
+    await sync();
+    const all = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
+    expect(all.map((v) => v.propertyCode)).toEqual(["654321", "765432"]);
+    const [main, comp] = all;
+    expect(comp).toMatchObject({ companionOfId: main.id, sourceEventId: null, consultantId: users.a.id, clientName: "Cliente Exemplo", phoneNormalized: "+5551998765432", status: "SCHEDULED" });
+    expect(comp.scheduledStart).toEqual(main.scheduledStart);
+
+    // resultado registrado em um imóvel não muda o outro
+    await concludeVisit(users.a, comp.id, { requestId: "req-comp-1", expectedVersion: comp.version, status: "DONE", evaluation: "NEGATIVE", negativeReasonId: (await db.reason.findFirstOrThrow()).id, note: "Não gostou" }, new Date("2026-10-07T14:30:00Z"));
+    expect((await db.visit.findUniqueOrThrow({ where: { id: main.id } })).status).toBe("SCHEDULED");
+
+    // mudou o horário: a principal e a acompanhante sem resultado mudam juntas; reprocessar não duplica
+    api.put(visitEvent("multi", { start: "2026-10-07T15:00:00Z", title: "Visita clt - Cliente Exemplo 1234567 - cod 654321;765432;876543 - (51) 99876-5432" }));
+    await sync();
+    await sync({ full: true });
+    const after = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
+    expect(after.map((v) => v.propertyCode)).toEqual(["654321", "765432", "876543"]);
+    expect(after[0].scheduledStart.toISOString()).toBe("2026-10-07T15:00:00.000Z");
+    expect(after[2].scheduledStart.toISOString()).toBe("2026-10-07T15:00:00.000Z");
+    expect(after[1]).toMatchObject({ status: "DONE", evaluation: "NEGATIVE" });
+
+    // imóvel tirado do evento: acompanhante sem resultado é cancelada; com resultado fica
+    api.put(visitEvent("multi", { start: "2026-10-07T15:00:00Z", title: MULTI }));
+    await sync();
+    const third = await db.visit.findFirstOrThrow({ where: { propertyCode: "876543" } });
+    expect(third).toMatchObject({ status: "CANCELED", autoCanceled: true });
+
+    // evento cancelado na agenda: cancela a principal e as acompanhantes sem resultado
+    api.cancel("multi");
+    await sync();
+    const final = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
+    expect(final.map((v) => v.status)).toEqual(["CANCELED", "DONE", "CANCELED"]);
+  });
+
+  it("evento movido para depois das 21h cancela todas as visitas do evento e voltar restaura", async () => {
+    api.put(visitEvent("multi2", { start: "2026-10-08T13:00:00Z", title: MULTI }));
+    await sync();
+    api.put(visitEvent("multi2", { start: "2026-10-09T00:30:00Z", title: MULTI })); // 21h30 em Brasília
+    await sync();
+    expect((await db.visit.findMany()).map((v) => v.status)).toEqual(["CANCELED", "CANCELED"]);
+    api.put(visitEvent("multi2", { start: "2026-10-08T13:00:00Z", title: MULTI }));
+    await sync();
+    expect((await db.visit.findMany()).map((v) => v.status)).toEqual(["SCHEDULED", "SCHEDULED"]);
+  });
+});
