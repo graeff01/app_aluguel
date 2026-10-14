@@ -10,14 +10,20 @@ export type PhoneResult = {
 };
 
 /**
- * Normaliza telefone sem inventar dígitos.
+ * Normaliza telefone.
  * - Com "+" ou prefixo 55 explícito: interpreta como internacional.
  * - 10/11 dígitos: DDD + número brasileiro.
+ * - Celular no formato antigo (DDD + 8 dígitos começando em 6–9): recebe o 9 da frente (regra da Anatel).
+ *   Fixo (começa em 2–5) não muda.
  * - Menos dígitos: inválido (não acrescenta DDD).
  */
 export function normalizePhone(rawInput: string | null | undefined): PhoneResult {
   const raw = (rawInput ?? "").trim();
-  const digits = raw.replace(/\D/g, "");
+  let digits = raw.replace(/\D/g, "");
+  if (!raw.startsWith("+") && !raw.startsWith("00")) {
+    const old = digits.match(/^(55|0)?([1-9][1-9])([6-9]\d{7})$/);
+    if (old) digits = `${old[1] ?? ""}${old[2]}9${old[3]}`;
+  }
   if (!digits) return { raw, normalized: null, valid: false, problem: "VAZIO" };
 
   let candidate: string | null = null;

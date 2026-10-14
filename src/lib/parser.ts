@@ -33,6 +33,11 @@ export function classifyTitle(title: string | null | undefined, cfg: PatternConf
   for (const ex of cfg.excludeTerms.map(normalizeText).filter(Boolean)) {
     if (containsTerm(t, ex)) return { cls: "IRRELEVANT" };
   }
+  // "Visita - Imóvel 836505 - Sergio 21 97906-8408", "isita clt - …" (letra faltando): começa com visita e tem código + telefone
+  if (/^v?isita\b/.test(t) && title) {
+    const p = parseVisitEvent(title, null, "");
+    if (p.propertyCode && p.phoneNormalized) return { cls: "VISIT", prefix: "" };
+  }
   for (const am of cfg.ambiguousTerms.map(normalizeText).filter(Boolean)) {
     if (containsTerm(t, am)) return { cls: "AMBIGUOUS", term: am };
   }
@@ -67,9 +72,11 @@ export type ParsedVisit = {
   issues: ParseIssue[];
 };
 
-// "cod 654321", "Cód: 654321", "codigo 0123", "cod. AB-12"
-const COD_RE = /(?:^|[\s(\[,;])c[oó]d(?:igo)?(?![A-Za-zÀ-ÿ])\.?\s*(?:do\s+im[oó]vel)?\s*(?:n[º°o]\.?)?\s*[:#º°.]*\s*([0-9A-Za-z][0-9A-Za-z\-\/]*)/i;
+// "cod 654321", "Cód: 654321", "codigo 0123", "cod. AB-12", "Imóvel 654321"
+const COD_RE = /(?:^|[\s(\[,;])(?:c[oó]d(?:igo)?|im[oó]vel)(?![A-Za-zÀ-ÿ])\.?\s*(?:do\s+im[oó]vel)?\s*(?:n[º°o]\.?)?\s*[:#º°.]*\s*([0-9A-Za-z][0-9A-Za-z\-\/]*)/i;
 const PHONE_SEGMENT_RE = /^[+()\d\s.\-]+$/;
+/** códigos de imóvel entre parênteses: "(844530;844529)" — 5 a 8 dígitos (não confunde com o DDD "(51)") */
+const CODE_LIST_RE = /\(\s*(\d{5,8}(?:\s*[;,]\s*\d{5,8})*)\s*\)/;
 const SEPARATOR_RE = /\s*[–—|]\s*|\s+-\s*|\s*-\s+/;
 
 /** Remove bloco do Google Meet/conferência e linhas de discagem/PIN. */
@@ -133,12 +140,22 @@ export function parseVisitEvent(title: string, description: string | null | unde
     let seg = segment;
     if (idx === 0 && !prefix && segments.length > 1) {
       // evento aceito na revisão (sem prefixo conhecido): o 1º segmento é um rótulo livre, ex. "Visita apto"
-      if (!COD_RE.test(seg) && !PHONE_SEGMENT_RE.test(seg)) return;
+      const named = seg.match(/^[Vv]?isita\s+([A-ZÀ-Ý][^\d]*)$/);
+      if (named) seg = named[1].trim();
+      else if (!COD_RE.test(seg) && !PHONE_SEGMENT_RE.test(seg) && !CODE_LIST_RE.test(seg)) return;
     }
     if (idx === 0 && prefix) {
       // remove o prefixo (comparando tokens normalizados)
       const tokens = seg.split(/\s+/);
       seg = tokens.slice(prefixTokens).join(" ").replace(/^[:\-]\s*/, "").trim();
+      if (!seg) return;
+    }
+    const list = seg.match(CODE_LIST_RE);
+    if (list) {
+      const codes = list[1].split(/\s*[;,]\s*/);
+      if (!code) code = codes[0];
+      for (const x of codes) if (x !== code && !extraCodes.includes(x)) extraCodes.push(x);
+      seg = `${seg.slice(0, list.index)} ${seg.slice((list.index ?? 0) + list[0].length)}`.trim();
       if (!seg) return;
     }
     const cod = seg.match(COD_RE);
@@ -178,6 +195,11 @@ export function parseVisitEvent(title: string, description: string | null | unde
   });
 
   function takeName(text: string) {
+    const tail = text.match(/^(.*[A-Za-zÀ-ÿ].*?)[\s,]+(\(?\d{2}\)?[\s.]*9?\d{4}[\s.\-]?\d{4})$/);
+    if (tail) {
+      if (!phone) phone = tail[2];
+      text = tail[1];
+    }
     // número isolado ao final (antes do "cod"): referência externa, não imóvel/cliente
     const m = text.match(/^(.*?)[\s,]+(\d{3,})$/);
     let candidate = text;

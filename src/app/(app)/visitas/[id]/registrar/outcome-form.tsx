@@ -25,6 +25,8 @@ type Props = {
   unlockLabel?: string;
   /** escolha vinda do atalho da notificação (não conta como "alteração não salva" até a pessoa mexer) */
   preset?: { status: Status; evaluation: Evaluation | null };
+  /** outros imóveis em aberto da mesma visita (evento com vários códigos) */
+  otherCodes?: string[];
 };
 
 const STATUS_OPTIONS: { value: Status; label: string; hint?: string }[] = [
@@ -58,6 +60,9 @@ export function OutcomeForm(p: Props) {
   const [thenNew, setThenNew] = useState(false);
   // "ainda decidindo": quando ligar de volta (padrão: em 3 dias)
   const [followUpDays, setFollowUpDays] = useState<number | null>(3);
+  const [applyGroup, setApplyGroup] = useState(true);
+  const others = p.otherCodes ?? [];
+  const groupable = others.length > 0 && !p.isEdit && (status === "NO_SHOW" || status === "CANCELED" || status === "RESCHEDULED");
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
   // chave de idempotência estável enquanto a tela estiver aberta (retry não duplica)
   const requestId = useMemo(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`), []);
@@ -102,6 +107,7 @@ export function OutcomeForm(p: Props) {
           negativeReasonId: status === "DONE" && evaluation === "NEGATIVE" ? reasonId : null,
           note,
           followUpDays: status === "DONE" && evaluation === "UNDECIDED" ? followUpDays : null,
+          applyToSameVisit: groupable && applyGroup,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -281,6 +287,20 @@ export function OutcomeForm(p: Props) {
           </Link>
           <p className="mt-2 text-[12px] text-ink-3">Sem data ainda? Escreva a observação e salve só como remarcada.</p>
         </div>
+      )}
+      {groupable && (
+        <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-line bg-surface px-4 py-3 text-[14px]">
+          <input type="checkbox" checked={applyGroup} onChange={(e) => setApplyGroup(e.target.checked)} className="mt-0.5 size-5 accent-[var(--accent)]" />
+          <span>
+            <strong>Vale também para {others.length === 1 ? "o imóvel" : "os imóveis"} {others.join(", ")}</strong>
+            <span className="block text-[12px] text-ink-3">Mesma visita: o cliente ia ver {others.length === 1 ? "outro imóvel" : "outros imóveis"} no mesmo horário.</span>
+          </span>
+        </label>
+      )}
+      {others.length > 0 && status === "DONE" && (
+        <p className="mb-4 rounded-2xl bg-tint px-4 py-3 text-[13px] text-ink-2">
+          Nesta visita o cliente também viu {others.join(", ")}. Registre o resultado de cada imóvel no cartão dele.
+        </p>
       )}
       {(status === "DONE" || status === "NO_SHOW") && (
         <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-line bg-surface px-4 py-3 text-[14px]">

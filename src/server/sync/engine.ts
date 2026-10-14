@@ -443,7 +443,11 @@ async function upsertVisit(
       await audit(tx, { actorId: null, action: "sync.visit_late_canceled", entityType: "Visit", entityId: visit.id, changes: { horarioNaAgenda: t.start.toISOString() } });
       ctx.stats.canceled++;
     }
-    return; // já cancelada ou com resultado: não muda nada
+    // a consultora continua sendo atualizada (cancelamentos contam nos números dela)
+    if (visit.assignmentStatus !== "MANUAL" && !visit.manualFields.includes("consultantId") && (visit.consultantId !== assignment.consultantId || visit.assignmentStatus !== assignment.status)) {
+      await tx.visit.update({ where: { id: visit.id }, data: { consultantId: assignment.consultantId, assignmentStatus: assignment.status, assignmentNote: assignment.note } });
+    }
+    return; // já cancelada ou com resultado: não muda mais nada
   }
   if (lateCanceled) {
     visit = await tx.visit.update({ where: { id: visit.id }, data: { status: "SCHEDULED", autoCanceled: false, note: null, concludedAt: null, concludedById: null, version: { increment: 1 } } });

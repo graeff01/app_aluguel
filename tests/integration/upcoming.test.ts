@@ -55,3 +55,14 @@ describe("registro antes do horário", () => {
     expect(r.visit.status).toBe("RESCHEDULED");
   });
 });
+
+describe("lembrete de visita com vários imóveis", () => {
+  it("uma notificação só, com todos os códigos", async () => {
+    const main = await at(50, u.a.id);
+    await db.visit.create({ data: { origin: "MANUAL", companionOfId: main.id, scheduledStart: main.scheduledStart, scheduledEnd: main.scheduledEnd, propertyCode: "835840", consultantId: u.a.id, assignmentStatus: "MANUAL" } });
+    await db.pushSubscription.create({ data: { userId: u.a.id, endpoint: "https://push.test/a", p256dh: "chave-sintetica", auth: "auth-sint" } });
+    const sent: { title: string }[] = [];
+    await sendUpcomingVisitReminders(NOW, { send: async (_t, p) => (sent.push(p), "ok"), email: null });
+    expect(sent.map((s) => s.title)).toEqual(["Visita às 12:50 · imóveis 761739, 835840"]);
+  });
+});

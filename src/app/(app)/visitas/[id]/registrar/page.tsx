@@ -21,7 +21,7 @@ export default async function RegisterPage({ params, searchParams }: { params: P
   const sp = await searchParams;
   const actor = await requireActor();
   const { id } = await params;
-  const { visit, settings } = await orNotFound(getVisitDetail(actor, id));
+  const { visit, sameEvent, settings } = await orNotFound(getVisitDetail(actor, id));
   if (!canConcludeVisit(actor, visit)) notFound();
   const reasons = await db.reason.findMany({
     where: { kind: "VISIT_NEGATIVE", OR: [{ active: true }, ...(visit.negativeReasonId ? [{ id: visit.negativeReasonId }] : [])] },
@@ -121,6 +121,7 @@ export default async function RegisterPage({ params, searchParams }: { params: P
         unlockLabel={fmt.time(new Date(visit.scheduledStart.getTime() - 15 * 60_000))}
         future={future}
         preset={presetStatus ? { status: presetStatus, evaluation: presetEval } : undefined}
+        otherCodes={sameEvent.filter((s) => s.status === "SCHEDULED").map((s) => s.propertyCode ?? "sem código")}
         initial={{
           status: isEdit ? (visit.status as "DONE") : null,
           evaluation: isEdit ? visit.evaluation : null,

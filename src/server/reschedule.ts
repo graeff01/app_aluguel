@@ -12,7 +12,7 @@ import { AppError, notFound } from "@/lib/errors";
 import { assert, canConcludeVisit, type AuthzActor } from "@/lib/authz";
 import { fromLocalInput, fmt } from "@/lib/time";
 import { getPatternConfig, getSettings } from "@/lib/settings";
-import { concludeVisit, ensureProperty } from "./visits";
+import { concludeSameVisit, concludeVisit, ensureProperty } from "./visits";
 import { cleanAddress } from "@/lib/address";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem 0/O/1/I
@@ -52,8 +52,11 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
   const start = fromLocalInput(input.scheduledStart);
   if (!start) throw new AppError("VALIDATION", "Informe data e horário.", { scheduledStart: "Data inválida." });
   if (start.getTime() < now.getTime() - 5 * 60_000) throw new AppError("VALIDATION", "Escolha um horário a partir de agora.", { scheduledStart: "Horário já passou." });
-  const code = (input.propertyCode ?? "").replace(/\s+/g, "").slice(0, 40) || old.propertyCode;
-  if (!/^[0-9A-Za-z-]{2,40}$/.test(code)) throw new AppError("VALIDATION", "Código do imóvel inválido.", { propertyCode: "Confira o código." });
+  // vários imóveis na mesma visita: "339541;835840" (o 1º fica na visita, os demais viram acompanhantes)
+  const codes = [...new Set((input.propertyCode ?? "").split(/[;,]/).map((c) => c.replace(/\s+/g, "").slice(0, 40)).filter(Boolean))];
+  if (!codes.length) codes.push(old.propertyCode);
+  if (codes.length > 6 || codes.some((c) => !/^[0-9A-Za-z-]{2,40}$/.test(c))) throw new AppError("VALIDATION", "Código do imóvel inválido.", { propertyCode: "Confira o código (vários: separe com ;)." });
+  const [code, ...extraCodes] = codes;
   const otherProperty = code !== old.propertyCode;
   const minutes = Math.min(600, Math.max(15, Math.round(input.durationMinutes || 60)));
   const requestId = `resched-${input.requestId}`.slice(0, 100);
@@ -75,6 +78,7 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
       evaluation: outcome.status === "DONE" ? (outcome.evaluation ?? null) : null,
       negativeReasonId: outcome.status === "DONE" && outcome.evaluation === "NEGATIVE" ? (outcome.negativeReasonId ?? null) : null,
       note: outcome.note ?? "",
+      applyToSameVisit: outcome.status === "NO_SHOW",
     }, now);
   }
   const reschedule = outcome?.status === "RESCHEDULED";
@@ -86,6 +90,7 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
       const note = `Remarcada para ${fmt.shortDate(start)} às ${fmt.time(start)}${otherProperty ? ` (imóvel ${code})` : ""}${input.note?.trim() ? ` — ${input.note.trim().slice(0, 300)}` : ""}`;
       await tx.visit.update({ where: { id: old.id }, data: { status: "RESCHEDULED", note, concludedAt: now, concludedById: actor.id, version: { increment: 1 } } });
       await tx.visitOutcomeHistory.create({ data: { visitId: old.id, status: "RESCHEDULED", note, authorId: actor.id } });
+      await concludeSameVisit(tx, actor, old, "RESCHEDULED", note, requestId, now);
     }
     const created = await tx.visit.create({
       data: {
@@ -108,6 +113,28 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
         linkCode: newLinkCode(),
       },
     });
+    for (const extra of extraCodes) {
+      await tx.visit.create({
+        data: {
+          origin: "MANUAL",
+          companionOfId: created.id,
+          scheduledStart: created.scheduledStart,
+          scheduledEnd: created.scheduledEnd,
+          clientName: old.clientName,
+          phoneRaw: old.phoneRaw,
+          phoneNormalized: old.phoneNormalized,
+          propertyCode: extra,
+          propertyId: await ensureProperty(tx, extra),
+          clientId: old.clientId,
+          clientMatch: old.clientMatch,
+          consultantId: old.consultantId,
+          assignmentStatus: "MANUAL",
+          assignmentNote: created.assignmentNote,
+          scheduledById: created.scheduledById,
+          rescheduledFromId: old.id,
+        },
+      });
+    }
     await audit(tx, { actorId: actor.id, action: asReschedule ? "visit.rescheduled" : "visit.revisit_scheduled", entityType: "Visit", entityId: created.id, changes: { anterior: old.id, inicio: start.toISOString(), ...(otherProperty ? { imovelAnterior: old.propertyCode, imovelNovo: code } : {}) } });
     return created;
   });
@@ -117,7 +144,11 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
 export async function calendarLinkFor(actor: AuthzActor, visitId: string) {
   const v = await db.visit.findUnique({
     where: { id: visitId },
-    include: { property: { select: { address: true, neighborhood: true, city: true } }, consultant: { select: { aliases: { select: { email: true } } } } },
+    include: {
+      property: { select: { address: true, neighborhood: true, city: true } },
+      consultant: { select: { aliases: { select: { email: true } } } },
+      companions: { where: { excluded: false, status: { not: "CANCELED" } }, select: { propertyCode: true }, orderBy: { createdAt: "asc" } },
+    },
   });
   if (!v) throw notFound();
   assert(canConcludeVisit(actor, v));
@@ -125,7 +156,8 @@ export async function calendarLinkFor(actor: AuthzActor, visitId: string) {
   const prefix = patterns.visitPrefixes[0] ?? "visita clt";
   const label = prefix.charAt(0).toUpperCase() + prefix.slice(1);
   // a etiqueta vai no FINAL: no começo atrapalharia a leitura do nome do cliente pela sincronização
-  const title = [label, v.clientName, v.propertyCode ? `cod ${v.propertyCode}` : null, v.phoneRaw, v.assignmentNote === "REAGENDADA" ? "REAGENDADA" : null].filter(Boolean).join(" - ");
+  const codes = [v.propertyCode, ...v.companions.map((c) => c.propertyCode)].filter(Boolean).join(";");
+  const title = [label, v.clientName, codes ? `cod ${codes}` : null, v.phoneRaw, v.assignmentNote === "REAGENDADA" ? "REAGENDADA" : null].filter(Boolean).join(" - ");
   const utc = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   // conta central (para o app ler) + cópias configuradas (ex.: pré-atendimento)
   const cc = settings.calendarCcEmails.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e));

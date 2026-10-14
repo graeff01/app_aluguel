@@ -146,3 +146,18 @@ describe("atribuição pela consultora que agendou", () => {
     expect(assignConsultant(forB, false, aliases, "user-a")).toMatchObject({ status: "AUTO", consultantId: "user-b" });
   });
 });
+
+describe("títulos fora do padrão", () => {
+  it("Visita - Imóvel …, códigos entre parênteses e letra faltando viram visita; o resto continua em revisão", () => {
+    const visit = (t: string) => {
+      const c = classifyTitle(t, DEFAULT_PATTERNS);
+      return c.cls === "VISIT" ? parseVisitEvent(t, null, c.prefix) : c.cls;
+    };
+    expect(visit("Visita - Imóvel 836505 - Sergio 21 97906-8408 - 2905002")).toMatchObject({ clientName: "Sergio", propertyCode: "836505", phoneNormalized: "+5521979068408" });
+    expect(visit("Visita Isabelle - 51 9172-5812 (844530;844529;844683)")).toMatchObject({ clientName: "Isabelle", propertyCode: "844530", extraPropertyCodes: ["844529", "844683"], phoneNormalized: "+5551991725812" });
+    expect(visit("isita clt - Miriani Drumm Saft 2883926 - cod 417016- 51 9944-2462")).toMatchObject({ clientName: "Miriani Drumm Saft", propertyCode: "417016" });
+    expect(visit("Visita - Imóvel 365585 - Sanderson")).toBe("AMBIGUOUS"); // sem telefone
+    expect(visit("vou no imóvel cód. 81141100 verificar questão do portão")).toBe("AMBIGUOUS");
+    expect(visit("Visita técnica - imóvel 123456 - 51 99999-9999")).toBe("IRRELEVANT");
+  });
+});

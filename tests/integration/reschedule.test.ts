@@ -136,3 +136,42 @@ describe("dados do imóvel na hora", () => {
     expect(await db.property.findUniqueOrThrow({ where: { code: "333333" } })).toMatchObject({ photoUrl: "https://img.test/9.jpg", neighborhood: "Igara", rent: 1800, totalPrice: 2300, pageStatus: "OK" });
   });
 });
+
+describe("visita com vários imóveis", () => {
+  const multi = async () => {
+    await makeConnection();
+    const api = new MockCalendar();
+    api.put(visitEvent("multi", { start: "2026-10-13T14:00:00Z", title: "Visita clt - Cliente Exemplo 1234567 - cod 654321;765432;876543 - 51 9876-5432" }));
+    await runSync({ api, now: NOW, sleep: async () => {} });
+    const vs = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
+    expect(vs).toHaveLength(3);
+    expect(vs[0].phoneNormalized).toBe("+5551998765432"); // celular antigo ganha o 9
+    return vs;
+  };
+
+  it("não compareceu vale para os outros imóveis em aberto (quando marcado)", async () => {
+    const [a, b, c] = await multi();
+    await concludeVisit(u.a, b.id, { requestId: "multi-done-b", expectedVersion: b.version, status: "DONE", evaluation: "POSITIVE", note: "gostou" }, NOW);
+    await concludeVisit(u.a, a.id, { requestId: "multi-ns-a", expectedVersion: a.version, status: "NO_SHOW", note: "não veio", applyToSameVisit: true }, NOW);
+    const after = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
+    expect(after.map((v) => v.status)).toEqual(["NO_SHOW", "DONE", "NO_SHOW"]); // o que já tinha resultado fica
+    expect((await db.visitOutcomeHistory.count({ where: { visitId: c.id } }))).toBe(1);
+  });
+
+  it("reagendar remarca todos os imóveis e a nova visita leva todos os códigos para o Google", async () => {
+    const [a] = await multi();
+    const nv = await rescheduleVisit(u.a, a.id, { requestId: "multi-rs", scheduledStart: local("2026-10-15T18:00:00Z"), durationMinutes: 60, mode: "reschedule", propertyCode: "654321; 876543" }, NOW);
+    const old = (await db.visit.findMany({ orderBy: { createdAt: "asc" } })).filter((v) => v.id !== nv.id && v.companionOfId !== nv.id);
+    expect(old.map((v) => v.status)).toEqual(["RESCHEDULED", "RESCHEDULED", "RESCHEDULED"]);
+    const comps = await db.visit.findMany({ where: { companionOfId: nv.id } });
+    expect(comps.map((v) => v.propertyCode)).toEqual(["876543"]);
+    const link = await calendarLinkFor(u.a, nv.id);
+    expect(link.title).toContain("cod 654321;876543");
+    // o evento criado pelo link volta e liga às duas visitas, sem duplicar
+    const api = new MockCalendar();
+    api.put(visitEvent("novo", { start: "2026-10-15T18:00:00Z", title: link.title, description: `Ref.: ${nv.linkCode}` }));
+    await runSync({ api, now: NOW, sleep: async () => {}, full: true });
+    expect(await db.visit.count({ where: { OR: [{ id: nv.id }, { companionOfId: nv.id }] } })).toBe(2);
+    expect((await db.visit.findUniqueOrThrow({ where: { id: nv.id } })).sourceEventId).not.toBeNull();
+  });
+});

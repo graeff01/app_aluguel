@@ -55,6 +55,8 @@ export const conclusionSchema = z
     note: z.string(),
     /** "ainda decidindo": daqui a quantos dias ligar de volta (null = sem data) */
     followUpDays: z.number().int().min(0).max(60).nullable().optional(),
+    /** visita com vários imóveis: "não compareceu"/"cancelada"/"remarcada" vale também para os outros imóveis em aberto */
+    applyToSameVisit: z.boolean().optional(),
   })
   .superRefine((v, ctx) => {
     if (v.status === "DONE" && !v.evaluation) ctx.addIssue({ code: "custom", path: ["evaluation"], message: "Selecione o resultado da visita." });
@@ -158,9 +160,30 @@ export async function concludeVisit(actor: AuthzActor, visitId: string, input: C
       ),
     });
     if (changedOppInputs || !updated.opportunityId) await applyDoneVisit(tx, visit.id, actor.id);
+    if (data.applyToSameVisit && data.status !== "DONE") await concludeSameVisit(tx, actor, visit, data.status, note, data.requestId, now);
     const fresh = await tx.visit.findUniqueOrThrow({ where: { id: visit.id } });
     return { visit: fresh, idempotent: false as const };
   });
+}
+
+/** Outras visitas do mesmo evento (vários imóveis), na ordem dos códigos. */
+export async function sameVisitGroup(tx: Tx, v: { id: string; companionOfId: string | null }) {
+  const groupId = v.companionOfId ?? v.id;
+  return tx.visit.findMany({ where: { excluded: false, id: { not: v.id }, OR: [{ id: groupId }, { companionOfId: groupId }] }, orderBy: { createdAt: "asc" } });
+}
+
+/** Cliente não veio / cancelou / remarcou: o mesmo status vale para os outros imóveis ainda em aberto da mesma visita. */
+export async function concludeSameVisit(tx: Tx, actor: AuthzActor, v: { id: string; companionOfId: string | null }, status: "NO_SHOW" | "CANCELED" | "RESCHEDULED", note: string, requestId: string, now: Date) {
+  for (const s of await sameVisitGroup(tx, v)) {
+    if (s.status !== "SCHEDULED" || !canConcludeVisit(actor, s)) continue;
+    await detachVisitFromOpportunity(tx, s.id, actor.id);
+    await tx.visit.update({
+      where: { id: s.id },
+      data: { status, evaluation: null, negativeReasonId: null, note, concludedAt: now, concludedById: actor.id, realizedById: null, autoCanceled: false, followUpOn: null, followUpDoneAt: null, version: { increment: 1 }, lastRequestId: `${requestId}:${s.id}`.slice(0, 100) },
+    });
+    await tx.visitOutcomeHistory.create({ data: { visitId: s.id, status, note, authorId: actor.id } });
+    await audit(tx, { actorId: actor.id, action: "visit.concluded", entityType: "Visit", entityId: s.id, changes: { status: { from: "SCHEDULED", to: status }, mesmaVisita: v.id } });
+  }
 }
 
 // ─────────────── Correção de dados ───────────────

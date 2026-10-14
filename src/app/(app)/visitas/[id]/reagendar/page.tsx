@@ -13,7 +13,7 @@ export default async function ReschedulePage({ params, searchParams }: { params:
   const sp = await searchParams;
   const actor = await requireActor();
   const { id } = await params;
-  const { visit } = await orNotFound(getVisitDetail(actor, id));
+  const { visit, sameEvent } = await orNotFound(getVisitDetail(actor, id));
   if (!canConcludeVisit(actor, visit) || visit.excluded) notFound();
   const canReschedule = visit.status === "SCHEDULED";
   const reasons = await db.reason.findMany({ where: { kind: "VISIT_NEGATIVE", active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, label: true } });
@@ -36,7 +36,7 @@ export default async function ReschedulePage({ params, searchParams }: { params:
         )}
       </p>
       <p className="mt-3 mb-6 text-[15px] text-ink-2">
-        {visit.clientName ?? "Cliente"} · imóvel {visit.propertyCode ?? "—"} · hoje marcada para {fmt.shortDate(visit.scheduledStart)} às {fmt.time(visit.scheduledStart)}
+        {visit.clientName ?? "Cliente"} · imóvel {[visit.propertyCode ?? "—", ...sameEvent.map((x) => x.propertyCode)].filter(Boolean).join(", ")} · hoje marcada para {fmt.shortDate(visit.scheduledStart)} às {fmt.time(visit.scheduledStart)}
       </p>
       {!visit.clientName || !visit.propertyCode ? (
         <p className="rounded-2xl bg-warn-soft px-4 py-3 text-sm text-warn">Complete o nome do cliente e o código do imóvel antes de reagendar (Corrigir dados).</p>
@@ -49,7 +49,7 @@ export default async function ReschedulePage({ params, searchParams }: { params:
           defaultDate={addDays(dayKey(new Date()), 1)}
           defaultTime={time}
           defaultDuration={[30, 45, 60, 90, 120].includes(duration) ? duration : 60}
-          propertyCode={visit.propertyCode}
+          propertyCode={[visit.propertyCode, ...(canReschedule ? sameEvent.filter((x) => x.status === "SCHEDULED" && x.propertyCode).map((x) => x.propertyCode) : [])].join(";")}
           reasons={reasons}
         />
       )}

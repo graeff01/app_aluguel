@@ -131,9 +131,9 @@ export function RescheduleForm(p: {
                 </Select>
               </Field>
             </div>
-            <Field label="Código do imóvel" htmlFor="propertyCode" error={st.fieldErrors?.propertyCode} hint={code.trim() && code.trim() !== p.propertyCode ? `Outro imóvel: a nova visita e a agenda vão com o ${code.trim()}, mesmo cliente.` : "Mesmo imóvel. Troque o código se o cliente for ver outro."}>
-              <Input id="propertyCode" name="propertyCode" inputMode="numeric" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} required />
-              <PropertyLookup code={code} />
+            <Field label="Código do imóvel" htmlFor="propertyCode" error={st.fieldErrors?.propertyCode} hint={code.includes(";") ? "Vários imóveis (separados por ;): uma visita para cada, no mesmo horário. Tire o código que o cliente não vai ver." : code.trim() && code.trim() !== p.propertyCode ? `Outro imóvel: a nova visita e a agenda vão com o ${code.trim()}, mesmo cliente.` : "Mesmo imóvel. Troque o código se o cliente for ver outro (vários: separe com ;)."}>
+              <Input id="propertyCode" name="propertyCode" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} required />
+              <PropertyLookup code={code.split(/[;,]/).map((c) => c.trim()).filter(Boolean).at(-1) ?? ""} />
             </Field>
           </section>
 

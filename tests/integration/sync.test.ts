@@ -82,7 +82,7 @@ describe("importação e classificação", () => {
 
 describe("revisão de eventos ambíguos", () => {
   it("aceito vira visita; rejeitado fica sem conteúdo mesmo após novas sincronizações", async () => {
-    api.put({ id: "amb1", summary: "Visita apto - Fulana - cod 321 - (51) 99876-1111", start: { dateTime: "2026-10-07T13:00:00Z" }, end: { dateTime: "2026-10-07T14:00:00Z" }, attendees: [{ email: "consultora.a@exemplo.test" }] });
+    api.put({ id: "amb1", summary: "Visita apto - Fulana - cod 321", start: { dateTime: "2026-10-07T13:00:00Z" }, end: { dateTime: "2026-10-07T14:00:00Z" }, attendees: [{ email: "consultora.a@exemplo.test" }] });
     api.put({ id: "amb2", summary: "Visita ao dentista", start: { dateTime: "2026-10-07T15:00:00Z" }, end: { dateTime: "2026-10-07T16:00:00Z" } });
     await sync();
     const [e1, e2] = await Promise.all([db.sourceEvent.findFirstOrThrow({ where: { googleEventId: "amb1" } }), db.sourceEvent.findFirstOrThrow({ where: { googleEventId: "amb2" } })]);
@@ -336,5 +336,16 @@ describe("evento com vários imóveis", () => {
     api.put(visitEvent("multi2", { start: "2026-10-08T13:00:00Z", title: MULTI }));
     await sync();
     expect((await db.visit.findMany()).map((v) => v.status)).toEqual(["SCHEDULED", "SCHEDULED"]);
+  });
+});
+
+describe("consultora que criou o evento", () => {
+  it("vale também para visita cancelada depois das 21h", async () => {
+    const ev = (start: string) => visitEvent("late", { start, organizer: "consultora.a@exemplo.test", attendees: ["pre@exemplo.test"] });
+    api.put(ev("2026-10-07T13:00:00Z"));
+    await sync();
+    api.put(ev("2026-10-08T00:30:00Z"));
+    await sync();
+    expect(await db.visit.findFirstOrThrow()).toMatchObject({ status: "CANCELED", consultantId: users.a.id, assignmentNote: "QUEM_AGENDOU" });
   });
 });

@@ -209,11 +209,11 @@ export async function sendUpcomingVisitReminders(now = new Date(), opts: { send?
       consultant: { active: true },
       scheduledStart: { gt: now, lte: new Date(now.getTime() + minutes * 60_000) },
     },
-    select: { id: true, scheduledStart: true, propertyCode: true, consultant: { select: { id: true, email: true, _count: { select: { pushSubscriptions: true } } } } },
+    select: { id: true, companionOfId: true, scheduledStart: true, propertyCode: true, consultant: { select: { id: true, email: true, _count: { select: { pushSubscriptions: true } } } } },
   });
   const timeFmt = new Intl.DateTimeFormat("pt-BR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
   let sent = 0;
-  for (const v of visits) {
+  for (const { v, codes } of bySameVisit(visits)) {
     const c = v.consultant!;
     const id = await claim(c.id, dayKey(v.scheduledStart), `upcoming:${v.id}`, 1);
     if (!id) continue; // já lembrado
@@ -221,7 +221,7 @@ export async function sendUpcomingVisitReminders(now = new Date(), opts: { send?
     const delivered = await notify(
       { id: c.id, email: c.email, subs: pushOn ? c._count.pushSubscriptions : 0 },
       {
-        title: `Visita às ${timeFmt.format(v.scheduledStart)}${v.propertyCode ? ` · imóvel ${v.propertyCode}` : ""}`,
+        title: `Visita às ${timeFmt.format(v.scheduledStart)}${codes.length ? ` · ${codesLabel(codes)}` : ""}`,
         body: mins >= 60 ? `Começa em ${Math.round(mins / 60)} h. Toque para ver a ficha antes de entrar.` : `Começa em ${mins} min. Toque para ver a ficha antes de entrar.`,
         url: `/visitas/${v.id}/registrar`,
         tag: `visita-${v.id}`,
@@ -272,6 +272,22 @@ const RESULT_SHORTCUTS = (visitId: string) => [
 ];
 
 /** Silêncio à noite para avisos que podem esperar (o "como foi?" imediato não entra aqui). */
+/** Evento com vários imóveis: uma notificação por visita (não por imóvel), com todos os códigos. */
+function bySameVisit<T extends { id: string; companionOfId: string | null; propertyCode: string | null }>(visits: T[]) {
+  const groups = new Map<string, { v: T; codes: string[] }>();
+  for (const v of visits) {
+    const key = v.companionOfId ?? v.id;
+    const g = groups.get(key);
+    if (!g) groups.set(key, { v, codes: v.propertyCode ? [v.propertyCode] : [] });
+    else {
+      if (v.propertyCode) g.codes.push(v.propertyCode);
+      if (!v.companionOfId) g.v = v; // a principal abre a notificação
+    }
+  }
+  return [...groups.values()];
+}
+const codesLabel = (codes: string[]) => (codes.length === 0 ? "" : codes.length === 1 ? `imóvel ${codes[0]}` : `imóveis ${codes.join(", ")}`);
+
 function quietHours(now: Date) {
   const h = localHour(now);
   return h >= 21 || h < 8;
@@ -298,6 +314,7 @@ export async function sendResultReminders(now = new Date(), opts: { send?: Sende
     scheduledStart: true,
     scheduledEnd: true,
     propertyCode: true,
+    companionOfId: true,
     consultantId: true,
     consultant: { select: { id: true, name: true, email: true, _count: { select: { pushSubscriptions: true } } } },
   } as const;
@@ -309,7 +326,7 @@ export async function sendResultReminders(now = new Date(), opts: { send?: Sende
   // 1) logo após o término
   if (settings.resultPromptEnabled) {
     const just = await db.visit.findMany({ where: { ...base, scheduledEnd: { lte: now, gt: new Date(now.getTime() - H) } }, select });
-    for (const v of just) {
+    for (const { v, codes } of bySameVisit(just)) {
       const c = v.consultant!;
       const id = await claim(c.id, dayKey(v.scheduledStart), `result_prompt:${v.id}`, 1);
       if (!id) continue;
@@ -317,7 +334,7 @@ export async function sendResultReminders(now = new Date(), opts: { send?: Sende
         { id: c.id, email: c.email, subs: pushOn ? c._count.pushSubscriptions : 0 },
         {
           title: `Como foi a visita das ${timeFmt.format(v.scheduledStart)}?`,
-          body: `${v.propertyCode ? `Imóvel ${v.propertyCode}. ` : ""}Toque para registrar o resultado.`,
+          body: `${codes.length > 1 ? `${codes.length} imóveis (${codes.join(", ")}): registre cada um. ` : codes.length ? `Imóvel ${codes[0]}. ` : ""}Toque para registrar o resultado.`,
           url: `/visitas/${v.id}/registrar`,
           tag: `resultado-${v.id}`,
           actions: RESULT_SHORTCUTS(v.id),
@@ -339,7 +356,7 @@ export async function sendResultReminders(now = new Date(), opts: { send?: Sende
       where: { ...base, scheduledEnd: { lte: new Date(now.getTime() - settings.resultReminderHours * H), gt: new Date(now.getTime() - 20 * H) } },
       select,
     });
-    for (const v of late) {
+    for (const { v, codes } of bySameVisit(late)) {
       const c = v.consultant!;
       const id = await claim(c.id, dayKey(v.scheduledStart), `result_reminder:${v.id}`, 1);
       if (!id) continue;
@@ -347,7 +364,7 @@ export async function sendResultReminders(now = new Date(), opts: { send?: Sende
         { id: c.id, email: c.email, subs: pushOn ? c._count.pushSubscriptions : 0 },
         {
           title: `Falta registrar a visita das ${timeFmt.format(v.scheduledStart)}`,
-          body: `${v.propertyCode ? `Imóvel ${v.propertyCode}. ` : ""}Leva menos de um minuto — toque para registrar.`,
+          body: `${codes.length > 1 ? `${codes.length} imóveis (${codes.join(", ")}). ` : codes.length ? `Imóvel ${codes[0]}. ` : ""}Leva menos de um minuto — toque para registrar.`,
           url: `/visitas/${v.id}/registrar`,
           tag: `resultado-${v.id}`,
           actions: RESULT_SHORTCUTS(v.id),
