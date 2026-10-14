@@ -1,13 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 
+// versão embutida no build (quando disponível); senão, vale a primeira que o servidor informar ao abrir a tela
 const BUILD = process.env.NEXT_PUBLIC_BUILD_ID ?? "dev";
 
 /** Depois de uma publicação, o app aberto (principalmente instalado) avisa para atualizar — sem interromper. */
 export function UpdateBanner() {
   const [stale, setStale] = useState(false);
   useEffect(() => {
-    if (BUILD === "dev") return;
+    let loaded: string | null = BUILD !== "dev" ? BUILD : null;
     let last = 0;
     const check = async () => {
       if (Date.now() - last < 60_000 || !navigator.onLine) return;
@@ -15,7 +16,9 @@ export function UpdateBanner() {
       try {
         const r = await fetch("/api/version", { cache: "no-store" });
         const { version } = (await r.json()) as { version: string };
-        if (version && version !== "dev" && version !== BUILD) setStale(true);
+        if (!version || version === "dev") return;
+        if (!loaded) loaded = version;
+        else if (version !== loaded) setStale(true);
       } catch {}
     };
     const onVisible = () => document.visibilityState === "visible" && check();
