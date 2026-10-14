@@ -47,6 +47,15 @@ describe("extração (critérios 1 e 2)", () => {
     expect(p.phoneNormalized).toBe("+5551998765432");
     expect(p.issues).toEqual([]);
   });
+  it("telefone colado ao código sem separador não gruda o DDD no código", () => {
+    const p = parseVisitEvent("Visita clt - Cliente Exemplo 1234567 - cod 654321-51 9876-5432", null, "visita clt");
+    expect(p.propertyCode).toBe("654321");
+    expect(p.phoneRaw).toBe("51 9876-5432");
+    const q = parseVisitEvent("Visita clt - Cliente Exemplo - cod 654321 (51) 99876-5432", null, "visita clt");
+    expect(q.propertyCode).toBe("654321");
+    expect(q.phoneNormalized).toBe("+5551998765432");
+    expect(parseVisitEvent("Visita clt - Cliente Exemplo - cod 654321-A - (51) 99876-5432", null, "visita clt").propertyCode).toBe("654321-A");
+  });
   it("número de referência não vira código do imóvel", () => {
     const p = parseVisitEvent("Visita clt - Cliente Exemplo 1234567 - (51) 99876-5432", null, "visita clt");
     expect(p.propertyCode).toBeNull();

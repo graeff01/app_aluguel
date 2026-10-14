@@ -140,7 +140,15 @@ export function parseVisitEvent(title: string, description: string | null | unde
     }
     const cod = seg.match(COD_RE);
     if (cod && /\d/.test(cod[1])) {
-      if (!code) code = cod[1];
+      let c = cod[1];
+      // telefone colado ao código sem " - ": "cod 487323-51 9851-5679" → código 487323, telefone 51 9851-5679
+      const rest = seg.slice((cod.index ?? 0) + cod[0].length);
+      const ddd = c.match(/^(\d{3,})-(\d{2})$/);
+      if (ddd && /^\s+[\d\s.\-]+$/.test(rest) && rest.replace(/\D/g, "").length >= 8) {
+        c = ddd[1];
+        if (!phone) phone = `${ddd[2]} ${rest.trim()}`;
+      } else if (PHONE_SEGMENT_RE.test(rest.trim()) && rest.replace(/\D/g, "").length >= 8 && !phone) phone = rest.trim();
+      if (!code) code = c;
       const before = seg.slice(0, cod.index ?? 0).trim();
       if (before && !name) takeName(before);
       return;
