@@ -55,6 +55,13 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         </ul>
       </Section>
       <Section title="Privacidade (LGPD)">
+        <p className="mb-3 text-sm text-ink-2">
+          Pedido de acesso do titular:{" "}
+          <a href={`/api/clientes/${c.id}/exportar`} className="font-semibold text-ink underline underline-offset-4">
+            baixar todos os dados deste cliente
+          </a>{" "}
+          (visitas, observações, andamentos e pré-análises). O download fica registrado na auditoria.
+        </p>
         {c.anonymizedAt ? (
           <p className="rounded-3xl border border-line bg-surface-2 p-5 text-sm text-ink-3">Dados pessoais removidos em {c.anonymizedAt.toLocaleDateString("pt-BR")}. Indicadores preservados.</p>
         ) : (

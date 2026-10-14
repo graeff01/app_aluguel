@@ -8,7 +8,7 @@ import { ROLE_LABEL } from "@/lib/labels";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { InlineAction } from "@/components/inline-action";
 import { Field, Input, PageHeader, Section, Select } from "@/components/ui";
-import { addAliasAction, removeAliasAction, resetLinkAction, resetOnboardingAction, setAwayAction, tempPasswordAction, updateUserAction } from "@/app/actions/admin";
+import { addAliasAction, endSessionsAction, removeAliasAction, resetLinkAction, resetOnboardingAction, setAwayAction, tempPasswordAction, updateUserAction } from "@/app/actions/admin";
 import { isAway } from "@/server/pre-analysis";
 
 export const metadata = { title: "Usuário" };
@@ -59,6 +59,12 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
                 <input type="hidden" name="role" value={u.role} />
                 <input type="hidden" name="active" value="0" />
                 <SubmitButton variant="danger">Desativar usuário</SubmitButton>
+              </ActionForm>
+            )}
+            {u.active && u.id !== actor.id && u._count.sessions > 0 && (
+              <ActionForm action={endSessionsAction} confirm={`Encerrar os acessos de ${u.name} em todos os aparelhos? (ex.: perdeu o celular). A conta continua ativa.`} className="mt-3 max-w-xl">
+                <input type="hidden" name="userId" value={u.id} />
+                <SubmitButton variant="secondary">Encerrar acessos em todos os aparelhos ({u._count.sessions})</SubmitButton>
               </ActionForm>
             )}
           </Section>

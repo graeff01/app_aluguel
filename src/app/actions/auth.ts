@@ -159,3 +159,16 @@ export async function completeOnboardingAction(skipped: boolean): Promise<{ ok: 
   });
   return { ok: true };
 }
+
+/** Encerra o acesso em todos os aparelhos (ex.: perdeu o celular). Volta para o login. */
+export async function logoutAllAction() {
+  const actor = await readActor();
+  if (actor) {
+    await db.$transaction(async (tx) => {
+      const n = await tx.session.deleteMany({ where: { userId: actor.id } });
+      await audit(tx, { actorId: actor.id, action: "auth.logout_all", entityType: "User", entityId: actor.id, changes: { sessoes: n.count } });
+    });
+  }
+  await destroySession();
+  redirect("/login?saiu=1");
+}

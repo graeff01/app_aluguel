@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { logoutAction, toggleSimpleMobileAction } from "@/app/actions/auth";
+import { logoutAction, logoutAllAction, toggleSimpleMobileAction } from "@/app/actions/auth";
 import { ROLE_LABEL } from "@/lib/labels";
 import { Avatar } from "./ui";
 import { Icon } from "./icons";
@@ -46,6 +46,11 @@ export function UserMenu({ name, email, role, showProfile, pushKey, simpleMobile
         <form action={logoutAction}>
           <button className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-bad hover:bg-bad-soft">
             <Icon name="logout" className="size-[18px]" /> Sair
+          </button>
+        </form>
+        <form action={logoutAllAction}>
+          <button className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[12px] font-medium text-ink-3 hover:bg-tint hover:text-bad">
+            <span className="size-[18px]" /> Sair de todos os aparelhos
           </button>
         </form>
       </div>

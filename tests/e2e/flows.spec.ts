@@ -75,7 +75,7 @@ test("consultora não acessa visita alheia por URL nem por API", async ({ page, 
   const regHref = await page.locator("li", { hasText: "Cliente Da B" }).getByRole("link", { name: /^Registrar resultado/ }).first().getAttribute("href");
   const href = regHref!.replace(/\/registrar$/, "");
   await page.getByLabel("Menu da conta").click();
-  await page.getByRole("button", { name: "Sair" }).click();
+  await page.getByRole("button", { name: "Sair", exact: true }).click();
   await page.waitForURL(/login/);
   await login(page, "a@e2e.test");
   await page.goto(href!);
@@ -157,7 +157,7 @@ test("senha provisória: troca obrigatória no primeiro acesso", async ({ page }
   await expect(page.getByRole("heading", { name: "Painel da equipe" })).toBeVisible();
   // a provisória deixou de valer
   await page.getByLabel("Menu da conta").click();
-  await page.getByRole("button", { name: "Sair" }).click();
+  await page.getByRole("button", { name: "Sair", exact: true }).click();
   await page.getByLabel("E-mail").fill("nova@e2e.test");
   await page.getByLabel("Senha").fill("provisoria-123");
   await page.getByRole("button", { name: "Entrar" }).click();
@@ -590,4 +590,17 @@ test("consultora: confirmar presença pelo WhatsApp e retorno do ainda decidindo
   await wa.click();
   await card.getByRole("button", { name: "✓ Confirmou" }).click();
   await expect(card.getByText("✓ Cliente confirmou presença")).toBeVisible();
+});
+
+test("segurança: cabeçalhos HSTS e CSP; sair de todos os aparelhos", async ({ page, request }, info) => {
+  test.skip(info.project.name !== "desktop");
+  const res = await request.get("/login");
+  expect(res.headers()["strict-transport-security"]).toContain("max-age=");
+  expect(res.headers()["content-security-policy-report-only"]).toContain("frame-ancestors 'none'");
+  await login(page, "b@e2e.test");
+  await page.getByLabel("Menu da conta").click();
+  await page.getByRole("button", { name: "Sair de todos os aparelhos" }).click();
+  await expect(page).toHaveURL(/\/login/);
+  await page.goto("/minhas");
+  await expect(page).toHaveURL(/\/login/);
 });

@@ -20,6 +20,7 @@ import { cx } from "@/components/ui";
 import { AppBadge } from "@/components/app-badge";
 import { countOpenFor } from "@/server/pre-analysis";
 import { Onboarding } from "@/components/onboarding";
+import { UpdateBanner } from "@/components/update-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -157,6 +158,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-h-dvh flex-col">
         <OfflineBanner />
         <RefreshOnFocus />
+        <UpdateBanner />
         <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen : pending} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-2.5">
@@ -190,6 +192,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0 flex-1 flex-col">
         <OfflineBanner />
         <RefreshOnFocus />
+        <UpdateBanner />
         <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen : pending} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 md:px-8">

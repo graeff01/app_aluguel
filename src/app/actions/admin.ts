@@ -421,6 +421,22 @@ export async function backupNowAction(_: ActionState, _fd: FormData) {
   }));
 }
 
+export async function endSessionsAction(_: ActionState, fd: FormData) {
+  return done(await runAction(async (actor) => {
+    const target = await db.user.findUnique({ where: { id: str(fd, "userId") } });
+    if (!target) throw new AppError("NOT_FOUND", "Usuário não encontrado.");
+    assert(canManageUser(actor, target.role));
+    if (target.id === actor.id) throw new AppError("VALIDATION", "Para você mesma, use “Sair de todos os aparelhos” no menu da conta.");
+    const n = await db.$transaction(async (tx) => {
+      const r = await tx.session.deleteMany({ where: { userId: target.id } });
+      await tx.pushSubscription.deleteMany({ where: { userId: target.id } });
+      await audit(tx, { actorId: actor.id, action: "user.sessions_ended", entityType: "User", entityId: target.id, changes: { sessoes: r.count } });
+      return r.count;
+    });
+    return n ? `Acessos encerrados em ${n} aparelho${n === 1 ? "" : "s"}. A pessoa precisa entrar de novo.` : "Não havia acessos abertos.";
+  }));
+}
+
 export async function setAwayAction(_: ActionState, fd: FormData) {
   return done(await runAction(async (actor) => {
     const target = await db.user.findUnique({ where: { id: str(fd, "userId") } });

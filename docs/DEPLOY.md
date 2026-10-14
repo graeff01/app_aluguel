@@ -205,7 +205,14 @@ Cada push na `main` dispara o GitHub Actions (`.github/workflows/ci.yml`): typec
 
 ---
 
+## 6.1 Cabeçalhos de segurança
+
+- **HSTS** (`Strict-Transport-Security: max-age=31536000`) em produção.
+- **CSP em modo "só observar"** (`Content-Security-Policy-Report-Only`, ver `next.config.ts`): nada é bloqueado; o que seria bloqueado aparece no **Diagnóstico** como "CSP (observação): …". Depois de alguns dias sem registros, troque o nome do cabeçalho para `Content-Security-Policy` para passar a bloquear. Se um domínio novo de imagens/scripts for necessário (ex.: outro site de fotos), inclua-o na diretiva correspondente antes.
+
 ## 7. Rotação de segredos
+
+> **Atenção:** `TOKEN_ENCRYPTION_KEY` protege os tokens do Google **e** os dados sensíveis da pré-análise (CPF, nascimento, e-mail, telefone, salário) e a detecção de CPF repetido. Trocá-la torna esses dados antigos ilegíveis. Só troque em caso de vazamento: reconecte a agenda Google depois e saiba que as pré-análises em aberto precisarão ser reenviadas.
 
 | Segredo | Como rotacionar | Efeito |
 |---|---|---|
