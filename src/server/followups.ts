@@ -35,7 +35,7 @@ export async function dueFollowUps(consultantId: string, now = new Date()) {
   return out;
 }
 
-export async function followUpAction(actor: AuthzActor, visitId: string, action: "done" | "snooze") {
+export async function followUpAction(actor: AuthzActor, visitId: string, action: "done" | "snooze", now = new Date()) {
   const v = await db.visit.findUnique({ where: { id: visitId } });
   if (!v) throw notFound();
   assert(canConcludeVisit(actor, v));
@@ -43,7 +43,7 @@ export async function followUpAction(actor: AuthzActor, visitId: string, action:
   await db.$transaction(async (tx) => {
     await tx.visit.update({
       where: { id: visitId },
-      data: action === "done" ? { followUpDoneAt: new Date() } : { followUpOn: dateOnlyFromKey(addDays(dayKey(new Date()), 2)) },
+      data: action === "done" ? { followUpDoneAt: now } : { followUpOn: dateOnlyFromKey(addDays(dayKey(now), 2)) },
     });
     await audit(tx, { actorId: actor.id, action: action === "done" ? "visit.followup_done" : "visit.followup_snoozed", entityType: "Visit", entityId: visitId });
   });

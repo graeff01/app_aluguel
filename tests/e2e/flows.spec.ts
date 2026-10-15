@@ -117,7 +117,8 @@ test("gestora usa o painel no desktop", async ({ page }, info) => {
   await expect(page.getByRole("heading", { name: "Consultora A" })).toBeVisible();
   await expect(page.getByText(/vs equipe/).first()).toBeVisible(); // tabela só no desktop/gestão
   await page.getByRole("link", { name: /Revisão/ }).first().click();
-  await expect(page.getByRole("link", { name: "Motivos" })).toHaveCount(0); // só admin
+  await expect(page.getByRole("link", { name: "Diagnóstico" })).toHaveCount(0); // só admin
+  await expect(page.getByRole("link", { name: "Listas e motivos" }).first()).toBeVisible(); // gestão cadastra agenciadores e garantias
   await expect(page.getByRole("heading", { name: "Revisão" })).toBeVisible();
 });
 
@@ -414,7 +415,7 @@ test("admin: desativar tira da lista e cadastrar de novo reativa a mesma conta",
 test("admin: todas as telas de gestão e administração abrem sem erro", async ({ page }) => {
   test.setTimeout(150_000); // 21 telas, cada uma esperando carregar por completo (inclusive mapas)
   await login(page, "admin@e2e.test");
-  for (const path of ["/painel", "/ao-vivo", "/rota", "/relatorios", "/hoje", "/pendencias", "/revisao", "/historico", "/oportunidades", "/imoveis", "/clientes", "/mais", "/config/usuarios", "/admin/google", "/admin/padroes", "/config/motivos", "/admin/configuracoes", "/admin/sincronizacao", "/config/auditoria", "/pre-analises", "/pre-analises/nova"]) {
+  for (const path of ["/painel", "/ao-vivo", "/rota", "/relatorios", "/hoje", "/pendencias", "/revisao", "/historico", "/oportunidades", "/imoveis", "/clientes", "/mais", "/config/usuarios", "/admin/google", "/admin/padroes", "/config/motivos", "/admin/configuracoes", "/admin/sincronizacao", "/config/auditoria", "/pre-analises", "/pre-analises/nova", "/pre-analises/painel", "/marketing"]) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
     await expect(page.getByText("Não foi possível carregar esta tela"), path).toHaveCount(0);
@@ -445,6 +446,7 @@ test("pré-análise: pré-atendimento envia, consultora responde e pré-atendime
   await page.getByLabel("E-mail").fill("maria@exemplo.test");
   await page.getByLabel("Telefone").fill("(51) 99876-1234");
   await page.getByLabel(/Salário/).fill("4.500,00");
+  await page.locator("label", { hasText: "CredPago" }).click();
   // rodízio: cartões com "Próxima da vez"
   await expect(page.getByText("Próxima da vez", { exact: true })).toBeVisible();
   await page.locator("label", { hasText: "Consultora A" }).first().click();
@@ -552,6 +554,7 @@ test("formulário com erro de validação mantém o que foi digitado", async ({ 
   await page.getByLabel("E-mail").fill("erro@exemplo.test");
   await page.getByLabel("Telefone").fill("(51) 99876-1234");
   await page.getByLabel(/Salário/).fill("3.000,00");
+  await page.locator("label", { hasText: "Fiador" }).click();
   await page.getByLabel(/titular do CPF e que ele autorizou/).check();
   await page.getByRole("button", { name: "Enviar para a consultora" }).click();
   await expect(page.getByText(/CPF inválido/)).toBeVisible();
@@ -603,4 +606,29 @@ test("segurança: cabeçalhos HSTS e CSP; sair de todos os aparelhos", async ({ 
   await expect(page).toHaveURL(/\/login/);
   await page.goto("/minhas");
   await expect(page).toHaveURL(/\/login/);
+});
+
+test("pré-atendimento cancela visita com motivo; marketing só vê a tela dele", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  await page.goto("/login");
+  await page.getByLabel("E-mail").fill("jasmin@e2e.test");
+  await page.getByLabel("Senha").fill(PW);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.waitForURL(/\/pre-analises/);
+  await page.goto("/agenda-do-dia");
+  const row = page.locator("li", { hasText: "Cliente Cancela" });
+  await row.getByRole("button", { name: "Cancelar" }).click();
+  await row.getByLabel("Motivo do cancelamento").selectOption({ label: "Cliente desistiu" });
+  await row.getByRole("button", { name: "Cancelar visita" }).click();
+  await expect(page.locator("li", { hasText: "Cliente Cancela" })).toContainText("Cliente desistiu");
+
+  await page.context().clearCookies();
+  await page.goto("/login");
+  await page.getByLabel("E-mail").fill("mkt@e2e.test");
+  await page.getByLabel("Senha").fill(PW);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.waitForURL(/\/marketing/);
+  await expect(page.getByRole("heading", { name: "Locações para postar" })).toBeVisible();
+  await page.goto("/minhas");
+  await expect(page).toHaveURL(/\/marketing/);
 });

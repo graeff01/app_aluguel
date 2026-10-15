@@ -6,7 +6,7 @@ import { PasswordForm } from "@/components/password-form";
 export const metadata = { title: "Alterar senha" };
 
 export default async function ChangePasswordPage() {
-  const actor = await requireActor({ preService: true });
+  const actor = await requireActor({ preService: true, marketing: true });
   return (
     <div className="mx-auto max-w-md">
       <Link href={hasGlobalView(actor) ? "/perfil" : "/minhas"} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">

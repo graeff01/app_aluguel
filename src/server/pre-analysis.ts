@@ -21,6 +21,8 @@ import { normalizeEmail } from "@/lib/text";
 import { getSettings } from "@/lib/settings";
 import { pushConfig, sendPush } from "@/lib/push";
 import { log } from "@/lib/log";
+import { notifyUser } from "./notify";
+import { dayKey } from "@/lib/time";
 import type { PreAnalysisStatus } from "@/generated/prisma/enums";
 
 const DAY = 86400_000;
@@ -70,6 +72,7 @@ const createSchema = z.object({
   phone: z.string().trim().max(40),
   salary: z.string().trim().max(30),
   consultantId: z.string().min(1, "Escolha a consultora."),
+  guaranteeId: z.string().min(1, "Escolha a garantia."),
   propertyCode: z.string().trim().max(40).optional().default(""),
   note: z.string().trim().max(1000).optional().default(""),
   holderConfirmed: z.literal(true, { message: "Confirme que os dados são do titular do CPF." }),
@@ -102,6 +105,8 @@ export async function createPreAnalysis(actor: AuthzActor, input: z.input<typeof
   const salary = parseMoney(p.salary);
   if (!salary) errors.salary = "Informe o salário (ex.: 4.500,00).";
   if (Object.keys(errors).length) throw new AppError("VALIDATION", "Revise os campos destacados.", errors);
+  const guarantee = await db.reason.findUnique({ where: { id: p.guaranteeId } });
+  if (!guarantee || guarantee.kind !== "GUARANTEE" || !guarantee.active) throw new AppError("VALIDATION", "Escolha a garantia.", { guaranteeId: "Garantia inválida." });
   const consultant = await db.user.findUnique({ where: { id: p.consultantId } });
   if (!consultant || consultant.role !== "CONSULTANT" || !consultant.active) throw new AppError("VALIDATION", "Escolha uma consultora ativa.", { consultantId: "Consultora inválida." });
   if (isAway(consultant.awayUntil, now) && !p.confirmAway) {
@@ -131,13 +136,14 @@ export async function createPreAnalysis(actor: AuthzActor, input: z.input<typeof
         salaryEnc: encryptSecret(String(salary)),
         incomeBand: incomeBand(salary!),
         propertyCode: p.propertyCode || null,
+        guaranteeId: guarantee.id,
         note: p.note || null,
       },
     });
     await audit(tx, { actorId: actor.id, action: "preanalysis.created", entityType: "PreAnalysis", entityId: row.id, changes: { consultora: consultant.id } });
     return row;
   });
-  await notifyUser(consultant.id, { title: "Nova pré-análise para você", body: "Enviada pelo pré-atendimento. Toque para ver os dados e responder.", url: `/pre-analises/${created.id}`, tag: `pre-${created.id}` });
+  await notifyUser(consultant.id, { title: "Nova pré-análise para você", body: `Garantia: ${guarantee.label}. Toque para ver os dados e responder.`, url: `/pre-analises/${created.id}`, tag: `pre-${created.id}` });
   return created;
 }
 
@@ -271,16 +277,23 @@ export async function runPreAnalysisRetention(now = new Date()) {
 
 // ─────────────── indicadores ───────────────
 
-export async function preAnalysisStats(actor: AuthzActor, from: Date, to: Date) {
+export async function preAnalysisStats(actor: AuthzActor, from: Date, to: Date, opts: { senderId?: string } = {}) {
   assert(hasGlobalView(actor) || isPreService(actor));
   const rows = await db.preAnalysis.findMany({
-    where: { createdAt: { gte: from, lt: to } },
+    where: { createdAt: { gte: from, lt: to }, ...(opts.senderId ? { createdById: opts.senderId } : {}) },
+    orderBy: { createdAt: "desc" },
     select: {
+      id: true,
+      fullName: true,
       status: true,
       incomeBand: true,
+      propertyCode: true,
+      resultNote: true,
       createdAt: true,
       resultAt: true,
       consultant: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true } },
+      guarantee: { select: { label: true } },
       visits: { select: { status: true, opportunity: { select: { status: true } } } },
     },
   });
@@ -316,18 +329,19 @@ export async function preAnalysisStats(actor: AuthzActor, from: Date, to: Date) 
     avgResponseHours: hours.length ? hours.reduce((a, b) => a + b, 0) / hours.length : null,
     byConsultant: [...by((r) => r.consultant.name).entries()].sort((a, b) => b[1].total - a[1].total),
     byIncome: [...by((r) => r.incomeBand).entries()],
+    byGuarantee: [...by((r) => r.guarantee?.label ?? "Não informada").entries()].sort((a, b) => b[1].total - a[1].total),
+    bySender: [...by((r) => r.createdBy.name).entries()].sort((a, b) => b[1].total - a[1].total),
+    // semana (segunda-feira) no fuso de São Paulo
+    byWeek: [...by((r) => weekStart(r.createdAt)).entries()].sort((a, b) => a[0].localeCompare(b[0])),
+    rows,
   };
 }
 
-// ─────────────── notificação (sem dados do cliente) ───────────────
-
-async function notifyUser(userId: string, payload: { title: string; body: string; url: string; tag: string }) {
-  if (!pushConfig()) return;
-  const subs = await db.pushSubscription.findMany({ where: { userId, user: { active: true } } });
-  for (const s of subs) {
-    const r = await sendPush(s, payload).catch(() => "error" as const);
-    if (r === "gone") await db.pushSubscription.delete({ where: { id: s.id } }).catch(() => undefined);
-  }
+function weekStart(d: Date) {
+  const key = dayKey(d);
+  const local = new Date(`${key}T12:00:00Z`);
+  local.setUTCDate(local.getUTCDate() - ((local.getUTCDay() + 6) % 7));
+  return local.toISOString().slice(0, 10);
 }
 
 // ─────────────── ausência ───────────────

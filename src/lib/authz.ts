@@ -51,7 +51,8 @@ export const canAssignVisit = hasGlobalView;
 export const canReview = hasGlobalView;
 export const canManageClients = hasGlobalView;
 export const canViewDashboard = hasGlobalView;
-export const canManageReasons = isAdmin;
+/** Listas e motivos (inclui agenciadores e garantias): gestão. */
+export const canManageReasons = hasGlobalView;
 export const canViewAudit = isAdmin;
 export const canManageIntegration = isAdmin;
 export const canManageSettings = isAdmin;
@@ -69,7 +70,7 @@ export function canUpdateOpportunity(a: AuthzActor, o: OppLike, s: PermissionSet
 /** Gestora gerencia consultoras e o pré-atendimento; admin gerencia todos. */
 export function canManageUser(a: AuthzActor, targetRole: Role) {
   if (isAdmin(a)) return true;
-  return a.role === "MANAGER" && (targetRole === "CONSULTANT" || targetRole === "PRE_SERVICE");
+  return a.role === "MANAGER" && (targetRole === "CONSULTANT" || targetRole === "PRE_SERVICE" || targetRole === "MARKETING");
 }
 
 // ─────────── Pré-análise ───────────

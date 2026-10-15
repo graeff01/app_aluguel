@@ -6,7 +6,7 @@ import { createPreAnalysis } from "@/server/pre-analysis";
 import { createManualVisit } from "@/server/visits";
 import { POST as cspReport } from "@/app/api/csp-report/route";
 import { toLocalInput } from "@/lib/time";
-import { makeUsers, resetDb } from "../helpers/db";
+import { guaranteeId, makeUsers, resetDb } from "../helpers/db";
 
 let u: Awaited<ReturnType<typeof makeUsers>>;
 const NOW = new Date("2026-10-14T15:00:00Z");
@@ -19,7 +19,7 @@ beforeEach(async () => {
 describe("exportação dos dados do titular", () => {
   it("traz visitas, observações e pré-análises ligadas pelo telefone; só gestão; fica na auditoria", async () => {
     const j = await db.user.create({ data: { name: "Jasmin Pré", email: "jasmin@exemplo.test", role: "PRE_SERVICE" } });
-    await createPreAnalysis({ id: j.id, role: "PRE_SERVICE" }, { fullName: "Maria Titular da Silva", birthDate: "1990-05-20", cpf: "529.982.247-25", email: "maria@exemplo.test", phone: "(51) 99876-1234", salary: "4.500,00", consultantId: u.a.id, propertyCode: "", note: "", holderConfirmed: true }, NOW);
+    await createPreAnalysis({ id: j.id, role: "PRE_SERVICE" }, { fullName: "Maria Titular da Silva", birthDate: "1990-05-20", cpf: "529.982.247-25", email: "maria@exemplo.test", phone: "(51) 99876-1234", salary: "4.500,00", consultantId: u.a.id, guaranteeId: await guaranteeId(), propertyCode: "", note: "", holderConfirmed: true }, NOW);
     const v = await createManualVisit(u.admin, { requestId: "exp-visit-req", scheduledStart: toLocalInput(NOW), clientName: "Maria Titular", phoneRaw: "(51) 99876-1234", propertyCode: "761739", consultantId: u.a.id });
     await expect(exportClientData(u.a, v.clientId!)).rejects.toMatchObject({ code: "FORBIDDEN" });
     const data = await exportClientData(u.manager, v.clientId!);

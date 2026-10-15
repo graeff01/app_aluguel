@@ -20,6 +20,8 @@ export async function dayAgenda(actor: AuthzActor, day: string) {
       assignmentNote: true,
       rescheduledFromId: true,
       consultantId: true,
+      companionOfId: true,
+      cancelReason: { select: { label: true } },
       consultant: { select: { name: true } },
       property: { select: { neighborhood: true } },
     },

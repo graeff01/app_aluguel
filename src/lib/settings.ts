@@ -43,17 +43,25 @@ export const DEFAULT_LOST_REASONS = [
   "Outro",
 ];
 
+export const DEFAULT_CANCEL_REASONS = ["Cliente desistiu", "Cliente não confirmou", "Imóvel já alugado", "Imóvel indisponível para visita", "Pré-análise reprovada", "Outro"];
+export const DEFAULT_GUARANTEES = ["Fiador", "Seguro fiança", "CredPago", "Aluga Rápido", "CredAluga", "Título de Capitalização"];
+export const DEFAULT_LEASE_HIGHLIGHTS = ["Alugado na 1ª visita", "Alugado em até 7 dias da 1ª visita", "Cliente indicado", "Imóvel estava parado há muito tempo", "Outro"];
+
 /** Garante dados de referência (idempotente). Usado pela criação do admin e pelo seed de desenvolvimento. */
 export async function ensureReferenceData(tx: Tx | typeof db = db) {
   await getSettings(tx);
-  const reasonCount = await tx.reason.count();
-  if (reasonCount === 0) {
-    await tx.reason.createMany({
-      data: [
-        ...DEFAULT_NEGATIVE_REASONS.map((label, i) => ({ kind: "VISIT_NEGATIVE" as const, label, sortOrder: i })),
-        ...DEFAULT_LOST_REASONS.map((label, i) => ({ kind: "OPPORTUNITY_LOST" as const, label, sortOrder: i })),
-      ],
-    });
+  // cada lista recebe os itens padrão só enquanto estiver vazia
+  const defaults = {
+    VISIT_NEGATIVE: DEFAULT_NEGATIVE_REASONS,
+    OPPORTUNITY_LOST: DEFAULT_LOST_REASONS,
+    VISIT_CANCEL: DEFAULT_CANCEL_REASONS,
+    GUARANTEE: DEFAULT_GUARANTEES,
+    LEASE_HIGHLIGHT: DEFAULT_LEASE_HIGHLIGHTS,
+  } as const;
+  for (const [kind, labels] of Object.entries(defaults) as [keyof typeof defaults, readonly string[]][]) {
+    if ((await tx.reason.count({ where: { kind } })) === 0) {
+      await tx.reason.createMany({ data: labels.map((label, i) => ({ kind, label, sortOrder: i })), skipDuplicates: true });
+    }
   }
   const patternCount = await tx.eventPattern.count();
   if (patternCount === 0) {

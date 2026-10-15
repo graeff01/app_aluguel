@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { runAction, str, type ActionState } from "@/lib/action";
-import { assignVisit, correctVisitData, createManualVisit, resolveConflict, setVisitExcluded, type ConflictAction } from "@/server/visits";
+import { assignVisit, cancelVisitByStaff, correctVisitData, createManualVisit, resolveConflict, setVisitExcluded, type ConflictAction } from "@/server/visits";
 import { confirmVisitClientAsDistinct, linkVisitToClient, mergeClients } from "@/server/clients";
 import { updateOpportunity, transferOpportunity } from "@/server/opportunities";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
@@ -95,6 +95,9 @@ export async function opportunityAction(_: ActionState, fd: FormData): Promise<A
       closedAt: str(fd, "closedAt") || undefined,
       closedResponsibleId: str(fd, "closedResponsibleId") || undefined,
       lostReasonId: str(fd, "lostReasonId") || undefined,
+      agentId: str(fd, "agentId") || undefined,
+      highlightIds: fd.getAll("highlightIds").map(String).filter(Boolean),
+      highlightNote: str(fd, "highlightNote"),
     });
     revalidatePath("/", "layout");
     return { ok: true, message: "Andamento atualizado.", at: Date.now() };
@@ -169,4 +172,13 @@ export async function followUpDoneAction(visitId: string, action: "done" | "snoo
     revalidatePath("/minhas");
     return action === "done" ? "Retorno feito." : "Adiado para daqui a 2 dias.";
   });
+}
+
+export async function cancelVisitAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const s = await runAction(async (a) => {
+    const n = await cancelVisitByStaff(a, str(fd, "visitId"), { reasonId: str(fd, "reasonId"), note: str(fd, "note") });
+    return n > 1 ? `Visita cancelada (${n} imóveis). A consultora foi avisada.` : "Visita cancelada. A consultora foi avisada.";
+  });
+  if (s.ok) revalidatePath("/agenda-do-dia");
+  return s;
 }

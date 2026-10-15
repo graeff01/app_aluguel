@@ -5,7 +5,7 @@ import { assignVisit, concludeVisit, correctVisitData, createManualVisit, setVis
 import { linkVisitToClient, mergeClients } from "@/server/clients";
 import { updateOpportunity } from "@/server/opportunities";
 import { getVisitDetail, listHistory, listMine, listPending, listToday } from "@/server/queries";
-import { makeUsers, reason, resetDb } from "../helpers/db";
+import { makeUsers, reason, resetDb, leaseInfo } from "../helpers/db";
 
 const NOW = new Date("2026-10-06T18:00:00Z");
 let u: Awaited<ReturnType<typeof makeUsers>>;
@@ -139,7 +139,7 @@ describe("oportunidades e clientes (critério 9)", () => {
     const opps = await db.opportunity.findMany();
     expect(opps).toHaveLength(1);
     expect(opps[0].firstDoneVisitAt.toISOString()).toBe(v1.scheduledStart.toISOString());
-    await updateOpportunity(u.a, opps[0].id, { expectedVersion: opps[0].version, toStatus: "CLOSED_WON", closedAt: "2026-10-05" });
+    await updateOpportunity(u.a, opps[0].id, { expectedVersion: opps[0].version, toStatus: "CLOSED_WON", closedAt: "2026-10-05", ...(await leaseInfo()) });
     expect(await db.opportunity.count({ where: { status: "CLOSED_WON" } })).toBe(1);
 
     // nova visita depois do fechamento abre novo ciclo explícito

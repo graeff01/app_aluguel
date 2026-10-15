@@ -39,6 +39,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
                 <Select id="role" name="role" defaultValue={u.role} disabled={!isAdmin(actor)}>
                   <option value="CONSULTANT">Consultora</option>
                   <option value="PRE_SERVICE">Pré-atendimento</option>
+                  <option value="MARKETING">Marketing</option>
                   <option value="MANAGER">Gestora</option>
                   <option value="ADMIN">Administrador(a)</option>
                 </Select>

@@ -18,6 +18,8 @@ enum Role {
   CONSULTANT
   /// pré-atendimento (ex.: Jasmin): cadastra pré-análises e encaminha para consultoras
   PRE_SERVICE
+  /// marketing: recebe as locações fechadas para postar
+  MARKETING
 }
 
 model User {
@@ -63,6 +65,8 @@ model User {
   preAnalysesCreated  PreAnalysis[] @relation("PreAnalysisCreatedBy")
   preAnalysesAssigned PreAnalysis[] @relation("PreAnalysisConsultant")
   preAnalysesResolved PreAnalysis[] @relation("PreAnalysisResolvedBy")
+  leasePostsCreated   LeasePost[]   @relation("LeasePostCreatedBy")
+  leasePostsPosted    LeasePost[]   @relation("LeasePostPostedBy")
 }
 
 /// E-mails usados para reconhecer a consultora entre os convidados do evento.
@@ -186,6 +190,14 @@ model EventPattern {
 enum ReasonKind {
   VISIT_NEGATIVE
   OPPORTUNITY_LOST
+  /// cancelamento de visita (pré-atendimento)
+  VISIT_CANCEL
+  /// garantia da locação escolhida na pré-análise
+  GUARANTEE
+  /// diferenciais da locação (aviso ao marketing)
+  LEASE_HIGHLIGHT
+  /// agenciadores (aviso ao marketing)
+  LEASE_AGENT
 }
 
 model Reason {
@@ -197,8 +209,11 @@ model Reason {
   /// "outro" exige observação descritiva (a observação já é sempre obrigatória)
   createdAt DateTime   @default(now())
 
-  visits        Visit[]
+  visits        Visit[]       @relation("VisitNegativeReason")
+  canceledVisits Visit[]      @relation("VisitCancelReason")
   opportunities Opportunity[]
+  preAnalyses   PreAnalysis[] @relation("PreAnalysisGuarantee")
+  leasePosts    LeasePost[]   @relation("LeasePostAgent")
 
   @@unique([kind, label])
 }
@@ -504,7 +519,10 @@ model Visit {
   status           VisitStatus      @default(SCHEDULED)
   evaluation       Evaluation?
   negativeReasonId String?
-  negativeReason   Reason?          @relation(fields: [negativeReasonId], references: [id])
+  negativeReason   Reason?          @relation("VisitNegativeReason", fields: [negativeReasonId], references: [id])
+  /// motivo do cancelamento (pré-atendimento)
+  cancelReasonId   String?
+  cancelReason     Reason?          @relation("VisitCancelReason", fields: [cancelReasonId], references: [id])
   note             String?
   concludedAt      DateTime?
   concludedById    String?
@@ -618,6 +636,7 @@ model Opportunity {
 
   visits Visit[]
   events OpportunityEvent[]
+  leasePost LeasePost?
 
   @@unique([clientId, propertyId, cycle])
   @@index([status])
@@ -769,6 +788,9 @@ model PreAnalysis {
   incomeBand   String
   /// imóvel de interesse (opcional)
   propertyCode String?
+  /// garantia da locação (Fiador, Seguro fiança, CredPago…)
+  guaranteeId  String?
+  guarantee    Reason?           @relation("PreAnalysisGuarantee", fields: [guaranteeId], references: [id])
   note         String?
   resultNote   String?
   resultAt     DateTime?
@@ -781,4 +803,24 @@ model PreAnalysis {
   @@index([consultantId, status])
   @@index([createdAt])
   @@index([cpfHash])
+}
+
+/// Locação fechada → aviso ao marketing para postar (diferencial e agenciador obrigatórios no fechamento).
+model LeasePost {
+  id            String      @id @default(cuid())
+  opportunityId String      @unique
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  agentId       String
+  agent         Reason      @relation("LeasePostAgent", fields: [agentId], references: [id])
+  /// diferenciais marcados (rótulos no momento do fechamento)
+  highlights    String[]    @default([])
+  highlightNote String
+  createdById   String
+  createdBy     User        @relation("LeasePostCreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime    @default(now())
+  postedAt      DateTime?
+  postedById    String?
+  postedBy      User?       @relation("LeasePostPostedBy", fields: [postedById], references: [id])
+
+  @@index([postedAt])
 }

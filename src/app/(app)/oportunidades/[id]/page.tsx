@@ -20,10 +20,21 @@ export default async function OppPage({ params, searchParams }: { params: Promis
   const settings = await getSettings();
   const canUpdate = canUpdateOpportunity(actor, opp, settings);
   const global = hasGlobalView(actor);
-  const [lostReasons, users] = await Promise.all([
-    db.reason.findMany({ where: { kind: "OPPORTUNITY_LOST", active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, label: true } }),
+  const list = (kind: "OPPORTUNITY_LOST" | "LEASE_AGENT" | "LEASE_HIGHLIGHT") => db.reason.findMany({ where: { kind, active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, label: true } });
+  const lease = await db.leasePost.findUnique({ where: { opportunityId: opp.id }, include: { agent: { select: { label: true } } } });
+  const [lostReasons, users, agents, highlights] = await Promise.all([
+    list("OPPORTUNITY_LOST"),
     global ? db.user.findMany({ where: { role: "CONSULTANT", active: true }, select: { id: true, name: true } }) : Promise.resolve([]),
+    list("LEASE_AGENT"),
+    list("LEASE_HIGHLIGHT"),
   ]);
+  // diferenciais que o app já sabe: alugado na 1ª visita / em até 7 dias da 1ª visita
+  const doneVisits = opp.visits.filter((v) => v.status === "DONE").length;
+  const days = Math.floor((Date.now() - opp.firstDoneVisitAt.getTime()) / 86400_000);
+  const norm = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const suggested = highlights
+    .filter((h) => (doneVisits === 1 && /1(a|ª)? visita|primeira visita/.test(norm(h.label)) && !/dias/.test(norm(h.label))) || (days <= 7 && /7 dias/.test(norm(h.label))))
+    .map((h) => h.id);
   return (
     <>
       <Link href="/oportunidades" className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
@@ -40,6 +51,9 @@ export default async function OppPage({ params, searchParams }: { params: Promis
             ["Responsável", opp.responsible?.name ?? "—"],
             ["1ª visita realizada", fmt.date(opp.firstDoneVisitAt)],
             ...(opp.closedAt ? [["Fechamento", `${fmt.dayKey(dateOnlyKey(opp.closedAt))} · ${opp.closedResponsible?.name ?? "—"}`] as [string, React.ReactNode]] : []),
+            ...(lease
+              ? [["Marketing", `${lease.postedAt ? `postado em ${fmt.date(lease.postedAt)}` : "aguardando postagem"} · agenciador ${lease.agent.label}${lease.highlights.length ? ` · ${lease.highlights.join(", ")}` : ""} — ${lease.highlightNote}`] as [string, React.ReactNode]]
+              : []),
             ...(opp.status === "LOST"
               ? [["Perda", `${opp.lostOrigin === "VISIT_NEGATIVE" ? "Visita negativa" : "Perda posterior"}${opp.lostReason ? ` · ${opp.lostReason.label}` : ""}${opp.lostNote ? ` — ${opp.lostNote}` : ""}`] as [string, React.ReactNode]]
               : []),
@@ -48,7 +62,7 @@ export default async function OppPage({ params, searchParams }: { params: Promis
       </Panel>
       {canUpdate && (
         <Section title="Atualizar andamento">
-          <OppForm initialTo={para} opp={{ id: opp.id, version: opp.version, status: opp.status, responsibleId: opp.responsibleId }} lostReasons={lostReasons} users={users} today={dayKey(new Date())} />
+          <OppForm initialTo={para} opp={{ id: opp.id, version: opp.version, status: opp.status, responsibleId: opp.responsibleId }} lostReasons={lostReasons} users={users} today={dayKey(new Date())} agents={agents} highlights={highlights} suggested={suggested} canManageLists={global} />
         </Section>
       )}
       {global && (

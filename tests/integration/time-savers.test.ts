@@ -11,19 +11,21 @@ import { sendOperationalAlerts } from "@/server/reminders";
 import { concludeVisit, createManualVisit } from "@/server/visits";
 import { buildConfirmMessage, whatsappUrl } from "@/lib/confirm";
 import { toLocalInput } from "@/lib/time";
-import { makeConnection, makeUsers, resetDb } from "../helpers/db";
+import { guaranteeId, makeConnection, makeUsers, resetDb } from "../helpers/db";
 
 let u: Awaited<ReturnType<typeof makeUsers>>;
 let jasmin: { id: string; role: "PRE_SERVICE" };
+let gId = "";
 const NOW = new Date("2026-10-13T15:00:00Z"); // terça 12:00 SP
 const H = 3600_000;
-const pre = (o: Record<string, unknown> = {}) => ({ fullName: "Maria Titular da Silva", birthDate: "1990-05-20", cpf: "529.982.247-25", email: "maria@exemplo.test", phone: "(51) 99876-1234", salary: "4.500,00", consultantId: u.a.id, propertyCode: "761739", note: "", holderConfirmed: true as const, ...o });
+const pre = (o: Record<string, unknown> = {}) => ({ fullName: "Maria Titular da Silva", birthDate: "1990-05-20", cpf: "529.982.247-25", email: "maria@exemplo.test", phone: "(51) 99876-1234", salary: "4.500,00", consultantId: u.a.id, guaranteeId: gId, propertyCode: "761739", note: "", holderConfirmed: true as const, ...o });
 
 beforeEach(async () => {
   await resetDb();
   u = await makeUsers();
   const j = await db.user.create({ data: { name: "Jasmin Pré", email: "jasmin@exemplo.test", role: "PRE_SERVICE" } });
   jasmin = { id: j.id, role: "PRE_SERVICE" };
+  gId = await guaranteeId();
   await db.appSettings.update({ where: { id: 1 }, data: { remindersEnabled: true } });
 });
 
@@ -94,11 +96,11 @@ describe("retornos do ainda decidindo", () => {
     expect(await dueFollowUps(u.a.id, NOW)).toHaveLength(0);
     const tomorrow = new Date("2026-10-14T15:00:00Z");
     expect((await dueFollowUps(u.a.id, tomorrow)).map((x) => x.id)).toEqual([v.id]);
-    await followUpAction(u.a, v.id, "snooze");
+    await followUpAction(u.a, v.id, "snooze", tomorrow);
     expect(await dueFollowUps(u.a.id, tomorrow)).toHaveLength(0);
     const later = new Date("2026-10-16T15:00:00Z");
     expect(await dueFollowUps(u.a.id, later)).toHaveLength(1);
-    await followUpAction(u.a, v.id, "done");
+    await followUpAction(u.a, v.id, "done", later);
     expect(await dueFollowUps(u.a.id, later)).toHaveLength(0);
   });
 

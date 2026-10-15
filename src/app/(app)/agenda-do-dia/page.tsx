@@ -6,6 +6,8 @@ import { addDays, dayKey, fmt, isDayKey } from "@/lib/time";
 import { EVALUATION_LABEL, STATUS_LABEL } from "@/lib/labels";
 import { PageHeader, Segmented, cx } from "@/components/ui";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { db } from "@/lib/db";
+import { CancelVisit } from "./cancel";
 
 export const metadata = { title: "Agenda do dia" };
 
@@ -17,7 +19,10 @@ export default async function DayAgendaPage({ searchParams }: { searchParams: Pr
   const today = dayKey(now);
   const tomorrow = addDays(today, 1);
   const day = isDayKey(sp.dia) ? sp.dia : today;
-  const a = await dayAgenda(actor, day);
+  const [a, cancelReasons] = await Promise.all([
+    dayAgenda(actor, day),
+    db.reason.findMany({ where: { kind: "VISIT_CANCEL", active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, label: true } }),
+  ]);
   const label = (v: (typeof a.groups)[number]["items"][number]) => {
     if (v.status !== "SCHEDULED") return v.evaluation ? EVALUATION_LABEL[v.evaluation] : STATUS_LABEL[v.status];
     if (v.scheduledStart <= now && v.scheduledEnd > now) return "Em andamento";
@@ -52,7 +57,7 @@ export default async function DayAgendaPage({ searchParams }: { searchParams: Pr
               </h2>
               <ol>
                 {g.items.map((v) => (
-                  <li key={v.id} className="flex items-center gap-3 border-b border-line px-5 py-2.5 last:border-b-0">
+                  <li key={v.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-5 py-2.5 last:border-b-0">
                     <span className="num w-12 shrink-0 text-[14px] font-bold">{fmt.time(v.scheduledStart)}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[14px] font-semibold">{v.clientName ?? "Cliente sem nome"}</span>
@@ -66,7 +71,13 @@ export default async function DayAgendaPage({ searchParams }: { searchParams: Pr
                       <span className="text-ink-2">{label(v)}</span>
                       {v.status === "SCHEDULED" && v.confirmStatus === "CONFIRMED" && <span className="text-good">✓ confirmada</span>}
                       {v.status === "SCHEDULED" && v.confirmStatus === "NO_REPLY" && <span className="text-warn">sem resposta</span>}
+                      {v.status === "CANCELED" && v.cancelReason && <span className="font-normal text-ink-3">{v.cancelReason.label}</span>}
                     </span>
+                    {v.status === "SCHEDULED" && !v.companionOfId && v.scheduledEnd > now && (
+                      <span className="basis-full sm:basis-auto">
+                        <CancelVisit visitId={v.id} label={`${fmt.time(v.scheduledStart)} · ${v.clientName ?? "cliente"}`} reasons={cancelReasons} />
+                      </span>
+                    )}
                   </li>
                 ))}
               </ol>

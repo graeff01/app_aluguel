@@ -22,6 +22,7 @@ await db.user.create({ data: { name: "Pessoa Nova", email: "privacidade@e2e.test
 await db.user.updateMany({ where: { email: { not: "privacidade@e2e.test" } }, data: { privacyAcceptedAt: new Date() } });
 await db.user.create({ data: { name: "Jasmin Pré", email: "jasmin@e2e.test", role: "PRE_SERVICE", passwordHash: hash, privacyAcceptedAt: new Date() } });
 await db.user.create({ data: { name: "Gisele Nova", email: "guia@e2e.test", role: "CONSULTANT", passwordHash: hash, privacyAcceptedAt: new Date() } });
+await db.user.create({ data: { name: "Marketing E2E", email: "mkt@e2e.test", role: "MARKETING", passwordHash: hash, privacyAcceptedAt: new Date() } });
 // todos já passaram pelo guia de primeiro acesso, exceto a usuária do teste do guia
 await db.user.updateMany({ where: { email: { not: "guia@e2e.test" } }, data: { onboardedAt: new Date() } });
 const ago = (h: number) => toLocalInput(new Date(Date.now() - h * 3600_000));
@@ -38,3 +39,6 @@ await db.property.update({ where: { code: "00556" }, data: { neighborhood: "Igar
 const kb = await createManualVisit(admin, { requestId: "e2e-seed-kanban", scheduledStart: ago(120), clientName: "Cliente Kanban", phoneRaw: "(51) 99876-0444", propertyCode: "00444", consultantId: b.id });
 await concludeVisit(admin, kb.id, { requestId: "e2e-seed-kanban-done", expectedVersion: 1, status: "DONE", evaluation: "POSITIVE", note: "Gostou e vai trazer a família." });
 await db.$disconnect();
+
+// visita daqui a pouco para o pré-atendimento cancelar
+await createManualVisit(admin, { requestId: "e2e-seed-cancel", scheduledStart: toLocalInput(new Date(Date.now() + 20 * 60_000)), clientName: "Cliente Cancela", phoneRaw: "(51) 99876-0099", propertyCode: "00555", consultantId: b.id });

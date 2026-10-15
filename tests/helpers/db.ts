@@ -38,3 +38,11 @@ export async function makeConnection(calendarId = "central@exemplo.test", access
 
 export const reason = (label: string, kind: "VISIT_NEGATIVE" | "OPPORTUNITY_LOST" = "VISIT_NEGATIVE") =>
   db.reason.findFirstOrThrow({ where: { label, kind } });
+
+/** Garantia padrão (pré-análise). */
+export const guaranteeId = async (label = "Fiador") => (await db.reason.findFirstOrThrow({ where: { kind: "GUARANTEE", label } })).id;
+/** Dados obrigatórios do fechamento (aviso ao marketing). */
+export async function leaseInfo() {
+  const agent = await db.reason.upsert({ where: { kind_label: { kind: "LEASE_AGENT", label: "Agenciador Teste" } }, update: {}, create: { kind: "LEASE_AGENT", label: "Agenciador Teste" } });
+  return { agentId: agent.id, highlightNote: "Fechou no mesmo dia da visita." };
+}

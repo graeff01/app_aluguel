@@ -7,16 +7,17 @@ import { rescheduleVisit } from "@/server/reschedule";
 import { createManualVisit } from "@/server/visits";
 import { runSync } from "@/server/sync/engine";
 import { toLocalInput } from "@/lib/time";
-import { makeConnection, makeUsers, resetDb } from "../helpers/db";
+import { guaranteeId, makeConnection, makeUsers, resetDb } from "../helpers/db";
 import { MockCalendar, visitEvent } from "../helpers/mock-calendar";
 
 let u: Awaited<ReturnType<typeof makeUsers>>;
 let jasmin: { id: string; role: "PRE_SERVICE" };
+let gId = "";
 const NOW = new Date("2026-10-13T15:00:00Z"); // 12:00 SP, terça
 const H = 3600_000;
 const pre = (o: Record<string, unknown> = {}) => ({
   fullName: "Maria Titular da Silva", birthDate: "1990-05-20", cpf: "529.982.247-25", email: "maria@exemplo.test", phone: "(51) 99876-1234", salary: "4.500,00",
-  consultantId: u.a.id, propertyCode: "", note: "", holderConfirmed: true as const, ...o,
+  consultantId: u.a.id, guaranteeId: gId, propertyCode: "", note: "", holderConfirmed: true as const, ...o,
 });
 const local = (d: Date) => toLocalInput(d);
 
@@ -26,6 +27,7 @@ beforeEach(async () => {
   const j = await db.user.create({ data: { name: "Jasmin Pré", email: "jasmin@exemplo.test", role: "PRE_SERVICE" } });
   jasmin = { id: j.id, role: "PRE_SERVICE" };
   await db.appSettings.update({ where: { id: 1 }, data: { remindersEnabled: true } });
+  gId = await guaranteeId();
 });
 
 describe("pré-análise: duplicidade, repetição e ausência", () => {
@@ -86,6 +88,7 @@ describe("alertas de gargalo", () => {
     expect(t1).toContain("1 pré-análise aprovada sem visita marcada");
 
     await resetDb();
+    gId = await guaranteeId();
     u = await makeUsers();
     const j = await db.user.create({ data: { name: "Jasmin Pré", email: "jasmin@exemplo.test", role: "PRE_SERVICE" } });
     jasmin = { id: j.id, role: "PRE_SERVICE" };

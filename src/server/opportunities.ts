@@ -14,6 +14,8 @@ import { assert, canUpdateOpportunity, canViewOpportunity, hasGlobalView, type A
 import { getSettings } from "@/lib/settings";
 import { dateOnlyFromKey, dayKey, isDayKey } from "@/lib/time";
 import type { OpportunityStatus } from "@/generated/prisma/enums";
+import { appLink, emailConfig, sendEmail } from "@/lib/email";
+import { notifyUser } from "./notify";
 
 const ACTIVE: OpportunityStatus[] = ["FOLLOW_UP", "DOCS_REVIEW"];
 
@@ -112,9 +114,15 @@ export const opportunityUpdateSchema = z
     closedAt: z.string().optional(),
     closedResponsibleId: z.string().optional(),
     lostReasonId: z.string().optional(),
+    /** aviso ao marketing (obrigatórios no fechamento): agenciador, diferenciais marcados e texto */
+    agentId: z.string().optional(),
+    highlightIds: z.array(z.string()).max(20).optional().default([]),
+    highlightNote: z.string().trim().max(600).optional().default(""),
   })
   .superRefine((v, ctx) => {
     if (v.toStatus === "CLOSED_WON" && !isDayKey(v.closedAt)) ctx.addIssue({ code: "custom", path: ["closedAt"], message: "Informe a data do fechamento." });
+    if (v.toStatus === "CLOSED_WON" && !v.agentId) ctx.addIssue({ code: "custom", path: ["agentId"], message: "Escolha o agenciador." });
+    if (v.toStatus === "CLOSED_WON" && v.highlightNote.length < 5) ctx.addIssue({ code: "custom", path: ["highlightNote"], message: "Conte o diferencial desta locação para o marketing." });
     if (v.toStatus === "LOST") {
       if (!v.lostReasonId) ctx.addIssue({ code: "custom", path: ["lostReasonId"], message: "Selecione o motivo da perda." });
       if (!v.note) ctx.addIssue({ code: "custom", path: ["note"], message: "Descreva o motivo da perda." });
@@ -122,9 +130,11 @@ export const opportunityUpdateSchema = z
   });
 
 export async function updateOpportunity(actor: AuthzActor, oppId: string, input: z.input<typeof opportunityUpdateSchema>) {
-  const data = opportunityUpdateSchema.parse(input);
+  const parsed = opportunityUpdateSchema.safeParse(input);
+  if (!parsed.success) throw new AppError("VALIDATION", "Revise os campos destacados.", Object.fromEntries(parsed.error.issues.map((i) => [i.path.join("."), i.message])));
+  const data = parsed.data;
   const settings = await getSettings();
-  return db.$transaction(async (tx) => {
+  const post = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Opportunity" WHERE id = ${oppId} FOR UPDATE`;
     const opp = await tx.opportunity.findUnique({ where: { id: oppId } });
     if (!opp || !canViewOpportunity(actor, opp)) throw notFound();
@@ -137,6 +147,7 @@ export async function updateOpportunity(actor: AuthzActor, oppId: string, input:
     if (reopening && !data.note) throw new AppError("VALIDATION", "Informe uma observação para reabrir.", { note: "Obrigatória para reabrir." });
 
     const update: Record<string, unknown> = { status: data.toStatus, version: { increment: 1 } };
+    let leaseInfo: { agentId: string; highlights: string[]; highlightNote: string } | null = null;
     if (data.toStatus === "CLOSED_WON") {
       const responsibleId = data.closedResponsibleId || opp.responsibleId || actor.id;
       if (data.closedResponsibleId && data.closedResponsibleId !== opp.responsibleId && !hasGlobalView(actor)) {
@@ -146,6 +157,10 @@ export async function updateOpportunity(actor: AuthzActor, oppId: string, input:
       if (!resp) throw new AppError("VALIDATION", "Responsável inválida.");
       if (data.closedAt! > dayKey(new Date())) throw new AppError("VALIDATION", "A data do fechamento não pode ser futura.", { closedAt: "Data futura." });
       Object.assign(update, { closedAt: dateOnlyFromKey(data.closedAt!), closedResponsibleId: responsibleId, lostAt: null, lostOrigin: null, lostReasonId: null, lostNote: null });
+      const agent = await tx.reason.findUnique({ where: { id: data.agentId! } });
+      if (!agent || agent.kind !== "LEASE_AGENT" || !agent.active) throw new AppError("VALIDATION", "Escolha o agenciador.", { agentId: "Agenciador inválido." });
+      const highlights = data.highlightIds.length ? await tx.reason.findMany({ where: { id: { in: data.highlightIds }, kind: "LEASE_HIGHLIGHT" }, orderBy: { sortOrder: "asc" } }) : [];
+      leaseInfo = { agentId: agent.id, highlights: highlights.map((h) => h.label), highlightNote: data.highlightNote };
     } else if (data.toStatus === "LOST") {
       const reason = await tx.reason.findUnique({ where: { id: data.lostReasonId! } });
       if (!reason || reason.kind !== "OPPORTUNITY_LOST" || !reason.active) throw new AppError("VALIDATION", "Motivo de perda inválido.");
@@ -171,6 +186,44 @@ export async function updateOpportunity(actor: AuthzActor, oppId: string, input:
       entityId: oppId,
       changes: { de: opp.status, para: data.toStatus, closedAt: data.closedAt ?? null },
     });
+    // aviso ao marketing: criado no fechamento; saiu de "fechada" antes de postar → o aviso some
+    if (leaseInfo) {
+      await tx.leasePost.upsert({ where: { opportunityId: oppId }, update: { ...leaseInfo, createdById: actor.id, createdAt: new Date(), postedAt: null, postedById: null }, create: { opportunityId: oppId, ...leaseInfo, createdById: actor.id } });
+      return true;
+    }
+    if (opp.status === "CLOSED_WON") await tx.leasePost.deleteMany({ where: { opportunityId: oppId, postedAt: null } });
+    return false;
+  });
+  if (post) await notifyMarketing(oppId).catch(() => undefined);
+}
+
+/** Avisa o marketing (celular e, se configurado, e-mail) de uma locação fechada para postar. */
+async function notifyMarketing(oppId: string) {
+  const o = await db.opportunity.findUnique({ where: { id: oppId }, include: { property: { select: { code: true, neighborhood: true } }, leasePost: { include: { agent: { select: { label: true } } } } } });
+  if (!o?.leasePost) return;
+  const people = await db.user.findMany({ where: { role: "MARKETING", active: true }, select: { id: true, email: true } });
+  const where = `imóvel ${o.property.code}${o.property.neighborhood ? ` · ${o.property.neighborhood}` : ""}`;
+  const highlight = o.leasePost.highlights[0] ?? o.leasePost.highlightNote;
+  for (const u of people) {
+    await notifyUser(u.id, { title: "Locação fechada para postar", body: `${where}. ${highlight}`.slice(0, 180), url: "/marketing", tag: `locacao-${oppId}` });
+    if (emailConfig()) {
+      await sendEmail(
+        u.email,
+        `Locação fechada: ${where}`,
+        [`Contrato assinado — ${where}.`, `Agenciador: ${o.leasePost.agent.label}`, o.leasePost.highlights.length ? `Diferenciais: ${o.leasePost.highlights.join(", ")}` : "", `Sobre a locação: ${o.leasePost.highlightNote}`, "", `Ver no app: ${appLink("/marketing")}`].filter(Boolean).join("\n"),
+      );
+    }
+  }
+}
+
+/** Marketing marca a locação como postada (ou desfaz). */
+export async function markLeasePosted(actor: AuthzActor, postId: string, posted: boolean) {
+  assert(actor.role === "MARKETING" || hasGlobalView(actor));
+  await db.$transaction(async (tx) => {
+    const p = await tx.leasePost.findUnique({ where: { id: postId } });
+    if (!p) throw notFound();
+    await tx.leasePost.update({ where: { id: postId }, data: posted ? { postedAt: new Date(), postedById: actor.id } : { postedAt: null, postedById: null } });
+    await audit(tx, { actorId: actor.id, action: posted ? "lease_post.posted" : "lease_post.unposted", entityType: "LeasePost", entityId: postId });
   });
 }
 

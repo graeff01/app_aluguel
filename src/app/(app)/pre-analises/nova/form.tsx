@@ -19,7 +19,7 @@ const ago = (d: Date) => {
   return h < 48 ? `há ${h} h` : `há ${Math.round(h / 24)} dias`;
 };
 
-export function PreAnalysisForm({ consultants }: { consultants: QueueItem[] }) {
+export function PreAnalysisForm({ consultants, guarantees }: { consultants: QueueItem[]; guarantees: { id: string; label: string }[] }) {
   const [cpf, setCpf] = useState("");
   const [chosen, setChosen] = useState(consultants.find((c) => c.isNext)?.id ?? "");
   const [pasted, setPasted] = useState("");
@@ -98,6 +98,20 @@ export function PreAnalysisForm({ consultants }: { consultants: QueueItem[] }) {
               <Input id="propertyCode" name="propertyCode" inputMode="numeric" placeholder="Código do imóvel" autoComplete="off" />
             </Field>
           </div>
+          <fieldset className="mb-5">
+            <legend className="mb-2 text-sm font-semibold text-ink">Garantia da locação</legend>
+            <div className="flex flex-wrap gap-2">
+              {guarantees.map((g) => (
+                <label key={g.id} className="press cursor-pointer">
+                  <input type="radio" name="guaranteeId" value={g.id} required className="peer sr-only" />
+                  <span className="inline-flex min-h-11 items-center rounded-full border-2 border-line bg-surface px-4 text-[14px] font-semibold transition peer-checked:border-accent peer-checked:bg-accent-soft peer-focus-visible:ring-2 peer-focus-visible:ring-accent">
+                    {g.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <FieldError state={st} name="guaranteeId" />
+          </fieldset>
           <fieldset className="mb-5">
             <legend className="mb-1 text-sm font-semibold text-ink">Encaminhar para a consultora</legend>
             <p className="mb-3 text-[13px] text-ink-3">Rodízio: vai para quem tem menos pré-análises em aberto (no empate, a da vez). Toque em outra se precisar.</p>

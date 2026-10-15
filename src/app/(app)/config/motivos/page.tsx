@@ -1,29 +1,27 @@
-import { requireAdmin } from "@/lib/require";
+import { requireManager } from "@/lib/require";
 import { db } from "@/lib/db";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { InlineAction } from "@/components/inline-action";
 import { Badge, Input, PageHeader, Section } from "@/components/ui";
 import { reasonAction } from "@/app/actions/admin";
+import { REASON_GROUPS, REASON_USAGE, reasonUsage } from "@/lib/reasons";
 
-export const metadata = { title: "Motivos" };
+export const metadata = { title: "Listas e motivos" };
 
 export default async function ReasonsPage() {
-  await requireAdmin();
-  const reasons = await db.reason.findMany({ include: { _count: { select: { visits: true, opportunities: true } } }, orderBy: [{ kind: "asc" }, { sortOrder: "asc" }] });
-  const groups = [
-    { kind: "VISIT_NEGATIVE", title: "Motivos de visita negativa" },
-    { kind: "OPPORTUNITY_LOST", title: "Motivos de perda posterior" },
-  ] as const;
+  await requireManager();
+  const reasons = await db.reason.findMany({ include: { _count: { select: REASON_USAGE } }, orderBy: [{ kind: "asc" }, { sortOrder: "asc" }] });
+  const groups = REASON_GROUPS;
   return (
     <>
-      <PageHeader title="Motivos" subtitle="Motivos já usados não podem ser excluídos — desative-os para preservar o histórico." />
+      <PageHeader title="Listas e motivos" subtitle="Itens já usados não podem ser excluídos — desative-os para preservar o histórico." />
       {groups.map((g) => (
         <Section key={g.kind} title={g.title}>
           <ul className="mb-3 divide-y divide-line overflow-hidden rounded-3xl border border-line bg-surface shadow-card">
             {reasons
               .filter((r) => r.kind === g.kind)
               .map((r) => {
-                const used = r._count.visits + r._count.opportunities;
+                const used = reasonUsage(r._count);
                 return (
                   <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                     <span>
@@ -46,7 +44,7 @@ export default async function ReasonsPage() {
             <label className="sr-only" htmlFor={`new-${g.kind}`}>
               Novo motivo
             </label>
-            <Input id={`new-${g.kind}`} name="label" placeholder="Novo motivo" required maxLength={80} className="flex-1" />
+            <Input id={`new-${g.kind}`} name="label" placeholder={g.placeholder} required maxLength={80} className="flex-1" />
             <SubmitButton variant="secondary">Adicionar</SubmitButton>
           </ActionForm>
         </Section>

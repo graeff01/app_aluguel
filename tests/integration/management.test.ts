@@ -6,7 +6,7 @@ import { updateOpportunity } from "@/server/opportunities";
 import { listProperties, nudgeConsultant, opportunityFunnel, propertyDetail, staleOpportunities } from "@/server/insights";
 import { sendDailyReminders, sendWeeklySummary, type Sender } from "@/server/reminders";
 import { recordError, scrubMessage, scrubPath } from "@/lib/error-tracking";
-import { makeUsers, resetDb } from "../helpers/db";
+import { makeUsers, resetDb, leaseInfo } from "../helpers/db";
 
 let u: Awaited<ReturnType<typeof makeUsers>>;
 let seq = 0;
@@ -32,7 +32,7 @@ describe("funil de locação", () => {
     const o1 = await db.opportunity.findFirstOrThrow({ where: { property: { code: "1" } } });
     await updateOpportunity(u.manager, o1.id, { expectedVersion: o1.version, toStatus: "DOCS_REVIEW" });
     const o1b = await db.opportunity.findUniqueOrThrow({ where: { id: o1.id } });
-    await updateOpportunity(u.manager, o1.id, { expectedVersion: o1b.version, toStatus: "CLOSED_WON", closedAt: "2026-09-10" });
+    await updateOpportunity(u.manager, o1.id, { expectedVersion: o1b.version, toStatus: "CLOSED_WON", closedAt: "2026-09-10", ...(await leaseInfo()) });
     const f = await opportunityFunnel(u.manager, { from: "2026-09-01", to: "2026-10-31" });
     expect(f.steps.map((s) => s.count)).toEqual([3, 2, 1, 1]);
     expect(f.daysToClose).toBe(9);

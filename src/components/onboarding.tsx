@@ -14,11 +14,16 @@ type BIP = Event & { prompt: () => Promise<void>; userChoice?: Promise<{ outcome
 type Platform = { ios: boolean; android: boolean; mobile: boolean; standalone: boolean };
 type StepKey = "welcome" | "install" | "notify" | "howto";
 
-const HOWTO: Record<"consultant" | "manager" | "pre", { icon: IconName; title: string; text: string }[]> = {
+const HOWTO: Record<"consultant" | "manager" | "pre" | "marketing", { icon: IconName; title: string; text: string }[]> = {
   pre: [
     { icon: "plus", title: "Nova pré-análise", text: "Preencha os dados do titular do CPF e escolha a consultora. Ela recebe na hora, no app." },
     { icon: "pending", title: "Acompanhe o resultado", text: "Aprovado, reprovado ou pendente: você é avisada quando a consultora responder." },
-    { icon: "today", title: "Cancelar visita", text: "Mova o evento na agenda Google para depois das 21h: o app marca a visita como cancelada sozinho." },
+    { icon: "today", title: "Cancelar visita", text: "Em Visitas, toque em Cancelar e escolha o motivo. A consultora é avisada na hora." },
+  ],
+  marketing: [
+    { icon: "home", title: "Locação fechada", text: "Quando um contrato é assinado, chega um aviso com o imóvel, o diferencial e o agenciador." },
+    { icon: "check", title: "Postou?", text: "Depois de postar, toque em Marcar como postado. A lista mostra o que ainda falta." },
+    { icon: "list", title: "Tudo em um lugar", text: "Fotos, valores e o link do anúncio de cada imóvel locado." },
   ],
   consultant: [
     { icon: "today", title: "Antes da visita", text: "Toque na visita e veja a ficha: valores, fotos, histórico do cliente e pontos para a conversa." },
@@ -32,7 +37,7 @@ const HOWTO: Record<"consultant" | "manager" | "pre", { icon: IconName; title: s
   ],
 };
 
-export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN" | "MANAGER" | "CONSULTANT" | "PRE_SERVICE"; pushKey: string | null }) {
+export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN" | "MANAGER" | "CONSULTANT" | "PRE_SERVICE" | "MARKETING"; pushKey: string | null }) {
   const [platform, setPlatform] = useState<Platform | null>(null);
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -41,7 +46,7 @@ export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN
   const [iosHandoff, setIosHandoff] = useState(false);
   const push = usePush(pushKey);
   const first = name.split(" ")[0];
-  const kind = role === "CONSULTANT" ? "consultant" : role === "PRE_SERVICE" ? "pre" : "manager";
+  const kind = role === "CONSULTANT" ? "consultant" : role === "PRE_SERVICE" ? "pre" : role === "MARKETING" ? "marketing" : "manager";
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -110,6 +115,8 @@ export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN
                   ? ["Suas visitas chegam sozinhas da agenda.", "Você registra o resultado em segundos, no celular.", "O app lembra você — nada fica para trás."]
                   : kind === "pre"
                     ? ["Você envia a pré-análise direto para a consultora.", "Os dados do cliente ficam protegidos e criptografados.", "Você acompanha o resultado de cada uma."]
+                    : kind === "marketing"
+                      ? ["Cada locação fechada chega para você na hora.", "Com o diferencial e o agenciador para a postagem.", "Você marca o que já foi postado."]
                     : ["As visitas chegam sozinhas da agenda da equipe.", "Você acompanha o dia de cada consultora ao vivo.", "Relatórios e PDFs prontos para a direção e proprietários."]
                 ).map((t) => (
                   <li key={t} className="flex items-start gap-3 text-[15px]">
@@ -177,7 +184,7 @@ export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN
                 Ative as notificações
               </h1>
               <p className="mt-2 text-[15px] text-ink-2">
-                {kind === "consultant" ? "É assim que o app avisa antes de cada visita e pergunta “Como foi?” quando ela termina." : kind === "pre" ? "É assim que você fica sabendo quando a consultora responder a pré-análise." : "É assim que você fica sabendo de visitas sem resultado e se a agenda parar."}
+                {kind === "consultant" ? "É assim que o app avisa antes de cada visita e pergunta “Como foi?” quando ela termina." : kind === "pre" ? "É assim que você fica sabendo quando a consultora responder a pré-análise." : kind === "marketing" ? "É assim que você fica sabendo de cada locação fechada para postar." : "É assim que você fica sabendo de visitas sem resultado e se a agenda parar."}
               </p>
               <div className="mt-6">
                 {push.state === "on" ? (

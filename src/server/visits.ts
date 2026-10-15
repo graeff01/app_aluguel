@@ -17,11 +17,13 @@ import {
   canReview,
   canViewVisit,
   hasGlobalView,
+  isPreService,
   type AuthzActor,
 } from "@/lib/authz";
 import { getSettings } from "@/lib/settings";
 import { normalizePhone } from "@/lib/phone";
-import { cleanOptional } from "@/lib/text";
+import { cleanOptional, normalizeText } from "@/lib/text";
+import { notifyUser } from "./notify";
 import { addDays, dateOnlyFromKey, dayKey, fromLocalInput } from "@/lib/time";
 import { resolveClient, cleanupOrphanClient } from "./clients";
 import { applyDoneVisit, detachVisitFromOpportunity } from "./opportunities";
@@ -184,6 +186,41 @@ export async function concludeSameVisit(tx: Tx, actor: AuthzActor, v: { id: stri
     await tx.visitOutcomeHistory.create({ data: { visitId: s.id, status, note, authorId: actor.id } });
     await audit(tx, { actorId: actor.id, action: "visit.concluded", entityType: "Visit", entityId: s.id, changes: { status: { from: "SCHEDULED", to: status }, mesmaVisita: v.id } });
   }
+}
+
+/**
+ * Pré-atendimento (ou gestão) cancela a visita com motivo da lista. Vale para todos os imóveis em aberto
+ * da mesma visita; a consultora é avisada no celular.
+ */
+export async function cancelVisitByStaff(actor: AuthzActor, visitId: string, input: { reasonId: string; note?: string }, now = new Date()) {
+  assert(isPreService(actor) || hasGlobalView(actor));
+  const reason = await db.reason.findUnique({ where: { id: input.reasonId } });
+  if (!reason || reason.kind !== "VISIT_CANCEL" || !reason.active) throw new AppError("VALIDATION", "Escolha o motivo do cancelamento.", { reasonId: "Escolha o motivo." });
+  const extra = (input.note ?? "").trim().slice(0, 500);
+  if (normalizeText(reason.label) === "outro" && !extra) throw new AppError("VALIDATION", "Descreva o motivo.", { note: "Obrigatório quando o motivo é Outro." });
+  const note = extra ? `${reason.label} — ${extra}` : reason.label;
+  const result = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Visit" WHERE id = ${visitId} FOR UPDATE`;
+    const visit = await tx.visit.findUnique({ where: { id: visitId } });
+    if (!visit || visit.excluded) throw notFound();
+    if (visit.status !== "SCHEDULED") throw new AppError("INVALID_STATE", "Esta visita já tem resultado registrado.");
+    const ids = [visit.id, ...(await sameVisitGroup(tx, visit)).filter((s) => s.status === "SCHEDULED").map((s) => s.id)];
+    for (const id of ids) {
+      await detachVisitFromOpportunity(tx, id, actor.id);
+      await tx.visit.update({
+        where: { id },
+        data: { status: "CANCELED", cancelReasonId: reason.id, note, evaluation: null, negativeReasonId: null, concludedAt: now, concludedById: actor.id, realizedById: null, autoCanceled: false, followUpOn: null, followUpDoneAt: null, version: { increment: 1 } },
+      });
+      await tx.visitOutcomeHistory.create({ data: { visitId: id, status: "CANCELED", note, authorId: actor.id } });
+      await audit(tx, { actorId: actor.id, action: "visit.canceled_by_staff", entityType: "Visit", entityId: id, changes: { motivo: reason.label } });
+    }
+    return { visit, count: ids.length };
+  });
+  if (result.visit.consultantId && result.visit.consultantId !== actor.id) {
+    const when = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(result.visit.scheduledStart);
+    await notifyUser(result.visit.consultantId, { title: `Visita de ${when} cancelada`, body: `Motivo: ${reason.label}${result.visit.propertyCode ? ` · imóvel ${result.visit.propertyCode}` : ""}`, url: `/visitas/${result.visit.id}`, tag: `cancelada-${result.visit.id}` }).catch(() => undefined);
+  }
+  return result.count;
 }
 
 // ─────────────── Correção de dados ───────────────

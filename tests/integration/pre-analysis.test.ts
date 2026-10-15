@@ -5,11 +5,12 @@ import { ageOn, assignmentQueue, createPreAnalysis, incomeBand, isValidCpf, list
 import { canCreateManualVisit } from "@/lib/authz";
 import { runSync, LATE_CANCEL_NOTE } from "@/server/sync/engine";
 import { concludeVisit } from "@/server/visits";
-import { makeConnection, makeUsers, resetDb } from "../helpers/db";
+import { makeConnection, makeUsers, resetDb, guaranteeId } from "../helpers/db";
 import { MockCalendar, visitEvent } from "../helpers/mock-calendar";
 
 let u: Awaited<ReturnType<typeof makeUsers>>;
 let jasmin: { id: string; role: "PRE_SERVICE" };
+let gId = "";
 const NOW = new Date("2026-10-13T15:00:00Z");
 const valid = (o: Partial<Parameters<typeof createPreAnalysis>[1]> = {}) => ({
   fullName: "Maria Titular da Silva",
@@ -19,6 +20,7 @@ const valid = (o: Partial<Parameters<typeof createPreAnalysis>[1]> = {}) => ({
   phone: "(51) 99876-1234",
   salary: "4.500,00",
   consultantId: u.a.id,
+  guaranteeId: gId,
   propertyCode: "761739",
   note: "",
   holderConfirmed: true as const,
@@ -30,6 +32,7 @@ beforeEach(async () => {
   u = await makeUsers();
   const j = await db.user.create({ data: { name: "Jasmin Pré", email: "jasmin@exemplo.test", role: "PRE_SERVICE" } });
   jasmin = { id: j.id, role: "PRE_SERVICE" };
+  gId = await guaranteeId();
 });
 
 describe("validações", () => {

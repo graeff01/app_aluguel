@@ -25,7 +25,7 @@ import { UpdateBanner } from "@/components/update-banner";
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const actor = await requireActor({ preService: true });
+  const actor = await requireActor({ preService: true, marketing: true });
   // senha provisória: nada do app é exibido até a troca
   if (actor.mustChangePassword) return <div className="min-h-dvh bg-bg"><ForcePasswordDialog name={actor.name} /></div>;
   // LGPD: ciência do aviso de privacidade no primeiro acesso
@@ -37,6 +37,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const global = hasGlobalView(actor);
   const preOpen = await countOpenFor(actor);
   const preService = actor.role === "PRE_SERVICE";
+  const marketing = actor.role === "MARKETING";
+  const toPost = marketing || global ? await db.leasePost.count({ where: { postedAt: null } }) : 0;
   const [pending, health, reviewCount] = await Promise.all([
     db.visit.count({
       // "para registrar": já terminou ou já começou (em andamento)
@@ -84,7 +86,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         },
         {
           title: "Equipe",
-          items: [{ href: "/config/usuarios", label: "Usuários", icon: "users" }] as NavItem[],
+          items: [
+            { href: "/config/usuarios", label: "Usuários", icon: "users" },
+            { href: "/pre-analises/painel", label: "Pré-atendimento", icon: "audit" },
+            { href: "/marketing", label: "Marketing", icon: "home", badge: toPost },
+            { href: "/config/motivos", label: "Listas e motivos", icon: "list" },
+          ] as NavItem[],
         },
         ...(isAdmin(actor)
           ? [
@@ -93,7 +100,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 items: [
                   { href: "/admin/google", label: "Agenda Google", icon: "sync" },
                   { href: "/admin/padroes", label: "Padrões", icon: "pattern" },
-                  { href: "/config/motivos", label: "Motivos", icon: "list" },
                   { href: "/admin/configuracoes", label: "Regras e app", icon: "settings" },
                   { href: "/admin/sincronizacao", label: "Diagnóstico", icon: "pulse" },
                   { href: "/config/auditoria", label: "Auditoria", icon: "audit" },
@@ -127,7 +133,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/pre-analises/nova", label: "Nova", icon: "plus" },
     { href: "/agenda-do-dia", label: "Visitas", icon: "today" },
   ];
-  const navGroups = preService ? [{ title: "Pré-atendimento", items: preNav }] : groups;
+  // marketing: só as locações para postar
+  const marketingNav: NavItem[] = [{ href: "/marketing", label: "Para postar", icon: "home", badge: toPost }];
+  const navGroups = preService ? [{ title: "Pré-atendimento", items: preNav }] : marketing ? [{ title: "Marketing", items: marketingNav }] : groups;
   const dot = { ok: "bg-good", stale: "bg-accent", error: "bg-bad", off: "bg-ink-3/50" }[health.level];
   // agenda parada (desconectada ou sem sucesso há mais de 1 h): faixa vermelha para a gestão
   const agendaDown = global && (health.level === "error" || (health.level === "stale" && !!health.lastSuccessAt && now.getTime() - health.lastSuccessAt.getTime() > 3600_000));
@@ -159,7 +167,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <OfflineBanner />
         <RefreshOnFocus />
         <UpdateBanner />
-        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen : pending} />
+        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen : marketing ? toPost : pending} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-2.5">
             <Link href="/minhas" className="flex items-center gap-2">
@@ -193,7 +201,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <OfflineBanner />
         <RefreshOnFocus />
         <UpdateBanner />
-        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen : pending} />
+        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen : marketing ? toPost : pending} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 md:px-8">
             <Link href="/" className="flex items-center gap-2 md:hidden">
@@ -222,7 +230,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {agendaBanner}
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-32 md:px-8 md:pt-9 md:pb-12">{children}</main>
       </div>
-      <BottomNav items={preService ? preNav : global ? managerBottom : consultantNav} />
+      <BottomNav items={preService ? preNav : marketing ? marketingNav : global ? managerBottom : consultantNav} />
       <Suspense>
         <UndoToast />
       </Suspense>

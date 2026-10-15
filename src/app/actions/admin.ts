@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { runAction, str, type ActionState } from "@/lib/action";
+import { REASON_KINDS, REASON_USAGE, reasonUsage } from "@/lib/reasons";
 import { assert, canManageIntegration, canManageReasons, canManageSettings, canManageUser, isAdmin } from "@/lib/authz";
 import { AppError } from "@/lib/errors";
 import { audit } from "@/lib/audit";
@@ -21,7 +22,7 @@ import { wipeTestData } from "@/server/wipe";
 import { hitRateLimit } from "@/lib/ratelimit";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const ROLES: Role[] = ["ADMIN", "MANAGER", "CONSULTANT", "PRE_SERVICE"];
+const ROLES: Role[] = ["ADMIN", "MANAGER", "CONSULTANT", "PRE_SERVICE", "MARKETING"];
 
 async function issueResetLink(userId: string, actorId: string) {
   const token = randomToken(32);
@@ -188,7 +189,7 @@ export async function reasonAction(_: ActionState, fd: FormData) {
       if (op === "create") {
         const kind = str(fd, "kind") as ReasonKind;
         const label = str(fd, "label").trim();
-        if (!["VISIT_NEGATIVE", "OPPORTUNITY_LOST"].includes(kind) || !label) throw new AppError("VALIDATION", "Informe o motivo.");
+        if (!REASON_KINDS.includes(kind) || !label) throw new AppError("VALIDATION", "Informe o nome.");
         const max = await db.reason.aggregate({ where: { kind }, _max: { sortOrder: true } });
         try {
           await db.reason.create({ data: { kind, label, sortOrder: (max._max.sortOrder ?? 0) + 1 } });
@@ -197,7 +198,7 @@ export async function reasonAction(_: ActionState, fd: FormData) {
         }
         return "Motivo criado.";
       }
-      const reason = await db.reason.findUnique({ where: { id: str(fd, "reasonId") }, include: { _count: { select: { visits: true, opportunities: true } } } });
+      const reason = await db.reason.findUnique({ where: { id: str(fd, "reasonId") }, include: { _count: { select: REASON_USAGE } } });
       if (!reason) throw new AppError("NOT_FOUND", "Motivo não encontrado.");
       if (op === "toggle") {
         await db.reason.update({ where: { id: reason.id }, data: { active: !reason.active } });
@@ -210,7 +211,7 @@ export async function reasonAction(_: ActionState, fd: FormData) {
         return "Motivo renomeado.";
       }
       if (op === "delete") {
-        if (reason._count.visits + reason._count.opportunities > 0) throw new AppError("VALIDATION", "Motivo já usado: desative em vez de excluir.");
+        if (reasonUsage(reason._count) > 0) throw new AppError("VALIDATION", "Motivo já usado: desative em vez de excluir.");
         await db.reason.delete({ where: { id: reason.id } });
         return "Motivo excluído.";
       }

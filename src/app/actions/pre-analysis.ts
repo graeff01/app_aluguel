@@ -18,6 +18,7 @@ export async function createPreAnalysisAction(_: ActionState, fd: FormData): Pro
       phone: str(fd, "phone"),
       salary: str(fd, "salary"),
       consultantId: str(fd, "consultantId"),
+      guaranteeId: str(fd, "guaranteeId"),
       propertyCode: str(fd, "propertyCode"),
       note: str(fd, "note"),
       holderConfirmed: (str(fd, "holder") === "1") as true,

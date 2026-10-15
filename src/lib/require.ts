@@ -6,13 +6,14 @@ import { hasGlobalView, isAdmin } from "./authz";
 import { AppError } from "./errors";
 
 /**
- * Usuário autenticado. O pré-atendimento só acessa as telas de pré-análise:
- * qualquer outra tela o leva para /pre-analises (passe { preService: true } nas telas permitidas).
+ * Usuário autenticado. O pré-atendimento só acessa as telas de pré-análise e o marketing só a tela de postagens:
+ * qualquer outra tela os leva para a tela deles (passe { preService: true } / { marketing: true } nas telas permitidas).
  */
-export async function requireActor(opts: { preService?: boolean } = {}): Promise<Actor> {
+export async function requireActor(opts: { preService?: boolean; marketing?: boolean } = {}): Promise<Actor> {
   const a = await getActor();
   if (!a) redirect("/login");
   if (a.role === "PRE_SERVICE" && !opts.preService) redirect("/pre-analises");
+  if (a.role === "MARKETING" && !opts.marketing) redirect("/marketing");
   return a;
 }
 export async function requireManager(): Promise<Actor> {
