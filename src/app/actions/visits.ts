@@ -176,8 +176,19 @@ export async function followUpDoneAction(visitId: string, action: "done" | "snoo
 
 export async function cancelVisitAction(_: ActionState, fd: FormData): Promise<ActionState> {
   const s = await runAction(async (a) => {
-    const n = await cancelVisitByStaff(a, str(fd, "visitId"), { reasonId: str(fd, "reasonId"), note: str(fd, "note") });
-    return n > 1 ? `Visita cancelada (${n} imóveis). A consultora foi avisada.` : "Visita cancelada. A consultora foi avisada.";
+    const r = await cancelVisitByStaff(a, str(fd, "visitId"), { reasonId: str(fd, "reasonId"), note: str(fd, "note"), onlyThis: str(fd, "scope") === "one" });
+    const app = r.count > 1 ? `Visita cancelada (${r.count} imóveis). A consultora foi avisada.` : "Visita cancelada. A consultora foi avisada.";
+    const google = {
+      canceled: " Cancelada também na agenda Google (convidados avisados).",
+      already: " Na agenda Google ela já estava cancelada.",
+      removed: " Saiu da sua agenda Google; o evento é da consultora e ela foi avisada para apagar.",
+      code_removed: " O código saiu do título do evento na agenda Google; os outros imóveis continuam.",
+      not_owner: " O evento é da consultora: ela foi avisada para tirar o código do título.",
+      no_permission: " Apague o evento na agenda Google: o app ainda não tem permissão de edição (a administração precisa reconectar a agenda).",
+      not_in_agenda: "",
+      error: " Não consegui cancelar na agenda Google agora: apague o evento lá.",
+    }[r.google];
+    return app + google;
   });
   if (s.ok) revalidatePath("/agenda-do-dia");
   return s;

@@ -24,7 +24,7 @@ export async function scheduleFromPreAnalysis(
   if (!p) throw notFound();
   assert(canResolvePreAnalysis(actor, p));
   if (p.status !== "APPROVED") throw new AppError("INVALID_STATE", "Só dá para agendar a partir de uma pré-análise aprovada.");
-  if (p.purgedAt || !p.phoneEnc) throw new AppError("INVALID_STATE", "Os dados desta pré-análise já foram apagados (LGPD). Cadastre a visita pela agenda.");
+  if (p.purgedAt) throw new AppError("INVALID_STATE", "Os dados desta pré-análise já foram apagados (LGPD). Cadastre a visita pela agenda.");
   const requestId = `pre-${input.requestId}`.slice(0, 100);
   const dup = await db.visit.findUnique({ where: { createRequestId: requestId } });
   if (dup) return dup;
@@ -36,19 +36,21 @@ export async function scheduleFromPreAnalysis(
   const minutes = Math.min(600, Math.max(15, Math.round(input.durationMinutes || 60)));
   const end = new Date(start.getTime() + minutes * 60_000);
   if (!input.allowOverlap) await assertNoOverlap(p.consultantId, start, end);
-  const phoneE164 = decryptSecret(p.phoneEnc);
+  // telefone e nome são opcionais na pré-análise
+  const phoneE164 = p.phoneEnc ? decryptSecret(p.phoneEnc) : null;
   const phone = normalizePhone(phoneE164);
-  const phoneRaw = formatPhone(phone.normalized, phoneE164);
+  const phoneRaw = phoneE164 ? formatPhone(phone.normalized, phoneE164) : null;
+  const clientName = p.fullName.trim() || null;
 
   return db.$transaction(async (tx) => {
-    const link = await resolveClient(tx, { clientName: p.fullName, phoneRaw });
+    const link = await resolveClient(tx, { clientName, phoneRaw });
     const v = await tx.visit.create({
       data: {
         origin: "MANUAL",
         createRequestId: requestId,
         scheduledStart: start,
         scheduledEnd: end,
-        clientName: p.fullName,
+        clientName,
         phoneRaw,
         phoneNormalized: phone.normalized,
         propertyCode: code,

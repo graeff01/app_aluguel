@@ -70,6 +70,24 @@ export class MockCalendar implements CalendarApi {
     const s = this.events.get(id);
     return s ? structuredClone(s.ev) : null;
   }
+
+  async updateSummary(calendarId: string, id: string, summary: (current: string) => string) {
+    const s = this.events.get(id);
+    if (!s || s.ev.status === "cancelled") return "already" as const;
+    if (s.ev.organizer?.email && s.ev.organizer.email.toLowerCase() !== calendarId.toLowerCase()) return "not_owner" as const;
+    this.put({ ...s.ev, summary: summary(s.ev.summary ?? "") });
+    return "updated" as const;
+  }
+
+  canceledByApp: { calendarId: string; id: string; how: string }[] = [];
+  async cancelEvent(calendarId: string, id: string) {
+    const s = this.events.get(id);
+    if (!s || s.ev.status === "cancelled") return "already" as const;
+    const own = !s.ev.organizer?.email || s.ev.organizer.email.toLowerCase() === calendarId.toLowerCase();
+    this.cancel(id);
+    this.canceledByApp.push({ calendarId, id, how: own ? "canceled" : "removed" });
+    return own ? ("canceled" as const) : ("removed" as const);
+  }
 }
 
 export function visitEvent(id: string, opts: { title?: string; start: string; minutes?: number; attendees?: string[]; organizer?: string; description?: string; extra?: Partial<GEvent> }): GEvent {

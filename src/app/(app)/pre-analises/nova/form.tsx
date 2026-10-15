@@ -4,6 +4,7 @@ import { ActionForm, FieldError, SubmitButton } from "@/components/action-form";
 import { Field, Input, Textarea, cx } from "@/components/ui";
 import { createPreAnalysisAction } from "@/app/actions/pre-analysis";
 import { extractClientData } from "@/lib/extract";
+import { FileAttach } from "@/components/file-attach";
 
 const cpfMask = (v: string) => {
   const d = v.replace(/\D/g, "").slice(0, 11);
@@ -22,6 +23,7 @@ const ago = (d: Date) => {
 export function PreAnalysisForm({ consultants, guarantees }: { consultants: QueueItem[]; guarantees: { id: string; label: string }[] }) {
   const [cpf, setCpf] = useState("");
   const [chosen, setChosen] = useState(consultants.find((c) => c.isNext)?.id ?? "");
+  const [own, setOwn] = useState(false);
   const [pasted, setPasted] = useState("");
   const [filled, setFilled] = useState<string[] | null>(null);
   function fillFromPaste() {
@@ -74,27 +76,27 @@ export function PreAnalysisForm({ consultants, guarantees }: { consultants: Queu
               <p className="mt-2 text-[12px] text-ink-3">A leitura acontece só neste aparelho; o texto colado não é salvo.</p>
             </div>
           </details>
-          <p className="mb-5 rounded-2xl bg-accent-soft px-4 py-3 text-[14px] font-medium text-accent-strong">Todos os dados precisam ser do <strong>titular do CPF</strong>.</p>
+          <p className="mb-5 rounded-2xl bg-accent-soft px-4 py-3 text-[14px] font-medium text-accent-strong">Preencha o que tiver: nenhum campo é obrigatório. Os dados precisam ser do <strong>titular do CPF</strong>.</p>
           <Field label="Nome completo" htmlFor="fullName" error={st.fieldErrors?.fullName}>
-            <Input id="fullName" name="fullName" autoComplete="off" required />
+            <Input id="fullName" name="fullName" autoComplete="off" />
           </Field>
           <div className="grid gap-x-4 sm:grid-cols-2">
             <Field label="CPF" htmlFor="cpf" error={st.fieldErrors?.cpf}>
-              <Input id="cpf" name="cpf" inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" value={cpf} onChange={(e) => setCpf(cpfMask(e.target.value))} required />
+              <Input id="cpf" name="cpf" inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" value={cpf} onChange={(e) => setCpf(cpfMask(e.target.value))} />
             </Field>
             <Field label="Data de nascimento" htmlFor="birthDate" error={st.fieldErrors?.birthDate}>
-              <Input id="birthDate" name="birthDate" type="date" required />
+              <Input id="birthDate" name="birthDate" type="date" />
             </Field>
             <Field label="E-mail" htmlFor="email" error={st.fieldErrors?.email}>
-              <Input id="email" name="email" type="email" inputMode="email" autoComplete="off" required />
+              <Input id="email" name="email" type="email" inputMode="email" autoComplete="off" />
             </Field>
             <Field label="Telefone" htmlFor="phone" error={st.fieldErrors?.phone}>
-              <Input id="phone" name="phone" type="tel" inputMode="tel" placeholder="(51) 99999-9999" autoComplete="off" required />
+              <Input id="phone" name="phone" type="tel" inputMode="tel" placeholder="(51) 99999-9999" autoComplete="off" />
             </Field>
             <Field label="Salário (R$)" htmlFor="salary" error={st.fieldErrors?.salary} hint="Renda mensal bruta do titular.">
-              <Input id="salary" name="salary" inputMode="decimal" placeholder="4.500,00" autoComplete="off" required />
+              <Input id="salary" name="salary" inputMode="decimal" placeholder="4.500,00" autoComplete="off" />
             </Field>
-            <Field label="Imóvel de interesse (opcional)" htmlFor="propertyCode">
+            <Field label="Imóvel de interesse" htmlFor="propertyCode">
               <Input id="propertyCode" name="propertyCode" inputMode="numeric" placeholder="Código do imóvel" autoComplete="off" />
             </Field>
           </div>
@@ -103,7 +105,7 @@ export function PreAnalysisForm({ consultants, guarantees }: { consultants: Queu
             <div className="flex flex-wrap gap-2">
               {guarantees.map((g) => (
                 <label key={g.id} className="press cursor-pointer">
-                  <input type="radio" name="guaranteeId" value={g.id} required className="peer sr-only" />
+                  <input type="radio" name="guaranteeId" value={g.id} className="peer sr-only" />
                   <span className="inline-flex min-h-11 items-center rounded-full border-2 border-line bg-surface px-4 text-[14px] font-semibold transition peer-checked:border-accent peer-checked:bg-accent-soft peer-focus-visible:ring-2 peer-focus-visible:ring-accent">
                     {g.label}
                   </span>
@@ -114,7 +116,7 @@ export function PreAnalysisForm({ consultants, guarantees }: { consultants: Queu
           </fieldset>
           <fieldset className="mb-5">
             <legend className="mb-1 text-sm font-semibold text-ink">Encaminhar para a consultora</legend>
-            <p className="mb-3 text-[13px] text-ink-3">Rodízio: vai para quem tem menos pré-análises em aberto (no empate, a da vez). Toque em outra se precisar.</p>
+            <p className="mb-3 text-[13px] text-ink-3">Rodízio: a da vez é quem recebeu há mais tempo. Toque em outra se precisar.</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {consultants.map((c) => {
                 const on = chosen === c.id;
@@ -158,8 +160,17 @@ export function PreAnalysisForm({ consultants, guarantees }: { consultants: Queu
               })}
             </div>
             {st.fieldErrors?.consultantId && <p className="mt-1.5 text-[13px] font-semibold text-bad">{st.fieldErrors.consultantId}</p>}
-            {chosen && !consultants.find((c) => c.id === chosen)?.isNext && <p className="mt-2 text-[13px] font-semibold text-accent-strong">Fora do rodízio: pela vez, seria {consultants.find((c) => c.isNext)?.name.split(" ")[0]}.</p>}
+            {chosen && !own && !consultants.find((c) => c.id === chosen)?.isNext && <p className="mt-2 text-[13px] font-semibold text-accent-strong">Fora do rodízio: pela vez, seria {consultants.find((c) => c.isNext)?.name.split(" ")[0]}.</p>}
+            <label className={cx("mt-3 flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 text-[14px]", own ? "border-accent bg-accent-soft/50" : "border-line")}>
+              <input type="checkbox" name="ownClient" value="1" checked={own} onChange={(e) => setOwn(e.target.checked)} className="mt-0.5 size-5 accent-[var(--accent)]" />
+              <span>
+                <strong>Cliente já é de {consultants.find((c) => c.id === chosen)?.name.split(" ")[0] ?? "uma consultora"}</strong>
+                <span className="block text-[12px] text-ink-3">Vai para ela sem contar a vez: o rodízio continua como estava.</span>
+              </span>
+            </label>
           </fieldset>
+          <FileAttach />
+          <FieldError state={st} name="files" />
           <Field label="Observação (opcional)" htmlFor="note" hint="Ex.: tem fiador, prefere contato à tarde. Não repita CPF ou dados aqui.">
             <Textarea id="note" name="note" rows={3} maxLength={1000} />
           </Field>
@@ -180,7 +191,7 @@ export function PreAnalysisForm({ consultants, guarantees }: { consultants: Queu
             </label>
           )}
           <label className="mb-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-line px-4 py-3 text-[14px]">
-            <input type="checkbox" name="holder" value="1" required className="mt-0.5 size-5 accent-[var(--accent)]" />
+            <input type="checkbox" name="holder" value="1" className="mt-0.5 size-5 accent-[var(--accent)]" />
             <span>Confirmo que os dados são do <strong>titular do CPF</strong> e que ele autorizou a pré-análise para a locação.</span>
           </label>
           <FieldError state={st} name="holderConfirmed" />

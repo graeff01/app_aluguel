@@ -132,7 +132,7 @@ export default async function PreServicePanel({ searchParams }: { searchParams: 
                       <td className="num px-4 py-3 whitespace-nowrap text-ink-2">{fmt.shortDate(r.createdAt)}</td>
                       <td className="px-4 py-3">
                         <Link href={`/pre-analises/${r.id}`} className="font-semibold underline-offset-4 hover:underline">
-                          {r.fullName}
+                          {r.fullName || "Titular sem nome"}
                         </Link>
                         {r.propertyCode && <span className="num block text-[12px] text-ink-3">imóvel {r.propertyCode}</span>}
                       </td>

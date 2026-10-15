@@ -38,6 +38,10 @@ export interface CalendarApi {
   listEvents(p: ListParams): Promise<ListPage>;
   /** null quando o evento não existe mais (404/410) */
   getEvent(calendarId: string, eventId: string): Promise<GEvent | null>;
+  /** cancela o evento: "canceled" (organizadora, para todos), "removed" (convidada, só da própria agenda), "already" */
+  cancelEvent(calendarId: string, eventId: string): Promise<"canceled" | "removed" | "already">;
+  /** troca o título (só se a agenda for a organizadora): "updated", "not_owner" ou "already" (evento sumiu) */
+  updateSummary(calendarId: string, eventId: string, summary: (current: string) => string): Promise<"updated" | "not_owner" | "already">;
 }
 
 export type GoogleErrorKind = "SYNC_TOKEN_INVALID" | "AUTH" | "PERMISSION" | "RETRYABLE" | "NOT_FOUND" | "OTHER";

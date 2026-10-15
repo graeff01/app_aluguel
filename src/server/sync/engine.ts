@@ -218,7 +218,8 @@ async function processEvent(ctx: Ctx, ev: GEvent, opts: { inWindowOnly: boolean;
     if (!start || !end || !parsed) return;
     const wasCancelled = existing?.googleStatus === "cancelled";
     await upsertVisit(tx, ctx, source.id, ev, parsed, { start, end, wasCancelled });
-    await syncCompanions(tx, ctx, source.id, parsed.extraPropertyCodes ?? []);
+    // todos os códigos do título: se o 1º sair (imóvel cancelado), a principal fica e o resto continua acompanhando
+    await syncCompanions(tx, ctx, source.id, [parsed.propertyCode ?? "", ...(parsed.extraPropertyCodes ?? [])], { start, end });
     await applyEventLocation(tx, parsed.propertyCode, ev.location);
   });
 }
@@ -230,15 +231,16 @@ export const COMPANION_GONE_NOTE = "Imóvel retirado do evento na agenda Google"
  * a mais vira uma visita acompanhante (mesmo cliente, horário e consultora), com resultado próprio.
  * As acompanhantes seguem a principal enquanto não têm resultado; cancelamentos da agenda também valem para elas.
  */
-async function syncCompanions(tx: Tx, ctx: Ctx, sourceEventId: string, codes: string[]) {
+async function syncCompanions(tx: Tx, ctx: Ctx, sourceEventId: string, codes: string[], t: { start: Date; end: Date }) {
   const primary = await tx.visit.findUnique({ where: { sourceEventId }, include: { companions: true } });
   if (!primary) return;
   const wanted = [...new Set(codes.map((c) => c.trim()).filter((c) => c && c !== primary.propertyCode))];
   if (!wanted.length && !primary.companions.length) return;
   const canceledBySync = primary.status === "CANCELED" && primary.autoCanceled;
   const shared = {
-    scheduledStart: primary.scheduledStart,
-    scheduledEnd: primary.scheduledEnd,
+    // horário vem do evento (a principal pode estar cancelada e não acompanhar mais)
+    scheduledStart: t.start,
+    scheduledEnd: t.end,
     clientName: primary.clientName,
     phoneRaw: primary.phoneRaw,
     phoneNormalized: primary.phoneNormalized,
@@ -456,6 +458,8 @@ async function upsertVisit(
 
   const manual = new Set(visit.manualFields);
   const concluded = visit.status !== "SCHEDULED" && !visit.autoCanceled;
+  // cancelada pelo pré-atendimento no app: decisão final; o título editado na agenda não vira conflito
+  if (visit.status === "CANCELED" && visit.cancelReasonId) return;
   // mesmo texto, regra de telefone nova (ex.: celular antigo ganha o 9): só a forma normalizada muda
   if (!manual.has("phone") && parsed.phoneRaw === visit.phoneRaw && parsed.phoneNormalized !== visit.phoneNormalized) {
     visit = await tx.visit.update({ where: { id: visit.id }, data: { phoneNormalized: parsed.phoneNormalized } });

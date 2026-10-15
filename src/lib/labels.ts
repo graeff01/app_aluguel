@@ -18,7 +18,7 @@ export const OPP_STATUS_LABEL: Record<string, string> = {
 };
 export const ROLE_LABEL: Record<string, string> = { ADMIN: "Administrador(a)", MANAGER: "Gestora", CONSULTANT: "Consultora", PRE_SERVICE: "Pré-atendimento", MARKETING: "Marketing" };
 export const PRE_STATUS_LABEL: Record<string, string> = { AWAITING: "Aguardando análise", APPROVED: "Aprovado", REJECTED: "Reprovado", PENDING: "Pendente" };
-export const INCOME_BAND_LABEL: Record<string, string> = { ate2k: "Até R$ 2 mil", "2a4k": "R$ 2 a 4 mil", "4a6k": "R$ 4 a 6 mil", "6a10k": "R$ 6 a 10 mil", "10kmais": "Acima de R$ 10 mil" };
+export const INCOME_BAND_LABEL: Record<string, string> = { ate2k: "Até R$ 2 mil", "2a4k": "R$ 2 a 4 mil", "4a6k": "R$ 4 a 6 mil", "6a10k": "R$ 6 a 10 mil", "10kmais": "Acima de R$ 10 mil", nao_informada: "Renda não informada" };
 export const CONFLICT_LABEL: Record<string, string> = {
   CANCELED_IN_GOOGLE: "Cancelada/excluída no Google após resultado registrado",
   DELETED_IN_GOOGLE: "Excluída no Google após resultado registrado",

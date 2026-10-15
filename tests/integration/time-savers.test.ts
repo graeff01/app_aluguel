@@ -78,13 +78,13 @@ describe("agenda do dia do pré-atendimento", () => {
 });
 
 describe("rodízio por carga", () => {
-  it("vai para quem tem menos em aberto, mesmo que seja a vez da outra", async () => {
+  it("segue a vez mesmo que a da vez tenha mais em aberto (sem nivelamento)", async () => {
     await createPreAnalysis(jasmin, pre({ consultantId: u.a.id }), new Date(NOW.getTime() - 3 * H));
     await createPreAnalysis(jasmin, pre({ consultantId: u.a.id, cpf: "168.995.350-09" }), new Date(NOW.getTime() - 2 * H));
     const b = await createPreAnalysis(jasmin, pre({ consultantId: u.b.id, cpf: "390.533.447-05" }), new Date(NOW.getTime() - H));
     await resolvePreAnalysis(u.b, b.id, { status: "APPROVED", note: "Aprovado" }, NOW);
-    // B recebeu por último, mas A tem 2 em aberto e B nenhuma
-    expect((await assignmentQueue(NOW)).find((c) => c.isNext)?.id).toBe(u.b.id);
+    // B recebeu por último: a vez é de A, mesmo com 2 em aberto
+    expect((await assignmentQueue(NOW)).find((c) => c.isNext)?.id).toBe(u.a.id);
   });
 });
 

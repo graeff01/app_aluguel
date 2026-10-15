@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { fmt } from "@/lib/time";
 import { env } from "@/lib/env";
 import { errorCode } from "@/lib/log";
-import { authorizedClient, googleConfigured, realCalendarApi } from "@/server/sync/google";
+import { authorizedClient, googleConfigured, realCalendarApi, canEditEvents } from "@/server/sync/google";
 import { DETAIL_ROLES, type GCalendar } from "@/server/sync/types";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Alert, Badge, KeyValue, PageHeader, Panel, Section } from "@/components/ui";
@@ -50,6 +50,11 @@ export default async function GooglePage({ searchParams }: { searchParams: Promi
       )}
       {conn?.status === "NEEDS_RECONNECT" && <Alert tone="bad" title="Reconexão necessária">{conn.statusDetail ?? "A autorização expirou ou foi revogada."} O app e os registros continuam funcionando; apenas a importação está parada.</Alert>}
       {conn?.statusDetail && conn.status === "CONNECTED" && <Alert tone="warn" title="Atenção">{conn.statusDetail}</Alert>}
+      {conn?.status === "CONNECTED" && !canEditEvents(conn.scopes) && (
+        <Alert tone="warn" title="Cancelar no Google pelo app">
+          Hoje o app só lê a agenda. Para o cancelamento feito no app (pré-atendimento) cancelar também o evento no Google, toque em <strong>Reconectar / trocar conta</strong>, entre com a mesma conta e aceite a permissão de ver e editar eventos.
+        </Alert>
+      )}
 
       <Section title="Conexão">
         <Panel>
@@ -58,6 +63,7 @@ export default async function GooglePage({ searchParams }: { searchParams: Promi
               items={[
                 ["Conta conectada", conn.googleEmail],
                 ["Situação", conn.status === "CONNECTED" ? <Badge tone="good">✓ Conectada</Badge> : <Badge tone="bad">✕ Reconectar</Badge>],
+                ["Permissão", canEditEvents(conn.scopes) ? "Lê a agenda e cancela eventos de visitas canceladas no app" : "Só leitura"],
                 ["Conectada em", fmt.dateTime(conn.connectedAt)],
                 ["Calendário", conn.calendarSummary ? `${conn.calendarSummary} (${ROLE[conn.calendarAccessRole ?? ""] ?? conn.calendarAccessRole})` : <Badge tone="warn">não selecionado</Badge>],
                 ["Última sincronização bem-sucedida", state?.lastSuccessAt ? fmt.dateTime(state.lastSuccessAt) : "—"],

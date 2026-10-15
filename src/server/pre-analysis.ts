@@ -22,6 +22,7 @@ import { getSettings } from "@/lib/settings";
 import { pushConfig, sendPush } from "@/lib/push";
 import { log } from "@/lib/log";
 import { notifyUser } from "./notify";
+import { readFiles, saveFiles, type IncomingFile } from "./pre-analysis-files";
 import { dayKey } from "@/lib/time";
 import type { PreAnalysisStatus } from "@/generated/prisma/enums";
 
@@ -65,17 +66,20 @@ function cpfHash(digits: string) {
 }
 
 const createSchema = z.object({
-  fullName: z.string().trim().min(5, "Informe o nome completo.").max(160),
-  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida."),
-  cpf: z.string(),
-  email: z.string().trim().max(160),
-  phone: z.string().trim().max(40),
-  salary: z.string().trim().max(30),
+  // nenhum campo do titular é obrigatório; o que vier preenchido é conferido
+  fullName: z.string().trim().max(160).optional().default(""),
+  birthDate: z.string().trim().optional().default(""),
+  cpf: z.string().optional().default(""),
+  email: z.string().trim().max(160).optional().default(""),
+  phone: z.string().trim().max(40).optional().default(""),
+  salary: z.string().trim().max(30).optional().default(""),
   consultantId: z.string().min(1, "Escolha a consultora."),
-  guaranteeId: z.string().min(1, "Escolha a garantia."),
+  /** cliente já era da consultora: não conta a vez no rodízio */
+  ownClient: z.boolean().optional().default(false),
+  guaranteeId: z.string().optional().default(""),
   propertyCode: z.string().trim().max(40).optional().default(""),
   note: z.string().trim().max(1000).optional().default(""),
-  holderConfirmed: z.literal(true, { message: "Confirme que os dados são do titular do CPF." }),
+  holderConfirmed: z.boolean().optional(),
   /** idempotência: o mesmo envio repetido não duplica */
   requestId: z.string().max(100).optional(),
   /** CPF já analisado há pouco: só segue com confirmação explícita */
@@ -84,7 +88,7 @@ const createSchema = z.object({
   confirmAway: z.boolean().optional(),
 });
 
-export async function createPreAnalysis(actor: AuthzActor, input: z.input<typeof createSchema>, now = new Date()) {
+export async function createPreAnalysis(actor: AuthzActor, input: z.input<typeof createSchema>, now = new Date(), files: IncomingFile[] = []) {
   assert(canCreatePreAnalysis(actor));
   const parsed = createSchema.safeParse(input);
   if (!parsed.success) throw new AppError("VALIDATION", "Revise os campos destacados.", Object.fromEntries(parsed.error.issues.map((i) => [i.path.join("."), i.message])));
@@ -95,28 +99,34 @@ export async function createPreAnalysis(actor: AuthzActor, input: z.input<typeof
   }
   const errors: Record<string, string> = {};
   const cpf = cpfDigits(p.cpf);
-  if (!isValidCpf(cpf)) errors.cpf = "CPF inválido (confira os números).";
-  const age = ageOn(p.birthDate, now);
-  if (!(age >= 18 && age <= 110)) errors.birthDate = "O titular precisa ter 18 anos ou mais.";
-  const email = normalizeEmail(p.email);
-  if (!EMAIL_RE.test(email)) errors.email = "E-mail inválido.";
-  const phone = normalizePhone(p.phone);
-  if (!phone.valid || !phone.normalized) errors.phone = "Telefone inválido (DDD + número).";
-  const salary = parseMoney(p.salary);
-  if (!salary) errors.salary = "Informe o salário (ex.: 4.500,00).";
+  if (cpf && !isValidCpf(cpf)) errors.cpf = "CPF inválido (confira os números) ou deixe em branco.";
+  if (p.birthDate) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(p.birthDate)) errors.birthDate = "Data inválida.";
+    else {
+      const age = ageOn(p.birthDate, now);
+      if (!(age >= 18 && age <= 110)) errors.birthDate = "O titular precisa ter 18 anos ou mais.";
+    }
+  }
+  const email = p.email ? normalizeEmail(p.email) : "";
+  if (email && !EMAIL_RE.test(email)) errors.email = "E-mail inválido ou deixe em branco.";
+  const phone = p.phone ? normalizePhone(p.phone) : null;
+  if (phone && (!phone.valid || !phone.normalized)) errors.phone = "Telefone inválido (DDD + número) ou deixe em branco.";
+  const salary = p.salary ? parseMoney(p.salary) : null;
+  if (p.salary && !salary) errors.salary = "Salário inválido (ex.: 4.500,00) ou deixe em branco.";
   if (Object.keys(errors).length) throw new AppError("VALIDATION", "Revise os campos destacados.", errors);
-  const guarantee = await db.reason.findUnique({ where: { id: p.guaranteeId } });
-  if (!guarantee || guarantee.kind !== "GUARANTEE" || !guarantee.active) throw new AppError("VALIDATION", "Escolha a garantia.", { guaranteeId: "Garantia inválida." });
+  const guarantee = p.guaranteeId ? await db.reason.findUnique({ where: { id: p.guaranteeId } }) : null;
+  if (p.guaranteeId && (!guarantee || guarantee.kind !== "GUARANTEE" || !guarantee.active)) throw new AppError("VALIDATION", "Garantia inválida.", { guaranteeId: "Garantia inválida." });
+  const docs = await readFiles(files);
   const consultant = await db.user.findUnique({ where: { id: p.consultantId } });
   if (!consultant || consultant.role !== "CONSULTANT" || !consultant.active) throw new AppError("VALIDATION", "Escolha uma consultora ativa.", { consultantId: "Consultora inválida." });
   if (isAway(consultant.awayUntil, now) && !p.confirmAway) {
     throw new AppError("VALIDATION", `${consultant.name.split(" ")[0]} está ausente até ${fmtDay(consultant.awayUntil!)}. Escolha outra consultora ou confirme o envio.`, { confirmAway: "Consultora ausente." });
   }
   // mesmo CPF: em aberto bloqueia; analisado nos últimos 30 dias pede confirmação
-  const hash = cpfHash(cpf);
-  const open = await db.preAnalysis.findFirst({ where: { cpfHash: hash, status: { in: ["AWAITING", "PENDING"] } }, include: { consultant: { select: { name: true } } } });
+  const hash = cpf ? cpfHash(cpf) : null;
+  const open = hash ? await db.preAnalysis.findFirst({ where: { cpfHash: hash, status: { in: ["AWAITING", "PENDING"] } }, include: { consultant: { select: { name: true } } } }) : null;
   if (open) throw new AppError("CONFLICT", `Este CPF já tem uma pré-análise em aberto com ${open.consultant.name.split(" ")[0]} (enviada em ${open.createdAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}). Acompanhe por ela.`, { cpf: "Pré-análise em aberto." });
-  const recent = await db.preAnalysis.findFirst({ where: { cpfHash: hash, resultAt: { gte: new Date(now.getTime() - 30 * DAY) } }, orderBy: { resultAt: "desc" } });
+  const recent = hash ? await db.preAnalysis.findFirst({ where: { cpfHash: hash, resultAt: { gte: new Date(now.getTime() - 30 * DAY) } }, orderBy: { resultAt: "desc" } }) : null;
   if (recent && !p.confirmRepeat) {
     throw new AppError("VALIDATION", `Este CPF teve pré-análise respondida em ${recent.resultAt!.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })} (${recent.status === "APPROVED" ? "aprovado" : recent.status === "REJECTED" ? "reprovado" : "pendente"}). Confirme para enviar de novo.`, { confirmRepeat: "CPF analisado há pouco." });
   }
@@ -129,21 +139,24 @@ export async function createPreAnalysis(actor: AuthzActor, input: z.input<typeof
         consultantId: consultant.id,
         fullName: p.fullName.replace(/\s+/g, " "),
         cpfHash: hash,
-        cpfEnc: encryptSecret(cpf),
-        birthDateEnc: encryptSecret(p.birthDate),
-        emailEnc: encryptSecret(email),
-        phoneEnc: encryptSecret(phone.normalized!),
-        salaryEnc: encryptSecret(String(salary)),
-        incomeBand: incomeBand(salary!),
+        cpfEnc: cpf ? encryptSecret(cpf) : null,
+        birthDateEnc: p.birthDate ? encryptSecret(p.birthDate) : null,
+        emailEnc: email ? encryptSecret(email) : null,
+        phoneEnc: phone?.normalized ? encryptSecret(phone.normalized) : null,
+        salaryEnc: salary ? encryptSecret(String(salary)) : null,
+        incomeBand: salary ? incomeBand(salary) : "nao_informada",
         propertyCode: p.propertyCode || null,
-        guaranteeId: guarantee.id,
+        guaranteeId: guarantee?.id ?? null,
+        ownClient: p.ownClient,
         note: p.note || null,
       },
     });
     await audit(tx, { actorId: actor.id, action: "preanalysis.created", entityType: "PreAnalysis", entityId: row.id, changes: { consultora: consultant.id } });
+    await saveFiles(tx, row.id, actor.id, docs);
     return row;
   });
-  await notifyUser(consultant.id, { title: "Nova pré-análise para você", body: `Garantia: ${guarantee.label}. Toque para ver os dados e responder.`, url: `/pre-analises/${created.id}`, tag: `pre-${created.id}` });
+  const extras = [guarantee ? `Garantia: ${guarantee.label}.` : "", docs.length ? `${docs.length} documento${docs.length > 1 ? "s" : ""} anexado${docs.length > 1 ? "s" : ""}.` : ""].filter(Boolean).join(" ");
+  await notifyUser(consultant.id, { title: "Nova pré-análise para você", body: `${extras ? `${extras} ` : ""}Toque para ver os dados e responder.`, url: `/pre-analises/${created.id}`, tag: `pre-${created.id}` });
   return created;
 }
 
@@ -160,7 +173,7 @@ export async function listPreAnalyses(actor: AuthzActor, f: { tab?: "abertas" | 
     },
     orderBy: open ? { createdAt: "asc" } : { resultAt: "desc" },
     take: 200,
-    select: { id: true, fullName: true, status: true, incomeBand: true, propertyCode: true, createdAt: true, resultAt: true, purgedAt: true, consultant: { select: { id: true, name: true } }, createdBy: { select: { name: true } } },
+    select: { id: true, fullName: true, status: true, incomeBand: true, propertyCode: true, createdAt: true, resultAt: true, purgedAt: true, consultant: { select: { id: true, name: true } }, createdBy: { select: { name: true } }, _count: { select: { files: true } } },
   });
 }
 
@@ -187,6 +200,8 @@ export async function preAnalysisDetail(actor: AuthzActor, id: string, now = new
       consultant: { select: { id: true, name: true } },
       createdBy: { select: { id: true, name: true } },
       resultBy: { select: { name: true } },
+      guarantee: { select: { label: true } },
+      files: { orderBy: { createdAt: "asc" }, select: { id: true, name: true, mime: true, size: true, createdAt: true, uploadedById: true, uploadedBy: { select: { name: true } } } },
       visits: { orderBy: { scheduledStart: "asc" }, select: { id: true, scheduledStart: true, status: true, propertyCode: true, sourceEventId: true } },
     },
   });
@@ -257,16 +272,19 @@ export async function deletePreAnalysis(actor: AuthzActor, id: string) {
 export async function runPreAnalysisRetention(now = new Date()) {
   const settings = await getSettings();
   const limit = new Date(now.getTime() - settings.preAnalysisRetentionDays * DAY);
-  const r = await db.preAnalysis.updateMany({
-    where: {
-      purgedAt: null,
-      OR: [
-        { status: { in: ["APPROVED", "REJECTED"] }, resultAt: { lt: limit } },
-        // abertas há mais que o prazo (sem resposta): também saem
-        { status: { in: ["AWAITING", "PENDING"] }, createdAt: { lt: limit } },
-      ],
-    },
-    data: { cpfEnc: null, birthDateEnc: null, emailEnc: null, phoneEnc: null, salaryEnc: null, cpfHash: null, purgedAt: now },
+  const where = {
+    purgedAt: null,
+    OR: [
+      { status: { in: ["APPROVED", "REJECTED"] as PreAnalysisStatus[] }, resultAt: { lt: limit } },
+      // abertas há mais que o prazo (sem resposta): também saem
+      { status: { in: ["AWAITING", "PENDING"] as PreAnalysisStatus[] }, createdAt: { lt: limit } },
+    ],
+  };
+  const ids = (await db.preAnalysis.findMany({ where, select: { id: true } })).map((x) => x.id);
+  const r = await db.$transaction(async (tx) => {
+    // documentos do cliente saem junto com os demais dados pessoais
+    await tx.preAnalysisFile.deleteMany({ where: { preAnalysisId: { in: ids } } });
+    return tx.preAnalysis.updateMany({ where: { id: { in: ids } }, data: { cpfEnc: null, birthDateEnc: null, emailEnc: null, phoneEnc: null, salaryEnc: null, cpfHash: null, purgedAt: now } });
   });
   if (r.count) {
     log.info("preanalysis.purged", { count: r.count });
@@ -366,7 +384,8 @@ export async function assignmentQueue(now = new Date()) {
   const ids = consultants.map((c) => c.id);
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 3));
   const [last, month, open] = await Promise.all([
-    db.preAnalysis.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids } }, _max: { createdAt: true } }),
+    // a vez só conta pré-análises do rodízio (cliente que já era da consultora não conta)
+    db.preAnalysis.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids }, ownClient: false }, _max: { createdAt: true } }),
     db.preAnalysis.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids }, createdAt: { gte: monthStart } }, _count: { _all: true } }),
     db.preAnalysis.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids }, status: { in: ["AWAITING", "PENDING"] } }, _count: { _all: true } }),
   ]);
@@ -376,8 +395,8 @@ export async function assignmentQueue(now = new Date()) {
   const rows = consultants.map((c) => ({ id: c.id, name: c.name, away: isAway(c.awayUntil, now), awayUntil: c.awayUntil ? fmtDay(c.awayUntil) : null, lastAt: lastAt.get(c.id) ?? null, monthCount: monthCount.get(c.id) ?? 0, openCount: openCount.get(c.id) ?? 0 }));
   // ausentes saem da vez (se todas estiverem ausentes, segue o rodízio normal)
   const available = rows.some((r) => !r.away) ? rows.filter((r) => !r.away) : rows;
-  // menos pré-análises em aberto primeiro (ninguém fica sobrecarregada); empate → quem está há mais tempo sem receber
-  const byOldest = [...available].sort((a, b) => a.openCount - b.openCount || (a.lastAt?.getTime() ?? 0) - (b.lastAt?.getTime() ?? 0) || a.name.localeCompare(b.name));
+  // vez: quem está há mais tempo sem receber pelo rodízio (sem olhar quantas estão em aberto)
+  const byOldest = [...available].sort((a, b) => (a.lastAt?.getTime() ?? 0) - (b.lastAt?.getTime() ?? 0) || a.name.localeCompare(b.name));
   const latest = [...rows].filter((r) => r.lastAt).sort((a, b) => b.lastAt!.getTime() - a.lastAt!.getTime())[0];
   return rows.map((r) => ({ ...r, isNext: r.id === byOldest[0].id, isLast: !!latest && r.id === latest.id && rows.length > 1 }));
 }

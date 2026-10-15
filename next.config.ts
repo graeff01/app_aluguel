@@ -34,6 +34,8 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // versão do build (aviso de "nova versão disponível" no app aberto)
   env: { NEXT_PUBLIC_BUILD_ID: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? "dev" },
+  // documentos da pré-análise vão no mesmo envio do formulário (fotos já reduzidas no celular)
+  experimental: { serverActions: { bodySizeLimit: "25mb" } },
   serverExternalPackages: ["@node-rs/argon2", "pg", "@prisma/adapter-pg", "@react-pdf/renderer"],
   // arquivos lidos em tempo de execução pelo PDF (fontes e logotipo)
   outputFileTracingIncludes: { "/api/relatorios/mensal": ["./assets/**/*"], "/api/imoveis/[code]/relatorio": ["./assets/**/*"] },

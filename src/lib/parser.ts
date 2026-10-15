@@ -282,3 +282,12 @@ export const ASSIGNMENT_NOTE_LABEL: Record<string, string> = {
   CORRECAO_MANUAL: "Atribuição corrigida manualmente",
   CADASTRO_MANUAL: "Cadastro manual",
 };
+
+/** Tira um código de imóvel do título ("cod 111;222;333" → "cod 111;333"). Os demais textos ficam iguais. */
+export function removeCodeFromTitle(title: string, code: string): string {
+  const esc = code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return title
+    .replace(new RegExp(`([;,]\\s*)${esc}(?=[\\s;,)]|$)`, "g"), "")
+    .replace(new RegExp(`(?<=[\\s(:#.])${esc}\\s*[;,]\\s*`, "g"), "")
+    .replace(/\s{2,}/g, " ");
+}

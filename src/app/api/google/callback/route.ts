@@ -7,7 +7,7 @@ import { encryptSecret, safeEqual } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { audit } from "@/lib/audit";
 import { errorCode, log } from "@/lib/log";
-import { oauthClient, REQUIRED_CALENDAR_SCOPES } from "@/server/sync/google";
+import { missingCalendarScopes, oauthClient } from "@/server/sync/google";
 import { handleLoginCallback, pendingLogin } from "@/server/google-login";
 
 function back(q: string) {
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     const client = oauthClient();
     const { tokens } = await client.getToken(code);
     const granted = (tokens.scope ?? "").split(" ");
-    const missing = REQUIRED_CALENDAR_SCOPES.filter((s) => !granted.includes(s));
+    const missing = missingCalendarScopes(granted);
     if (missing.length) {
       // consentimento granular: usuário desmarcou permissões necessárias
       if (tokens.access_token) await client.revokeToken(tokens.access_token).catch(() => undefined);

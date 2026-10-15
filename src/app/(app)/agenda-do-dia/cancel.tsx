@@ -5,8 +5,9 @@ import { Select, Textarea } from "@/components/ui";
 import { cancelVisitAction } from "@/app/actions/visits";
 
 /** Pré-atendimento: cancelar a visita escolhendo o motivo (a consultora é avisada). */
-export function CancelVisit({ visitId, label, reasons }: { visitId: string; label: string; reasons: { id: string; label: string }[] }) {
+export function CancelVisit({ visitId, label, reasons, code, others = [] }: { visitId: string; label: string; reasons: { id: string; label: string }[]; code?: string | null; others?: string[] }) {
   const [open, setOpen] = useState(false);
+  const [scope, setScope] = useState<"one" | "all">("one");
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="press min-h-9 rounded-full border border-bad/30 px-3 text-[12px] font-semibold text-bad hover:bg-bad-soft">
@@ -20,6 +21,19 @@ export function CancelVisit({ visitId, label, reasons }: { visitId: string; labe
         <>
           <input type="hidden" name="visitId" value={visitId} />
           <p className="mb-2 text-[13px] font-semibold">Cancelar a visita de {label}?</p>
+          {others.length > 0 && (
+            <fieldset className="mb-2 grid gap-1.5 text-[13px]">
+              <legend className="sr-only">O que cancelar</legend>
+              <label className="flex cursor-pointer items-center gap-2">
+                <input type="radio" name="scope" value="one" checked={scope === "one"} onChange={() => setScope("one")} className="size-4 accent-[var(--bad)]" />
+                Só o imóvel <strong className="num">{code ?? "deste cartão"}</strong> (os outros continuam)
+              </label>
+              <label className="flex cursor-pointer items-center gap-2">
+                <input type="radio" name="scope" value="all" checked={scope === "all"} onChange={() => setScope("all")} className="size-4 accent-[var(--bad)]" />
+                Todos os {others.length + 1} imóveis desta visita
+              </label>
+            </fieldset>
+          )}
           <label className="sr-only" htmlFor={`reason-${visitId}`}>
             Motivo do cancelamento
           </label>

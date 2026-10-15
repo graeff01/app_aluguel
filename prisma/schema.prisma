@@ -67,6 +67,7 @@ model User {
   preAnalysesResolved PreAnalysis[] @relation("PreAnalysisResolvedBy")
   leasePostsCreated   LeasePost[]   @relation("LeasePostCreatedBy")
   leasePostsPosted    LeasePost[]   @relation("LeasePostPostedBy")
+  preAnalysisFiles    PreAnalysisFile[]
 }
 
 /// E-mails usados para reconhecer a consultora entre os convidados do evento.
@@ -788,6 +789,8 @@ model PreAnalysis {
   incomeBand   String
   /// imóvel de interesse (opcional)
   propertyCode String?
+  /// cliente já era da consultora: a pré-análise vai para ela sem contar a vez no rodízio
+  ownClient    Boolean           @default(false)
   /// garantia da locação (Fiador, Seguro fiança, CredPago…)
   guaranteeId  String?
   guarantee    Reason?           @relation("PreAnalysisGuarantee", fields: [guaranteeId], references: [id])
@@ -799,6 +802,7 @@ model PreAnalysis {
   /// dados sensíveis apagados (retenção LGPD)
   purgedAt     DateTime?
   visits       Visit[]
+  files        PreAnalysisFile[]
 
   @@index([consultantId, status])
   @@index([createdAt])
@@ -823,4 +827,22 @@ model LeasePost {
   postedBy      User?       @relation("LeasePostPostedBy", fields: [postedById], references: [id])
 
   @@index([postedAt])
+}
+
+/// Documentos do cliente anexados à pré-análise (RG, comprovante de renda…).
+/// LGPD: conteúdo CRIPTOGRAFADO (AES-256-GCM) e apagado junto com os demais dados pessoais na retenção.
+model PreAnalysisFile {
+  id            String      @id @default(cuid())
+  preAnalysisId String
+  preAnalysis   PreAnalysis @relation(fields: [preAnalysisId], references: [id], onDelete: Cascade)
+  name          String
+  mime          String
+  size          Int
+  /// iv (12) + tag (16) + conteúdo cifrado
+  data          Bytes
+  uploadedById  String
+  uploadedBy    User        @relation(fields: [uploadedById], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@index([preAnalysisId])
 }

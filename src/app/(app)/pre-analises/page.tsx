@@ -149,11 +149,12 @@ export default async function PreAnalysesPage({ searchParams }: { searchParams: 
             <li key={r.id} className="animate-rise" style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}>
               <Link href={`/pre-analises/${r.id}`} className="press block h-full rounded-3xl border border-line bg-surface p-4 shadow-card hover:shadow-float">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="min-w-0 truncate text-[16px] font-bold">{r.fullName}</p>
+                  <p className="min-w-0 truncate text-[16px] font-bold">{r.fullName || "Titular sem nome"}</p>
                   <span className={cx("shrink-0 rounded-full px-2.5 py-0.5 text-[12px] font-bold", STATUS_CLS[r.status])}>{PRE_STATUS_LABEL[r.status]}</span>
                 </div>
                 <p className="mt-1 text-[13px] text-ink-2">
                   {actor.role === "CONSULTANT" ? `Enviada por ${r.createdBy.name.split(" ")[0]}` : `Para ${r.consultant.name}`} · {INCOME_BAND_LABEL[r.incomeBand]}
+                  {r._count.files > 0 && ` · 📎 ${r._count.files} doc${r._count.files > 1 ? "s" : ""}`}
                   {r.propertyCode ? ` · imóvel ${r.propertyCode}` : ""}
                 </p>
                 <p className="mt-0.5 text-[12px] text-ink-3">

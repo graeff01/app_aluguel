@@ -7,7 +7,10 @@ import { formatPhone } from "@/lib/phone";
 import { Alert, PageHeader, cx } from "@/components/ui";
 import { ContactButtons } from "@/components/contact-buttons";
 import { InlineAction } from "@/components/inline-action";
-import { deletePreAnalysisAction } from "@/app/actions/pre-analysis";
+import { addPreAnalysisFilesAction, deletePreAnalysisAction, deletePreAnalysisFileAction } from "@/app/actions/pre-analysis";
+import { ActionForm, SubmitButton } from "@/components/action-form";
+import { FileAttach } from "@/components/file-attach";
+import { hasGlobalView } from "@/lib/authz";
 import { ResultForm } from "./result-form";
 import { SchedulePreVisitForm } from "./schedule-form";
 import { STATUS_LABEL } from "@/lib/labels";
@@ -37,7 +40,9 @@ export default async function PreAnalysisPage({ params, searchParams }: { params
         ["E-mail", p.email ? <a href={`mailto:${p.email}`} className="break-all underline underline-offset-4">{p.email}</a> : "—"],
         ["Telefone", p.phone ? formatPhone(p.phone) : "—"],
         ["Salário", p.salaryCents ? <span className="num">{brl(p.salaryCents)}</span> : "—"],
+        ["Garantia", p.guarantee?.label ?? "—"],
       ];
+  const sizeLabel = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
   return (
     <div className="mx-auto max-w-3xl">
       <Link href="/pre-analises" className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
@@ -46,8 +51,8 @@ export default async function PreAnalysisPage({ params, searchParams }: { params
       {sp.enviada && <p role="status" className="mb-5 rounded-2xl bg-good-soft px-4 py-3 text-sm font-semibold text-good">✓ Enviada para {p.consultant.name}. Ela foi avisada no app.</p>}
       <PageHeader
         eyebrow="Pré-análise"
-        title={p.fullName}
-        subtitle={`Enviada por ${p.createdBy.name} para ${p.consultant.name} · ${fmt.dateTime(p.createdAt)}`}
+        title={p.fullName || "Titular sem nome"}
+        subtitle={`Enviada por ${p.createdBy.name} para ${p.consultant.name}${p.ownClient ? " (cliente já era dela, fora do rodízio)" : ""} · ${fmt.dateTime(p.createdAt)}`}
         action={<span className={cx("inline-flex rounded-full px-3 py-1 text-[13px] font-bold", STATUS_CLS[p.status])}>{PRE_STATUS_LABEL[p.status]}</span>}
       />
 
@@ -87,8 +92,49 @@ export default async function PreAnalysisPage({ params, searchParams }: { params
             )}
           </dl>
         )}
-        {!p.purgedAt && p.phone && <ContactButtons phone={p.phone} name={p.fullName.split(" ")[0]} className="mt-4" />}
+        {!p.purgedAt && p.phone && <ContactButtons phone={p.phone} name={p.fullName.split(" ")[0] || "cliente"} className="mt-4" />}
         {p.note && <p className="mt-4 rounded-2xl bg-tint px-4 py-3 text-sm text-ink-2">“{p.note}”</p>}
+      </section>
+
+      <section className="mb-6 rounded-[26px] border border-line bg-surface p-5 shadow-card sm:p-6" aria-labelledby="t-docs">
+        <h2 id="t-docs" className="mb-3 text-[15px] font-bold">
+          Documentos do cliente {p.files.length > 0 && <span className="font-medium text-ink-3">· {p.files.length}</span>}
+        </h2>
+        {p.purgedAt ? (
+          <p className="text-sm text-ink-3">Documentos apagados junto com os dados pessoais (prazo da LGPD).</p>
+        ) : (
+          <>
+            {p.files.length === 0 ? (
+              <p className="mb-4 text-sm text-ink-3">Nenhum documento anexado.</p>
+            ) : (
+              <ul className="mb-4 divide-y divide-line overflow-hidden rounded-2xl border border-line">
+                {p.files.map((f) => (
+                  <li key={f.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+                    <a href={`/api/pre-analises/${p.id}/arquivos/${f.id}`} target="_blank" rel="noopener" className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-semibold underline-offset-4 hover:underline">
+                        {f.mime === "application/pdf" ? "📄" : "🖼️"} {f.name}
+                      </span>
+                      <span className="text-[12px] text-ink-3">
+                        {sizeLabel(f.size)} · {f.uploadedBy.name.split(" ")[0]} · {fmt.dateTime(f.createdAt)}
+                      </span>
+                    </a>
+                    <span className="flex gap-1">
+                      <a href={`/api/pre-analises/${p.id}/arquivos/${f.id}?baixar=1`} className="press inline-flex min-h-10 items-center rounded-full border border-line-strong px-3 text-[13px] font-semibold">
+                        Baixar
+                      </a>
+                      {(f.uploadedById === actor.id || hasGlobalView(actor)) && <InlineAction action={deletePreAnalysisFileAction} fields={{ fileId: f.id }} label="Remover" variant="danger" confirm={`Remover ${f.name}?`} />}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <ActionForm action={addPreAnalysisFilesAction} resetOnSuccess>
+              <input type="hidden" name="id" value={p.id} />
+              <FileAttach hint="Faltou algum documento? Anexe aqui: quem enviou a pré-análise e a consultora são avisadas." />
+              <SubmitButton variant="secondary">Enviar documentos</SubmitButton>
+            </ActionForm>
+          </>
+        )}
       </section>
 
       {(p.status !== "AWAITING" || p.resultNote) && (

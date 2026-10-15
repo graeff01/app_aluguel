@@ -1,6 +1,7 @@
 /**
- * Integração real com a Google Calendar API (somente leitura) via OAuth no servidor.
- * Escopos mínimos: listar calendários + ler eventos. Tokens ficam criptografados no banco.
+ * Integração real com a Google Calendar API via OAuth no servidor. Tokens ficam criptografados no banco.
+ * Escopos: listar calendários + eventos. A sincronização só LÊ; a única escrita é cancelar o evento de uma
+ * visita que o pré-atendimento cancelou no app (precisa da conta reconectada com a permissão de edição).
  */
 import { OAuth2Client } from "google-auth-library";
 import { calendar, type calendar_v3 } from "@googleapis/calendar";
@@ -14,9 +15,19 @@ export const GOOGLE_SCOPES = [
   "openid",
   "email",
   "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
-  "https://www.googleapis.com/auth/calendar.events.readonly",
+  "https://www.googleapis.com/auth/calendar.events",
 ];
-export const REQUIRED_CALENDAR_SCOPES = GOOGLE_SCOPES.slice(2);
+const EVENTS_RW = "https://www.googleapis.com/auth/calendar.events";
+const EVENTS_RO = "https://www.googleapis.com/auth/calendar.events.readonly";
+/** Mínimo para sincronizar: listar calendários e ler eventos (leitura ou edição). */
+export function missingCalendarScopes(granted: string[]) {
+  const missing: string[] = [];
+  if (!granted.includes("https://www.googleapis.com/auth/calendar.calendarlist.readonly")) missing.push("calendarlist");
+  if (!granted.includes(EVENTS_RW) && !granted.includes(EVENTS_RO)) missing.push("events");
+  return missing;
+}
+/** A conexão permite cancelar eventos pelo app. */
+export const canEditEvents = (scopes: string | null | undefined) => (scopes ?? "").split(" ").includes(EVENTS_RW);
 
 export function googleConfigured() {
   return Boolean(env.googleClientId && env.googleClientSecret);
@@ -136,6 +147,35 @@ export function realCalendarApi(auth: OAuth2Client): CalendarApi {
         };
       } catch (e) {
         throw mapGoogleError(e);
+      }
+    },
+    async cancelEvent(calendarId, eventId) {
+      try {
+        const ev = (await api.events.get({ calendarId, eventId })).data;
+        if (ev.status === "cancelled") return "already";
+        const own = !ev.organizer?.email || ev.organizer.self === true || ev.organizer.email.toLowerCase() === calendarId.toLowerCase();
+        // organizadora: cancela para todos (convidados recebem o aviso); convidada: tira só da própria agenda
+        await api.events.delete({ calendarId, eventId, sendUpdates: own ? "all" : "none" });
+        return own ? "canceled" : "removed";
+      } catch (e) {
+        const m = mapGoogleError(e);
+        if (m.kind === "NOT_FOUND" || m.status === 410) return "already";
+        throw m;
+      }
+    },
+    async updateSummary(calendarId, eventId, summary) {
+      try {
+        const ev = (await api.events.get({ calendarId, eventId })).data;
+        if (ev.status === "cancelled") return "already";
+        const own = !ev.organizer?.email || ev.organizer.self === true || ev.organizer.email.toLowerCase() === calendarId.toLowerCase();
+        if (!own) return "not_owner";
+        const next = summary(ev.summary ?? "");
+        if (next !== ev.summary) await api.events.patch({ calendarId, eventId, sendUpdates: "all", requestBody: { summary: next } });
+        return "updated";
+      } catch (e) {
+        const m = mapGoogleError(e);
+        if (m.kind === "NOT_FOUND" || m.status === 410) return "already";
+        throw m;
       }
     },
     async getEvent(calendarId, eventId) {

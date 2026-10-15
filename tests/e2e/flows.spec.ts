@@ -447,6 +447,8 @@ test("pré-análise: pré-atendimento envia, consultora responde e pré-atendime
   await page.getByLabel("Telefone").fill("(51) 99876-1234");
   await page.getByLabel(/Salário/).fill("4.500,00");
   await page.locator("label", { hasText: "CredPago" }).click();
+  await page.locator("#files-input").setInputFiles({ name: "rg-titular.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n% sintetico\n") });
+  await expect(page.getByText("rg-titular.pdf")).toBeVisible();
   // rodízio: cartões com "Próxima da vez"
   await expect(page.getByText("Próxima da vez", { exact: true })).toBeVisible();
   await page.locator("label", { hasText: "Consultora A" }).first().click();
@@ -454,6 +456,7 @@ test("pré-análise: pré-atendimento envia, consultora responde e pré-atendime
   await page.getByRole("button", { name: "Enviar para a consultora" }).click();
   await expect(page.getByText("✓ Enviada para Consultora A")).toBeVisible();
   await expect(page.getByText("529.982.247-25")).toBeVisible();
+  await expect(page.getByRole("link", { name: /rg-titular\.pdf/ })).toBeVisible();
 
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
   const c = await ctx.newPage();
@@ -621,6 +624,10 @@ test("pré-atendimento cancela visita com motivo; marketing só vê a tela dele"
   await row.getByLabel("Motivo do cancelamento").selectOption({ label: "Cliente desistiu" });
   await row.getByRole("button", { name: "Cancelar visita" }).click();
   await expect(page.locator("li", { hasText: "Cliente Cancela" })).toContainText("Cliente desistiu");
+  await page.getByRole("link", { name: "Semana", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /^Semana de/ })).toBeVisible();
+  await page.getByRole("link", { name: "Mês", exact: true }).click();
+  await expect(page.getByText("Visitas do mês")).toBeVisible();
 
   await page.context().clearCookies();
   await page.goto("/login");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignConsultant, classifyTitle, DEFAULT_PATTERNS, parseVisitEvent } from "@/lib/parser";
+import { assignConsultant, classifyTitle, DEFAULT_PATTERNS, parseVisitEvent, removeCodeFromTitle } from "@/lib/parser";
 import { htmlToText } from "@/server/sync/sanitize";
 
 // Dados sintéticos — nenhum dado real.
@@ -159,5 +159,15 @@ describe("títulos fora do padrão", () => {
     expect(visit("Visita - Imóvel 365585 - Sanderson")).toBe("AMBIGUOUS"); // sem telefone
     expect(visit("vou no imóvel cód. 81141100 verificar questão do portão")).toBe("AMBIGUOUS");
     expect(visit("Visita técnica - imóvel 123456 - 51 99999-9999")).toBe("IRRELEVANT");
+  });
+});
+
+describe("tirar um código do título", () => {
+  it("mantém os outros códigos e o resto do título", () => {
+    const t = "Visita clt - Ana 123 - cod 111111;222222;333333 - 51 99999-9999";
+    expect(removeCodeFromTitle(t, "222222")).toBe("Visita clt - Ana 123 - cod 111111;333333 - 51 99999-9999");
+    expect(removeCodeFromTitle(t, "111111")).toBe("Visita clt - Ana 123 - cod 222222;333333 - 51 99999-9999");
+    expect(removeCodeFromTitle(t, "333333")).toBe("Visita clt - Ana 123 - cod 111111;222222 - 51 99999-9999");
+    expect(removeCodeFromTitle("Visita Isabelle - 51 9172-5812 (844530;844529)", "844530")).toBe("Visita Isabelle - 51 9172-5812 (844529)");
   });
 });
