@@ -1,0 +1,281 @@
+// Bateria de casos de borda das funcionalidades de 14–15/10 (documentos, pré-análise sem obrigatórios, rodízio,
+// cancelamento parcial/Google, vários imóveis, marketing, telefone, leitura do título, agenda semana/mês).
+import { beforeEach, describe, expect, it } from "vitest";
+import { db } from "@/lib/db";
+import { normalizePhone } from "@/lib/phone";
+import { classifyTitle, DEFAULT_PATTERNS, parseVisitEvent, removeCodeFromTitle } from "@/lib/parser";
+import { assignmentQueue, createPreAnalysis, runPreAnalysisRetention } from "@/server/pre-analysis";
+import { addPreAnalysisFiles, readFiles, readPreAnalysisFile, MAX_FILE_BYTES } from "@/server/pre-analysis-files";
+import { cancelVisitByStaff, concludeVisit, createManualVisit } from "@/server/visits";
+import { markLeasePosted, updateOpportunity } from "@/server/opportunities";
+import { rangeAgenda } from "@/server/day-agenda";
+import { runSync } from "@/server/sync/engine";
+import { toLocalInput } from "@/lib/time";
+import { MockCalendar, visitEvent } from "../helpers/mock-calendar";
+import { leaseInfo, makeConnection, makeUsers, resetDb } from "../helpers/db";
+
+let u: Awaited<ReturnType<typeof makeUsers>>;
+let jasmin: { id: string; role: "PRE_SERVICE" };
+let mkt: { id: string; role: "MARKETING" };
+const NOW = new Date("2026-10-13T15:00:00Z");
+const H = 3600_000;
+let seq = 0;
+const pdf = (name = "doc.pdf") => new File(["%PDF-1.4\n%sintetico\n"], name, { type: "application/pdf" });
+const visit = (start: string, code = "761739", consultantId?: string) =>
+  createManualVisit(u.admin, { requestId: `bateria-${++seq}-req`, scheduledStart: toLocalInput(new Date(start)), clientName: "Cliente Bateria", phoneRaw: "(51) 99876-7777", propertyCode: code, consultantId: consultantId ?? u.a.id });
+const cancelReason = (label = "Cliente desistiu") => db.reason.findFirstOrThrow({ where: { kind: "VISIT_CANCEL", label } });
+
+beforeEach(async () => {
+  await resetDb();
+  u = await makeUsers();
+  jasmin = { id: (await db.user.create({ data: { name: "Jasmin Pré", email: "jasmin@exemplo.test", role: "PRE_SERVICE" } })).id, role: "PRE_SERVICE" };
+  mkt = { id: (await db.user.create({ data: { name: "Marketing", email: "mkt@exemplo.test", role: "MARKETING" } })).id, role: "MARKETING" };
+});
+
+// ───────────────────────── Documentos ─────────────────────────
+describe("documentos: limites e segurança", () => {
+  it("rejeita arquivo grande, demais, falso e ignora campo vazio", async () => {
+    await expect(readFiles([new File([new Uint8Array(MAX_FILE_BYTES + 1)], "grande.pdf")])).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(readFiles(Array.from({ length: 13 }, (_, i) => pdf(`d${i}.pdf`)))).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(readFiles([new File(["<html><script>alert(1)</script>"], "rg.pdf", { type: "application/pdf" })])).rejects.toMatchObject({ code: "VALIDATION" });
+    expect(await readFiles([new File([], ""), pdf()])).toHaveLength(1); // input sem arquivo manda item vazio
+  });
+
+  it("aceita JPG, PNG, WEBP, HEIC e PDF pelo conteúdo e limpa o nome (sem caminho)", async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+    const heic = new Uint8Array([0, 0, 0, 0x18, ...Buffer.from("ftypheic"), 0, 0]);
+    const webp = new Uint8Array([...Buffer.from("RIFF"), 0, 0, 0, 0, ...Buffer.from("WEBP")]);
+    const out = await readFiles([new File([png], "../../etc/passwd.png"), new File([heic], "foto.HEIC"), new File([webp], "x.webp"), pdf("Comprovante de Renda (março).pdf")]);
+    expect(out.map((f) => f.mime)).toEqual(["image/png", "image/heic", "image/webp", "application/pdf"]);
+    expect(out[0].name).not.toContain("/");
+    expect(out[3].name).toBe("Comprovante de Renda março.pdf");
+  });
+
+  it("até 12 por pré-análise somando os já anexados; depois da retenção não aceita mais", async () => {
+    const p = await createPreAnalysis(jasmin, { consultantId: u.a.id }, NOW, Array.from({ length: 11 }, (_, i) => pdf(`d${i}.pdf`)));
+    await expect(addPreAnalysisFiles(jasmin, p.id, [pdf("a.pdf"), pdf("b.pdf")])).rejects.toMatchObject({ code: "VALIDATION" });
+    await addPreAnalysisFiles(jasmin, p.id, [pdf("a.pdf")]);
+    await runPreAnalysisRetention(new Date(NOW.getTime() + 200 * 24 * H));
+    await expect(addPreAnalysisFiles(jasmin, p.id, [pdf("c.pdf")])).rejects.toMatchObject({ code: "INVALID_STATE" });
+  });
+
+  it("marketing e outra consultora não abrem; documento de outra pré-análise não abre pelo id trocado", async () => {
+    const p1 = await createPreAnalysis(jasmin, { consultantId: u.a.id }, NOW, [pdf()]);
+    const p2 = await createPreAnalysis(jasmin, { consultantId: u.b.id }, NOW, [pdf()]);
+    const f1 = await db.preAnalysisFile.findFirstOrThrow({ where: { preAnalysisId: p1.id } });
+    await expect(readPreAnalysisFile(mkt, p1.id, f1.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(readPreAnalysisFile(u.b, p1.id, f1.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(readPreAnalysisFile(u.b, p2.id, f1.id)).rejects.toMatchObject({ code: "NOT_FOUND" }); // id de outra pré-análise
+    expect((await readPreAnalysisFile(u.manager, p1.id, f1.id)).mime).toBe("application/pdf");
+  });
+});
+
+// ───────────────────────── Pré-análise sem obrigatórios ─────────────────────────
+describe("pré-análise sem campos obrigatórios", () => {
+  it("duas sem CPF não se bloqueiam; CPF repetido continua barrado", async () => {
+    await createPreAnalysis(jasmin, { consultantId: u.a.id }, NOW);
+    await createPreAnalysis(jasmin, { consultantId: u.a.id }, NOW);
+    await createPreAnalysis(jasmin, { consultantId: u.a.id, cpf: "529.982.247-25" }, NOW);
+    await expect(createPreAnalysis(jasmin, { consultantId: u.b.id, cpf: "529.982.247-25" }, NOW)).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("valida só o que veio: menor de idade, salário e e-mail inválidos", async () => {
+    await expect(createPreAnalysis(jasmin, { consultantId: u.a.id, birthDate: "2015-01-01", salary: "abc", email: "sem-arroba" }, NOW)).rejects.toMatchObject({
+      code: "VALIDATION",
+      details: { birthDate: expect.any(String), salary: expect.any(String), email: expect.any(String) },
+    });
+  });
+
+  it("sem consultora não envia; consultora inativa não recebe", async () => {
+    await expect(createPreAnalysis(jasmin, { consultantId: "" }, NOW)).rejects.toMatchObject({ code: "VALIDATION" });
+    await db.user.update({ where: { id: u.b.id }, data: { active: false } });
+    await expect(createPreAnalysis(jasmin, { consultantId: u.b.id }, NOW)).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+
+  it("aprovada sem telefone/nome ainda agenda a visita", async () => {
+    const { resolvePreAnalysis } = await import("@/server/pre-analysis");
+    const { scheduleFromPreAnalysis } = await import("@/server/pre-visit");
+    const p = await createPreAnalysis(jasmin, { consultantId: u.a.id }, NOW);
+    await resolvePreAnalysis(u.a, p.id, { status: "APPROVED", note: "aprovado" }, NOW);
+    const v = await scheduleFromPreAnalysis(u.a, p.id, { requestId: "bateria-pre-1", scheduledStart: toLocalInput(new Date(NOW.getTime() + 24 * H)), durationMinutes: 60, propertyCode: "761739" }, NOW);
+    expect(v).toMatchObject({ clientName: null, phoneRaw: null, preAnalysisId: p.id });
+  });
+});
+
+// ───────────────────────── Rodízio ─────────────────────────
+describe("rodízio", () => {
+  it("ninguém recebeu ainda: ordem alfabética; ausente sai da vez; todas ausentes segue normal", async () => {
+    let q = await assignmentQueue(NOW);
+    expect(q.find((c) => c.isNext)?.name).toBe("Consultora A");
+    await db.user.update({ where: { id: u.a.id }, data: { awayUntil: new Date("2026-10-20T00:00:00Z") } });
+    q = await assignmentQueue(NOW);
+    expect(q.find((c) => c.isNext)?.name).toBe("Consultora B");
+    await db.user.update({ where: { id: u.b.id }, data: { awayUntil: new Date("2026-10-20T00:00:00Z") } });
+    q = await assignmentQueue(NOW);
+    expect(q.filter((c) => c.isNext)).toHaveLength(1);
+  });
+
+  it("vez alterna A → B → A; 'cliente da consultora' não mexe em quem é a última a receber", async () => {
+    await createPreAnalysis(jasmin, { consultantId: u.a.id }, new Date(NOW.getTime() - 2 * H));
+    expect((await assignmentQueue(NOW)).find((c) => c.isNext)?.id).toBe(u.b.id);
+    await createPreAnalysis(jasmin, { consultantId: u.b.id }, new Date(NOW.getTime() - H));
+    await createPreAnalysis(jasmin, { consultantId: u.a.id, ownClient: true }, NOW);
+    const q = await assignmentQueue(new Date(NOW.getTime() + 60_000));
+    expect(q.find((c) => c.isNext)?.id).toBe(u.a.id);
+    expect(q.find((c) => c.isLast)?.id).toBe(u.b.id);
+  });
+});
+
+// ───────────────────────── Cancelamento ─────────────────────────
+describe("cancelamento pelo pré-atendimento", () => {
+  it("permissões, motivo inativo, visita já concluída", async () => {
+    const v = await visit("2026-10-14T15:00:00Z");
+    const r = await cancelReason();
+    await expect(cancelVisitByStaff(mkt, v.id, { reasonId: r.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(cancelVisitByStaff(u.b, v.id, { reasonId: r.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await db.reason.update({ where: { id: r.id }, data: { active: false } });
+    await expect(cancelVisitByStaff(jasmin, v.id, { reasonId: r.id })).rejects.toMatchObject({ code: "VALIDATION" });
+    const past = await visit("2026-10-13T12:00:00Z", "222222");
+    await concludeVisit(u.a, past.id, { requestId: "bateria-done-1", expectedVersion: 1, status: "DONE", evaluation: "POSITIVE", note: "ok" }, NOW);
+    await expect(cancelVisitByStaff(jasmin, past.id, { reasonId: (await cancelReason("Outro")).id, note: "x" })).rejects.toMatchObject({ code: "INVALID_STATE" });
+  });
+
+  it("Google: sem permissão de edição, falha do Google e evento da consultora", async () => {
+    await makeConnection("central@exemplo.test");
+    const api = new MockCalendar();
+    api.put(visitEvent("e1", { start: "2026-10-14T15:00:00Z", title: "Visita clt - Cliente Exemplo 1234567 - cod 111111;222222 - 51 99876-5432", organizer: "consultora.a@exemplo.test" }));
+    api.put(visitEvent("e2", { start: "2026-10-14T18:00:00Z", title: "Visita clt - Outro Cliente 7654321 - cod 333333 - 51 99876-1111", organizer: "central@exemplo.test" }));
+    api.put(visitEvent("e3", { start: "2026-10-15T15:00:00Z", title: "Visita clt - Terceiro Cliente 1112223 - cod 444444 - 51 99876-2222", organizer: "central@exemplo.test" }));
+    await runSync({ api, now: NOW, sleep: async () => {} });
+    const r = await cancelReason();
+    const byCode = async (c: string) => db.visit.findFirstOrThrow({ where: { propertyCode: c } });
+
+    // conexão real só com leitura: cancela no app e avisa (sem tocar no Google)
+    expect((await cancelVisitByStaff(jasmin, (await byCode("333333")).id, { reasonId: r.id }, NOW)).google).toBe("no_permission");
+
+    // evento organizado pela consultora: só um imóvel → não dá para editar o título dela
+    expect((await cancelVisitByStaff(jasmin, (await byCode("111111")).id, { reasonId: r.id, onlyThis: true }, NOW, { calendarApi: api })).google).toBe("not_owner");
+    // o restante → sai só da agenda conectada (cópia de convidada)
+    expect((await cancelVisitByStaff(jasmin, (await byCode("222222")).id, { reasonId: r.id }, NOW, { calendarApi: api })).google).toBe("removed");
+
+    // Google fora do ar: a visita fica cancelada no app mesmo assim
+    const v3 = await byCode("444444");
+    const broken = { cancelEvent: async () => Promise.reject(Object.assign(new Error("Google fora"), { kind: "RETRYABLE" })) } as unknown as MockCalendar;
+    expect((await cancelVisitByStaff(jasmin, v3.id, { reasonId: r.id }, NOW, { calendarApi: broken })).google).toBe("error");
+    expect((await db.visit.findUniqueOrThrow({ where: { id: v3.id } })).status).toBe("CANCELED");
+  });
+
+  it("sincronização depois de cancelamentos: horário mudado, código novo e evento apagado", async () => {
+    await makeConnection("central@exemplo.test");
+    const api = new MockCalendar();
+    const ev = (start: string, codes: string) => visitEvent("m", { start, title: `Visita clt - Cliente Exemplo 1234567 - cod ${codes} - 51 99876-5432`, organizer: "central@exemplo.test" });
+    api.put(ev("2026-10-14T15:00:00Z", "111111;222222;333333"));
+    const sync = () => runSync({ api, now: NOW, sleep: async () => {} });
+    await sync();
+    const r = await cancelReason();
+    const first = await db.visit.findFirstOrThrow({ where: { propertyCode: "111111" } });
+    await cancelVisitByStaff(jasmin, first.id, { reasonId: r.id, onlyThis: true }, NOW, { calendarApi: api });
+    // Jasmin muda o horário e acrescenta um imóvel no Google
+    api.put(ev("2026-10-14T17:00:00Z", "222222;333333;444444"));
+    await sync();
+    const all = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
+    expect(all.map((v) => [v.propertyCode, v.status, v.syncConflict, v.scheduledStart.toISOString()])).toEqual([
+      ["111111", "CANCELED", "NONE", "2026-10-14T15:00:00.000Z"],
+      ["222222", "SCHEDULED", "NONE", "2026-10-14T17:00:00.000Z"],
+      ["333333", "SCHEDULED", "NONE", "2026-10-14T17:00:00.000Z"],
+      ["444444", "SCHEDULED", "NONE", "2026-10-14T17:00:00.000Z"],
+    ]);
+    // apagou o evento: tudo cancelado, nada de conflito
+    api.cancel("m");
+    await sync();
+    expect((await db.visit.findMany()).every((v) => v.status === "CANCELED" && v.syncConflict === "NONE")).toBe(true);
+  });
+});
+
+// ───────────────────────── Marketing ─────────────────────────
+describe("marketing", () => {
+  const ready = async () => {
+    const v = await visit("2026-10-10T13:00:00Z");
+    await concludeVisit(u.a, v.id, { requestId: `bateria-done-${++seq}`, expectedVersion: 1, status: "DONE", evaluation: "POSITIVE", note: "gostou" }, NOW);
+    return db.opportunity.findFirstOrThrow();
+  };
+
+  it("agenciador desativado não vale; diferencial de outra lista é ignorado", async () => {
+    const o = await ready();
+    const info = await leaseInfo();
+    await db.reason.update({ where: { id: info.agentId }, data: { active: false } });
+    await expect(updateOpportunity(u.a, o.id, { expectedVersion: o.version, toStatus: "CLOSED_WON", closedAt: "2026-10-12", ...info })).rejects.toMatchObject({ code: "VALIDATION" });
+    await db.reason.update({ where: { id: info.agentId }, data: { active: true } });
+    const wrong = await db.reason.findFirstOrThrow({ where: { kind: "VISIT_NEGATIVE" } });
+    await updateOpportunity(u.a, o.id, { expectedVersion: o.version, toStatus: "CLOSED_WON", closedAt: "2026-10-12", highlightIds: [wrong.id], ...info });
+    expect((await db.leasePost.findFirstOrThrow()).highlights).toEqual([]);
+  });
+
+  it("depois de postado, reabrir não apaga o histórico; fechar de novo volta para 'para postar'", async () => {
+    const o = await ready();
+    await updateOpportunity(u.a, o.id, { expectedVersion: o.version, toStatus: "CLOSED_WON", closedAt: "2026-10-12", ...(await leaseInfo()) });
+    const post = await db.leasePost.findFirstOrThrow();
+    await markLeasePosted(mkt, post.id, true);
+    let cur = await db.opportunity.findUniqueOrThrow({ where: { id: o.id } });
+    await updateOpportunity(u.manager, o.id, { expectedVersion: cur.version, toStatus: "FOLLOW_UP", note: "contrato caiu" });
+    expect(await db.leasePost.count()).toBe(1); // postado fica registrado
+    cur = await db.opportunity.findUniqueOrThrow({ where: { id: o.id } });
+    await updateOpportunity(u.manager, o.id, { expectedVersion: cur.version, toStatus: "CLOSED_WON", closedAt: "2026-10-13", ...(await leaseInfo()) });
+    expect((await db.leasePost.findFirstOrThrow()).postedAt).toBeNull();
+  });
+
+  it("data futura e versão desatualizada são barradas", async () => {
+    const o = await ready();
+    await expect(updateOpportunity(u.a, o.id, { expectedVersion: o.version, toStatus: "CLOSED_WON", closedAt: "2099-01-01", ...(await leaseInfo()) })).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(updateOpportunity(u.a, o.id, { expectedVersion: o.version + 5, toStatus: "CLOSED_WON", closedAt: "2026-10-12", ...(await leaseInfo()) })).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+});
+
+// ───────────────────────── Telefone e título ─────────────────────────
+describe("telefone e leitura do título: formatos que aparecem na agenda", () => {
+  it.each([
+    ["51 9348-4750", "+5551993484750"],
+    ["(51)9 9876-5432", "+5551998765432"],
+    ["51998765432", "+5551998765432"],
+    ["+55 51 99876-5432", "+5551998765432"],
+    ["51 3333-4444", "+555133334444"],
+    ["53 98426.0650", "+5553984260650"],
+  ])("%s → %s", (raw, e164) => expect(normalizePhone(raw).normalized).toBe(e164));
+
+  it("sem DDD continua sem DDD (não inventa)", () => expect(normalizePhone("9348-4750")).toMatchObject({ valid: false, problem: "SEM_DDD" }));
+
+  it.each([
+    ["Visita clt - Ana 2964 - cod 123456 ; 654321 - 51 99999-9999", "123456", ["654321"]],
+    ["Visita clt - Ana 2964 - cód.: 123456 - 51 99999-9999", "123456", []],
+    ["VISITA CLT - Ana 2964 - COD 123456 - 51 99999-9999", "123456", []],
+    ["Visita clt - Ana - cod 123456,654321,777777 - (51) 99999-9999", "123456", ["654321", "777777"]],
+  ])("%s", (title, code, extra) => {
+    const c = classifyTitle(title, DEFAULT_PATTERNS);
+    expect(c.cls).toBe("VISIT");
+    const p = parseVisitEvent(title, null, c.cls === "VISIT" ? c.prefix : "");
+    expect(p.propertyCode).toBe(code);
+    expect(p.extraPropertyCodes).toEqual(extra);
+    expect(p.phoneNormalized).toBe("+5551999999999");
+  });
+
+  it("tirar código: não mexe no telefone nem em código parecido", () => {
+    expect(removeCodeFromTitle("Visita clt - Ana - cod 111111;1111112 - 51 99999-9999", "111111")).toBe("Visita clt - Ana - cod 1111112 - 51 99999-9999");
+    expect(removeCodeFromTitle("Visita clt - Ana - cod 111111 - 51 99999-9999", "99999")).toBe("Visita clt - Ana - cod 111111 - 51 99999-9999");
+  });
+});
+
+// ───────────────────────── Agenda semana/mês ─────────────────────────
+describe("agenda por período no fuso de Brasília", () => {
+  it("visita às 23:30 do último dia do mês fica no mês certo", async () => {
+    await visit("2026-11-01T02:30:00Z"); // 31/10 23:30 em Brasília
+    expect((await rangeAgenda(jasmin, "2026-10-01", "2026-11-01")).total).toBe(1);
+    expect((await rangeAgenda(jasmin, "2026-11-01", "2026-12-01")).total).toBe(0);
+  });
+
+  it("cancelada aparece no período mas não conta como visita da consultora", async () => {
+    const v = await visit("2026-10-14T15:00:00Z");
+    await cancelVisitByStaff(jasmin, v.id, { reasonId: (await cancelReason()).id }, NOW);
+    const a = await rangeAgenda(jasmin, "2026-10-12", "2026-10-19");
+    expect(a).toMatchObject({ total: 1, canceled: 1, byConsultant: [] });
+  });
+});

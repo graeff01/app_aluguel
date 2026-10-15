@@ -463,6 +463,20 @@ test("pré-análise: pré-atendimento envia, consultora responde e pré-atendime
   await login(c, "a@e2e.test");
   await c.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: /Pré-análises/ }).click();
   await c.getByRole("link", { name: /Maria Titular da Silva/ }).click();
+  // documento: a consultora escolhida abre; outra consultora e quem não está logado, não
+  const docHref = await c.getByRole("link", { name: /rg-titular\.pdf/ }).getAttribute("href");
+  const docRes = await c.request.get(docHref!);
+  expect(docRes.status()).toBe(200);
+  expect(docRes.headers()["content-type"]).toContain("application/pdf");
+  expect((await docRes.body()).toString("latin1")).toContain("%PDF-1.4");
+  const anon = await browser.newContext();
+  expect((await anon.request.get(`http://localhost:${new URL(page.url()).port}${docHref}`)).status()).toBe(401);
+  await anon.close();
+  const otherCtx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+  const other = await otherCtx.newPage();
+  await login(other, "b@e2e.test");
+  expect((await other.request.get(docHref!)).status()).toBe(404);
+  await otherCtx.close();
   await c.getByText("Aprovado", { exact: true }).click();
   await c.getByLabel(/Observação/).fill("Aprovado sem fiador.");
   await c.getByRole("button", { name: "Registrar resultado" }).click();
@@ -522,6 +536,7 @@ test("registrar resultado e já marcar nova visita para o mesmo cliente", async 
   await page.getByRole("button", { name: "Salvar resultado" }).click();
   await expect(page.getByText("✓ Resultado salvo. Agora marque a nova visita.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Nova visita para o cliente" })).toBeVisible();
+  await page.getByLabel("Horário").fill("06:30"); // horário livre (o padrão é a hora atual e pode cair em outra visita)
   await page.getByLabel("Código do imóvel").fill("761739");
   await page.getByRole("button", { name: "Salvar e preparar a agenda" }).click();
   await expect(page.getByText(/✓ Nova visita marcada para/)).toBeVisible();
