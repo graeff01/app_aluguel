@@ -6,6 +6,7 @@ export const REASON_GROUPS = [
   { kind: "GUARANTEE", title: "Garantias da locação (pré-análise)", placeholder: "Nova garantia" },
   { kind: "LEASE_HIGHLIGHT", title: "Diferenciais da locação (aviso ao marketing)", placeholder: "Novo diferencial" },
   { kind: "LEASE_AGENT", title: "Agenciadores", placeholder: "Nome do agenciador" },
+  { kind: "PRE_MISSING", title: "O que pode faltar na pré-análise (pendente)", placeholder: "Novo documento" },
 ] as const;
 
 export const REASON_KINDS: string[] = REASON_GROUPS.map((g) => g.kind);

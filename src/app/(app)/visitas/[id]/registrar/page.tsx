@@ -8,6 +8,7 @@ import { formatPhone } from "@/lib/phone";
 import { revisitLabel, scheduledByConsultant } from "@/lib/labels";
 import { Alert, Panel } from "@/components/ui";
 import { OutcomeForm } from "./outcome-form";
+import { AfterVisitMessage } from "@/components/after-visit-message";
 import { ContactButtons } from "@/components/contact-buttons";
 import { notFound } from "next/navigation";
 import { visitBrief } from "@/server/brief";
@@ -17,7 +18,7 @@ import { isMobileRequest } from "@/lib/session";
 
 export const metadata = { title: "Registrar resultado" };
 
-export default async function RegisterPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ anterior?: string; restantes?: string; desfeito?: string; r?: string }> }) {
+export default async function RegisterPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ anterior?: string; restantes?: string; desfeito?: string; r?: string; desfazer?: string }> }) {
   const sp = await searchParams;
   const actor = await requireActor();
   const { id } = await params;
@@ -56,12 +57,15 @@ export default async function RegisterPage({ params, searchParams }: { params: P
           <span>
             <strong>✓ Resultado anterior salvo.</strong> Esta é a próxima pendente{Number(sp.restantes) > 1 ? ` (${sp.restantes} na fila)` : ""}.
           </span>
-          <Link href={global ? "/hoje" : "/minhas"} className="shrink-0 font-semibold underline">
-            Parar
-          </Link>
+          <span className="flex shrink-0 flex-wrap items-center gap-2">
+            {sp.desfazer && <AfterVisitMessage actor={actor} visitId={sp.desfazer.split(".")[0]} />}
+            <Link href={global ? "/hoje" : "/minhas"} className="font-semibold underline">
+              Parar
+            </Link>
+          </span>
         </div>
       )}
-      {visit.linkCode && !visit.sourceEventId && visit.status === "SCHEDULED" && (
+      {visit.linkCode && !visit.sourceEventId && !visit.googleCreatedAt && visit.status === "SCHEDULED" && (
         <Link href={`/visitas/${visit.id}/agenda`} className="press mb-5 flex items-center justify-between gap-3 rounded-2xl border border-warn/25 bg-warn-soft px-4 py-3 text-sm text-warn">
           <span>
             <strong>Falta colocar na agenda Google.</strong> Um toque abre o evento já preenchido.

@@ -14,6 +14,10 @@ import { fromLocalInput, fmt } from "@/lib/time";
 import { getPatternConfig, getSettings } from "@/lib/settings";
 import { concludeSameVisit, concludeVisit, ensureProperty } from "./visits";
 import { cleanAddress } from "@/lib/address";
+import { log } from "@/lib/log";
+import type { CalendarApi } from "./sync/types";
+import { authorizedClient, canEditEvents, realCalendarApi } from "./sync/google";
+import { requestManualSync } from "./sync/runner";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem 0/O/1/I
 export const LINK_CODE_RE = /\bVL-([A-HJ-NP-Z2-9]{6})\b/;
@@ -140,13 +144,13 @@ export async function rescheduleVisit(actor: AuthzActor, visitId: string, input:
   });
 }
 
-/** Link "adicionar evento" do Google Agenda, já preenchido. */
-export async function calendarLinkFor(actor: AuthzActor, visitId: string) {
+/** Dados do evento da visita marcada no app (título no padrão, descrição com o código VL-, endereço e convidados). */
+async function calendarEventData(actor: AuthzActor, visitId: string) {
   const v = await db.visit.findUnique({
     where: { id: visitId },
     include: {
       property: { select: { address: true, neighborhood: true, city: true } },
-      consultant: { select: { aliases: { select: { email: true } } } },
+      consultant: { select: { email: true, aliases: { select: { email: true } } } },
       companions: { where: { excluded: false, status: { not: "CANCELED" } }, select: { propertyCode: true }, orderBy: { createdAt: "asc" } },
     },
   });
@@ -158,17 +162,52 @@ export async function calendarLinkFor(actor: AuthzActor, visitId: string) {
   // a etiqueta vai no FINAL: no começo atrapalharia a leitura do nome do cliente pela sincronização
   const codes = [v.propertyCode, ...v.companions.map((c) => c.propertyCode)].filter(Boolean).join(";");
   const title = [label, v.clientName, codes ? `cod ${codes}` : null, v.phoneRaw, v.assignmentNote === "REAGENDADA" ? "REAGENDADA" : null].filter(Boolean).join(" - ");
-  const utc = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   // conta central (para o app ler) + cópias configuradas (ex.: pré-atendimento)
   const cc = settings.calendarCcEmails.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e));
-  const guests = [...new Set([conn?.calendarId?.includes("@") ? conn.calendarId : conn?.googleEmail, ...cc].filter(Boolean) as string[])];
+  const central = conn?.calendarId?.includes("@") ? conn.calendarId : conn?.googleEmail;
+  const guests = [...new Set([central, ...cc].filter(Boolean) as string[])];
   const details = [
     v.rescheduledFromId ? "Visita remarcada pela consultora no app Visitas Locação." : v.preAnalysisId ? "Visita marcada a partir da pré-análise aprovada (app Visitas Locação)." : "Visita marcada pela consultora no app Visitas Locação.",
     `Ref.: ${v.linkCode ?? ""} (não apague esta linha: liga o evento à visita no app)`,
   ].join("\n");
   const location = cleanAddress(v.property?.address) ?? (v.property?.neighborhood ? `${v.property.neighborhood}, ${v.property.city ?? "Canoas"} - RS` : "");
+  // consultora convidada (o evento fica na agenda dela e a atribuição continua certa)
+  const consultantEmail = v.consultant?.aliases[0]?.email ?? v.consultant?.email ?? null;
+  return { v, conn, title, details, location, guests, central, cc, consultantEmail };
+}
+
+/** Link "adicionar evento" do Google Agenda, já preenchido (plano B quando o app não consegue criar sozinho). */
+export async function calendarLinkFor(actor: AuthzActor, visitId: string) {
+  const { v, title, details, location, guests } = await calendarEventData(actor, visitId);
+  const utc = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   const params = new URLSearchParams({ action: "TEMPLATE", text: title, dates: `${utc(v.scheduledStart)}/${utc(v.scheduledEnd)}`, details, ctz: "America/Sao_Paulo" });
   if (location) params.set("location", location);
   if (guests.length) params.set("add", guests.join(","));
-  return { url: `https://calendar.google.com/calendar/render?${params.toString()}`, linked: !!v.sourceEventId, code: v.linkCode, title, guests };
+  return { url: `https://calendar.google.com/calendar/render?${params.toString()}`, linked: !!v.sourceEventId, created: !!v.googleCreatedAt, code: v.linkCode, title, guests };
+}
+
+/**
+ * O app cria o evento direto na agenda conectada (precisa da permissão de edição): a consultora não precisa
+ * mais tocar em "Colocar na agenda". O código VL- da descrição liga o evento à visita na sincronização.
+ */
+export async function createVisitEventInGoogle(actor: AuthzActor, visitId: string, opts: { calendarApi?: CalendarApi; now?: Date } = {}): Promise<"created" | "already" | "no_permission" | "error"> {
+  const { v, conn, title, details, location, cc, consultantEmail } = await calendarEventData(actor, visitId);
+  if (v.sourceEventId || v.googleCreatedAt) return "already";
+  if (!v.linkCode || !conn || conn.status !== "CONNECTED" || !conn.calendarId) return "no_permission";
+  if (!opts.calendarApi && !canEditEvents(conn.scopes)) return "no_permission";
+  try {
+    const api = opts.calendarApi ?? realCalendarApi(await authorizedClient(conn.id));
+    const attendees = [...new Set([consultantEmail, ...cc].filter((e): e is string => !!e && e.toLowerCase() !== conn.calendarId!.toLowerCase()))];
+    const eventId = await api.insertEvent(conn.calendarId, { summary: title, description: details, location, start: v.scheduledStart, end: v.scheduledEnd, attendees });
+    await db.$transaction(async (tx) => {
+      await tx.visit.update({ where: { id: v.id }, data: { googleCreatedAt: opts.now ?? new Date() } });
+      await audit(tx, { actorId: actor.id, action: "google.event_created", entityType: "Visit", entityId: v.id, changes: { evento: eventId } });
+    });
+    // liga o evento à visita já na próxima rodada (sem esperar os 5 minutos)
+    await requestManualSync(actor.id).catch(() => undefined);
+    return "created";
+  } catch (e) {
+    log.warn("google.insert_failed", { kind: (e as { kind?: string }).kind ?? "OTHER" });
+    return "error";
+  }
 }

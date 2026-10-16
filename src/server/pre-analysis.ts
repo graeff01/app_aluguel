@@ -17,7 +17,7 @@ import { AppError, notFound } from "@/lib/errors";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { assert, canCreatePreAnalysis, canResolvePreAnalysis, canViewPreAnalysis, hasGlobalView, isPreService, preAnalysisScope, type AuthzActor } from "@/lib/authz";
 import { normalizePhone } from "@/lib/phone";
-import { normalizeEmail } from "@/lib/text";
+import { normalizeEmail, normalizeText } from "@/lib/text";
 import { getSettings } from "@/lib/settings";
 import { pushConfig, sendPush } from "@/lib/push";
 import { log } from "@/lib/log";
@@ -202,7 +202,7 @@ export async function preAnalysisDetail(actor: AuthzActor, id: string, now = new
       resultBy: { select: { name: true } },
       guarantee: { select: { label: true } },
       files: { orderBy: { createdAt: "asc" }, select: { id: true, name: true, mime: true, size: true, createdAt: true, uploadedById: true, uploadedBy: { select: { name: true } } } },
-      visits: { orderBy: { scheduledStart: "asc" }, select: { id: true, scheduledStart: true, status: true, propertyCode: true, sourceEventId: true } },
+      visits: { orderBy: { scheduledStart: "asc" }, select: { id: true, scheduledStart: true, status: true, propertyCode: true, sourceEventId: true, googleCreatedAt: true } },
     },
   });
   if (!p) throw notFound();
@@ -238,7 +238,7 @@ export async function preAnalysisDetail(actor: AuthzActor, id: string, now = new
 
 // ─────────────── resultado ───────────────
 
-export async function resolvePreAnalysis(actor: AuthzActor, id: string, input: { status: string; note: string }, now = new Date()) {
+export async function resolvePreAnalysis(actor: AuthzActor, id: string, input: { status: string; note: string; missingIds?: string[] }, now = new Date()) {
   const p = await db.preAnalysis.findUnique({ where: { id } });
   if (!p) throw notFound();
   assert(canResolvePreAnalysis(actor, p));
@@ -246,13 +246,18 @@ export async function resolvePreAnalysis(actor: AuthzActor, id: string, input: {
   const status = input.status as PreAnalysisStatus;
   if (!["APPROVED", "REJECTED", "PENDING"].includes(status)) throw new AppError("VALIDATION", "Escolha o resultado.", { status: "Escolha o resultado." });
   const note = input.note.trim();
-  if (note.length < 3) throw new AppError("VALIDATION", "Escreva uma observação (ex.: o que falta ou o motivo).", { note: "Obrigatória." });
+  // pendente: o que falta vem da lista (com observação opcional); aprovado/reprovado: observação obrigatória
+  const missing = status === "PENDING" && input.missingIds?.length ? await db.reason.findMany({ where: { id: { in: input.missingIds }, kind: "PRE_MISSING" }, orderBy: { sortOrder: "asc" } }) : [];
+  if (status === "PENDING" && !missing.length && note.length < 3) throw new AppError("VALIDATION", "Marque o que falta (ou escreva na observação).", { missing: "Marque o que falta." });
+  if (missing.some((m) => normalizeText(m.label) === "outro") && note.length < 3) throw new AppError("VALIDATION", "Escreva o que é o \"Outro\".", { note: "Diga o que falta." });
+  if (status !== "PENDING" && note.length < 3) throw new AppError("VALIDATION", "Escreva uma observação (ex.: o motivo).", { note: "Obrigatória." });
   await db.$transaction(async (tx) => {
-    await tx.preAnalysis.update({ where: { id }, data: { status, resultNote: note.slice(0, 1000), resultAt: now, resultById: actor.id } });
+    await tx.preAnalysis.update({ where: { id }, data: { status, resultNote: note ? note.slice(0, 1000) : null, missingItems: missing.map((m) => m.label), resultAt: now, resultById: actor.id } });
     await audit(tx, { actorId: actor.id, action: "preanalysis.resolved", entityType: "PreAnalysis", entityId: id, changes: { de: p.status, para: status } });
   });
   const label = status === "APPROVED" ? "aprovada" : status === "REJECTED" ? "reprovada" : "pendente";
-  await notifyUser(p.createdById, { title: `Pré-análise ${label}`, body: "A consultora respondeu. Toque para ver.", url: `/pre-analises/${id}`, tag: `pre-${id}` });
+  const body = missing.length ? `Falta: ${missing.map((m) => m.label).join(", ")}. Toque para anexar.`.slice(0, 180) : "A consultora respondeu. Toque para ver.";
+  await notifyUser(p.createdById, { title: `Pré-análise ${label}`, body, url: `/pre-analises/${id}`, tag: `pre-${id}` });
   return status;
 }
 

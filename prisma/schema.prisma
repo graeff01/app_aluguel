@@ -152,6 +152,11 @@ model AppSettings {
   /// e-mails colocados em cópia nos eventos que as consultoras criam pelo app (reagendar/nova visita), separados por vírgula
   calendarCcEmails         String   @default("")
   /// mensagem de confirmação de presença (WhatsApp aberto pela consultora). {cliente} {consultora} {dia} {hora} {codigo} {bairro}
+  /// mensagens prontas para depois da visita (WhatsApp aberto pela consultora). Mesmos campos da confirmação.
+  msgAfterPositive         String   @default("Olá, {cliente}! Aqui é {consultora}, da Auxiliadora Predial. Que bom que você gostou do imóvel {codigo}! Para seguirmos com a locação, me envie por aqui: documento com foto (RG ou CNH), comprovante de renda dos últimos 3 meses e comprovante de residência. Qualquer dúvida, estou à disposição.")
+  msgAfterUndecided        String   @default("Olá, {cliente}! Aqui é {consultora}, da Auxiliadora Predial. Ficou alguma dúvida sobre o imóvel {codigo}? Posso te ajudar a decidir ou te mostrar outras opções parecidas.")
+  msgAfterNegative         String   @default("Olá, {cliente}! Aqui é {consultora}, da Auxiliadora Predial. Obrigada pela visita ao imóvel {codigo}. Tenho outras opções no perfil que você procura. Posso te enviar algumas?")
+  msgAfterNoShow           String   @default("Olá, {cliente}! Aqui é {consultora}, da Auxiliadora Predial. Senti sua falta na visita ao imóvel {codigo}. Quer remarcar? Me diga o melhor dia e horário para você.")
   confirmMessage           String   @default("Olá, {cliente}! Aqui é {consultora}, da Auxiliadora Predial. Confirmando sua visita {dia} às {hora} no imóvel {codigo}{bairro}. Posso contar com você?")
   /// LGPD: anonimizar clientes sem atividade há N meses (0 = desligado)
   retentionMonths          Int      @default(24)
@@ -199,6 +204,8 @@ enum ReasonKind {
   LEASE_HIGHLIGHT
   /// agenciadores (aviso ao marketing)
   LEASE_AGENT
+  /// o que pode faltar numa pré-análise pendente (documentos)
+  PRE_MISSING
 }
 
 model Reason {
@@ -551,6 +558,8 @@ model Visit {
   companionOfId     String?
   companionOf       Visit?          @relation("VisitCompanions", fields: [companionOfId], references: [id], onDelete: SetNull)
   companions        Visit[]         @relation("VisitCompanions")
+  /// evento criado pelo próprio app na agenda Google (sem precisar do botão "Colocar na agenda")
+  googleCreatedAt   DateTime?
   /// código "VL-XXXXXX" levado no evento do Google criado pela consultora: liga o evento a esta visita sem duplicar
   linkCode          String?         @unique
   /// pré-análise que originou esta visita (funil pré-análise → visita → locação)
@@ -789,6 +798,8 @@ model PreAnalysis {
   incomeBand   String
   /// imóvel de interesse (opcional)
   propertyCode String?
+  /// pendente: o que falta (rótulos da lista "o que pode faltar")
+  missingItems String[]          @default([])
   /// cliente já era da consultora: a pré-análise vai para ela sem contar a vez no rodízio
   ownClient    Boolean           @default(false)
   /// garantia da locação (Fiador, Seguro fiança, CredPago…)

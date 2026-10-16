@@ -144,6 +144,12 @@ test("jornada consultora (celular): responde a pré-análise, anexa documento, a
   await page.getByRole("button", { name: "Enviar documentos" }).click();
   await expect(page.getByText("Documento anexado.")).toBeVisible();
   await expect(page.getByRole("link", { name: /residencia\.pdf/ })).toBeVisible();
+  // primeiro fica pendente: marca o que falta
+  await page.getByText("Pendente", { exact: true }).click();
+  await page.locator("label", { hasText: "Comprovante de renda" }).click();
+  await page.getByRole("button", { name: "Registrar resultado" }).click();
+  await expect(page.getByRole("heading", { name: "O que falta para a análise" })).toBeVisible();
+  await expect(page.getByText("Comprovante de renda").first()).toBeVisible();
   // aprova e agenda a visita a partir da pré-análise
   await page.getByText("Aprovado", { exact: true }).click();
   await page.getByLabel(/Observação/).fill("Aprovado com seguro fiança.");
@@ -165,6 +171,10 @@ test("jornada consultora (celular): responde a pré-análise, anexa documento, a
   await page.getByLabel(/Observação/).fill("Não apareceu e não atende.");
   await page.getByRole("button", { name: "Salvar resultado" }).click();
   await page.waitForURL(/\/minhas|anterior=salvo/); // o app já abre a próxima pendente
+  // mensagem pronta para o cliente que não veio
+  const wa = page.getByRole("link", { name: "Propor remarcar no WhatsApp" });
+  await expect(wa).toBeVisible();
+  expect(decodeURIComponent((await wa.getAttribute("href"))!)).toContain("Senti sua falta");
   await go(page, J, "/minhas");
   await expect(page.getByRole("link", { name: /Registrar resultado: Cliente Grupo/ })).toHaveCount(0);
   await go(page, J, "/rota");

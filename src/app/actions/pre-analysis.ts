@@ -6,6 +6,7 @@ import { createPreAnalysis, deletePreAnalysis, resolvePreAnalysis } from "@/serv
 import { addPreAnalysisFiles, deletePreAnalysisFile } from "@/server/pre-analysis-files";
 import { notifyUser } from "@/server/notify";
 import { scheduleFromPreAnalysis } from "@/server/pre-visit";
+import { createVisitEventInGoogle } from "@/server/reschedule";
 import { refreshPropertyNow } from "@/server/property-preview";
 import { ensurePropertyCoords } from "@/server/geo";
 
@@ -42,7 +43,7 @@ export async function createPreAnalysisAction(_: ActionState, fd: FormData): Pro
 export async function resolvePreAnalysisAction(_: ActionState, fd: FormData) {
   const id = str(fd, "id");
   const s = await runAction(async (a) => {
-    const st = await resolvePreAnalysis(a, id, { status: str(fd, "status"), note: str(fd, "note") });
+    const st = await resolvePreAnalysis(a, id, { status: str(fd, "status"), note: str(fd, "note"), missingIds: fd.getAll("missing").map(String).filter(Boolean) });
     return st === "PENDING" ? "Marcada como pendente. O pré-atendimento foi avisado." : "Resultado registrado. O pré-atendimento foi avisado.";
   });
   if (s.ok) {
@@ -72,7 +73,9 @@ export async function schedulePreVisitAction(_: ActionState, fd: FormData): Prom
     });
     const code = v.propertyCode;
     if (code) void refreshPropertyNow(code).then(() => ensurePropertyCoords([code], { maxCalls: 2 })).catch(() => undefined);
-    target = `/visitas/${v.id}/agenda?nova=1`;
+    // o app já cria o evento na agenda (se tiver permissão); senão a tela oferece o botão
+    const g = await createVisitEventInGoogle(a, v.id).catch(() => "error" as const);
+    target = `/visitas/${v.id}/agenda?nova=1&google=${g}`;
   });
   if (s.ok && target) redirect(target);
   return s;
@@ -84,8 +87,15 @@ export async function addPreAnalysisFilesAction(_: ActionState, fd: FormData): P
     const r = await addPreAnalysisFiles(a, id, fd.getAll("files").filter((f): f is File => typeof f !== "string"));
     // avisa o outro lado: quem anexou foi o pré-atendimento → consultora; foi a consultora → pré-atendimento
     const to = a.id === r.consultantId ? r.createdById : r.consultantId;
-    if (to !== a.id) await notifyUser(to, { title: "Novos documentos na pré-análise", body: `${r.count} documento${r.count > 1 ? "s" : ""} anexado${r.count > 1 ? "s" : ""}. Toque para ver.`, url: `/pre-analises/${id}`, tag: `pre-${id}` }).catch(() => undefined);
-    return r.count > 1 ? `${r.count} documentos anexados.` : "Documento anexado.";
+    if (to !== a.id)
+      await notifyUser(to, {
+        title: r.resubmitted ? "Pré-análise voltou para você" : "Novos documentos na pré-análise",
+        body: r.resubmitted ? "O pré-atendimento enviou o que faltava. Toque para analisar de novo." : `${r.count} documento${r.count > 1 ? "s" : ""} anexado${r.count > 1 ? "s" : ""}. Toque para ver.`,
+        url: `/pre-analises/${id}`,
+        tag: `pre-${id}`,
+      }).catch(() => undefined);
+    const base = r.count > 1 ? `${r.count} documentos anexados.` : "Documento anexado.";
+    return r.resubmitted ? `${base} A pré-análise voltou para a consultora analisar.` : base;
   });
   if (s.ok) revalidatePath(`/pre-analises/${id}`);
   return s;

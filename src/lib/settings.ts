@@ -45,6 +45,7 @@ export const DEFAULT_LOST_REASONS = [
 
 export const DEFAULT_CANCEL_REASONS = ["Cliente desistiu", "Cliente não confirmou", "Imóvel já alugado", "Imóvel indisponível para visita", "Pré-análise reprovada", "Outro"];
 export const DEFAULT_GUARANTEES = ["Fiador", "Seguro fiança", "CredPago", "Aluga Rápido", "CredAluga", "Título de Capitalização"];
+export const DEFAULT_PRE_MISSING = ["Documento com foto (RG ou CNH)", "Comprovante de renda", "Comprovante de residência", "Extrato bancário", "Declaração de imposto de renda", "Certidão de casamento ou união estável", "Dados do fiador", "Outro"];
 export const DEFAULT_LEASE_HIGHLIGHTS = ["Alugado na 1ª visita", "Alugado em até 7 dias da 1ª visita", "Cliente indicado", "Imóvel estava parado há muito tempo", "Outro"];
 
 /** Garante dados de referência (idempotente). Usado pela criação do admin e pelo seed de desenvolvimento. */
@@ -57,6 +58,7 @@ export async function ensureReferenceData(tx: Tx | typeof db = db) {
     VISIT_CANCEL: DEFAULT_CANCEL_REASONS,
     GUARANTEE: DEFAULT_GUARANTEES,
     LEASE_HIGHLIGHT: DEFAULT_LEASE_HIGHLIGHTS,
+    PRE_MISSING: DEFAULT_PRE_MISSING,
   } as const;
   for (const [kind, labels] of Object.entries(defaults) as [keyof typeof defaults, readonly string[]][]) {
     if ((await tx.reason.count({ where: { kind } })) === 0) {

@@ -80,6 +80,21 @@ export class MockCalendar implements CalendarApi {
   }
 
   private deleted = new Map<string, GEvent>();
+  inserted = 0;
+  async insertEvent(calendarId: string, ev: { summary: string; description: string; location?: string; start: Date; end: Date; attendees: string[] }) {
+    const id = `app-${++this.inserted}`;
+    this.put({
+      id,
+      summary: ev.summary,
+      description: ev.description,
+      location: ev.location ?? null,
+      start: { dateTime: ev.start.toISOString() },
+      end: { dateTime: ev.end.toISOString() },
+      organizer: { email: calendarId },
+      attendees: [{ email: calendarId, organizer: true, responseStatus: "accepted" }, ...ev.attendees.map((email) => ({ email, responseStatus: "needsAction" }))],
+    });
+    return id;
+  }
   async restoreEvent(_cal: string, id: string) {
     const ev = this.deleted.get(id);
     if (!ev) return "gone" as const;

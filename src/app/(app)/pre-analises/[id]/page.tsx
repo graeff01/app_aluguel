@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { db } from "@/lib/db";
 import { requireActor, orNotFound } from "@/lib/require";
 import { formatCpf, preAnalysisDetail } from "@/server/pre-analysis";
 import { INCOME_BAND_LABEL, PRE_STATUS_LABEL } from "@/lib/labels";
@@ -31,6 +32,7 @@ export default async function PreAnalysisPage({ params, searchParams }: { params
   const { id } = await params;
   const sp = await searchParams;
   const p = await orNotFound(preAnalysisDetail(actor, id));
+  const missingOptions = await db.reason.findMany({ where: { kind: "PRE_MISSING", active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, label: true } });
   const birth = p.birthDate ? p.birthDate.split("-").reverse().join("/") : null;
   const fields: [string, React.ReactNode][] = p.purgedAt
     ? []
@@ -137,6 +139,20 @@ export default async function PreAnalysisPage({ params, searchParams }: { params
         )}
       </section>
 
+      {p.missingItems.length > 0 && p.status !== "APPROVED" && p.status !== "REJECTED" && (
+        <section className={cx("mb-6 rounded-[26px] border-2 p-5 shadow-card sm:p-6", p.status === "PENDING" ? "border-[#2f6fde]/40 bg-[#eef4ff] dark:bg-[#1a2436]" : "border-line bg-surface")} aria-labelledby="t-falta">
+          <h2 id="t-falta" className="mb-2 text-[15px] font-bold">{p.status === "PENDING" ? "O que falta para a análise" : "Faltava (já enviado, aguardando nova análise)"}</h2>
+          <ul className="space-y-1.5 text-[15px]">
+            {p.missingItems.map((m) => (
+              <li key={m} className="flex items-center gap-2">
+                <span aria-hidden className={cx("grid size-5 place-items-center rounded-full text-[11px] font-bold", p.status === "PENDING" ? "bg-[#2f6fde] text-white" : "bg-good text-bg")}>{p.status === "PENDING" ? "!" : "✓"}</span>
+                {m}
+              </li>
+            ))}
+          </ul>
+          {p.status === "PENDING" && <p className="mt-3 text-[13px] text-ink-2">Anexe em “Documentos do cliente” abaixo: a pré-análise volta sozinha para a consultora analisar.</p>}
+        </section>
+      )}
       {(p.status !== "AWAITING" || p.resultNote) && (
         <section className="mb-6 rounded-[26px] border border-line bg-surface p-5 shadow-card sm:p-6">
           <h2 className="mb-2 text-[15px] font-bold">Resultado</h2>
@@ -158,7 +174,7 @@ export default async function PreAnalysisPage({ params, searchParams }: { params
                 <Link href={p.canResolve ? `/visitas/${v.id}/registrar` : "/agenda-do-dia"} className="underline underline-offset-4">
                   {fmt.dateTime(v.scheduledStart)} · imóvel {v.propertyCode} · {STATUS_LABEL[v.status]}
                 </Link>
-                {!v.sourceEventId && v.status === "SCHEDULED" && <span className="ml-2 text-[12px] font-semibold text-warn">falta pôr na agenda</span>}
+                {!v.sourceEventId && !v.googleCreatedAt && v.status === "SCHEDULED" && <span className="ml-2 text-[12px] font-semibold text-warn">falta pôr na agenda</span>}
               </li>
             ))}
           </ul>
@@ -175,7 +191,7 @@ export default async function PreAnalysisPage({ params, searchParams }: { params
 
       {p.canResolve && !p.purgedAt && (
         <section className="mb-6 rounded-[26px] border border-line bg-surface p-5 shadow-card sm:p-6">
-          <ResultForm id={p.id} current={p.status} />
+          <ResultForm id={p.id} current={p.status} missingOptions={missingOptions} currentMissing={p.missingItems} />
           <p className="mt-3 text-[12px] text-ink-3">A análise é feita fora do sistema. Aqui você só registra o resultado — o pré-atendimento é avisado na hora.</p>
         </section>
       )}

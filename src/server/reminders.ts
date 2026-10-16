@@ -573,7 +573,7 @@ export async function sendOperationalAlerts(now = new Date(), opts: { send?: Sen
 
   // reagendamento sem o evento salvo no Google
   const pendingLink = await db.visit.findMany({
-    where: { status: "SCHEDULED", linkCode: { not: null }, sourceEventId: null, consultantId: { not: null }, createdAt: { lte: new Date(now.getTime() - 45 * 60_000) }, scheduledStart: { gt: now } },
+    where: { status: "SCHEDULED", linkCode: { not: null }, sourceEventId: null, googleCreatedAt: null, consultantId: { not: null }, createdAt: { lte: new Date(now.getTime() - 45 * 60_000) }, scheduledStart: { gt: now } },
     select: { id: true, scheduledStart: true, consultantId: true },
   });
   for (const v of pendingLink) {

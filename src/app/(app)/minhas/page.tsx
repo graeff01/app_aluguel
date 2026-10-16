@@ -19,6 +19,7 @@ import { db } from "@/lib/db";
 import { countOpenFor } from "@/server/pre-analysis";
 import { PreAnalysisCard, RouteCard } from "@/components/feature-cards";
 import { ConfirmPresence } from "@/components/confirm-presence";
+import { AfterVisitMessage } from "@/components/after-visit-message";
 import { FollowUpButtons } from "@/components/follow-up-buttons";
 import { dueFollowUps } from "@/server/followups";
 import { buildConfirmMessage, whatsappUrl } from "@/lib/confirm";
@@ -65,14 +66,14 @@ function MineCard({ v, today, now, mode, index, team, confirmTemplate }: { v: Vi
           <Icon name="home" className="size-4 text-ink-3" />
           {v.propertyCode ? <span className="num font-semibold text-ink">{v.propertyCode}</span> : <span className="text-warn">sem código</span>}
         </p>
-        {(v.revisit || scheduledByConsultant(v) || (v.rescheduledFromId && v.assignmentNote === "REAGENDADA") || (v.linkCode && !v.sourceEventId) || v.confirmStatus === "CONFIRMED") && (
+        {(v.revisit || scheduledByConsultant(v) || (v.rescheduledFromId && v.assignmentNote === "REAGENDADA") || (v.linkCode && !v.sourceEventId && !v.googleCreatedAt) || v.confirmStatus === "CONFIRMED") && (
           <p className="mt-2 flex flex-wrap gap-1.5 text-[12px] font-semibold">
             {v.rescheduledFromId && v.assignmentNote === "REAGENDADA" && (
               <span className="rounded-full bg-[#e7effc] px-2 py-0.5 text-[#2357b3] dark:bg-[#1f2c44] dark:text-[#93b8ff]">
                 ↻ Remarcada{v.rescheduledFrom ? ` de ${fmt.shortDate(v.rescheduledFrom.scheduledStart).replace(".", "")}` : ""}
               </span>
             )}
-            {v.linkCode && !v.sourceEventId && v.status === "SCHEDULED" && <span className="rounded-full bg-warn-soft px-2 py-0.5 text-warn">Falta pôr na agenda</span>}
+            {v.linkCode && !v.sourceEventId && !v.googleCreatedAt && v.status === "SCHEDULED" && <span className="rounded-full bg-warn-soft px-2 py-0.5 text-warn">Falta pôr na agenda</span>}
             {v.status === "SCHEDULED" && v.confirmStatus === "CONFIRMED" && <span className="rounded-full bg-good-soft px-2 py-0.5 text-good">✓ Confirmada</span>}
             {v.revisit && (
               <span className="rounded-full bg-tint px-2 py-0.5 text-ink-2">
@@ -129,7 +130,7 @@ function MineCard({ v, today, now, mode, index, team, confirmTemplate }: { v: Vi
   );
 }
 
-export default async function MinePage({ searchParams }: { searchParams: Promise<{ salvo?: string; busca?: string }> }) {
+export default async function MinePage({ searchParams }: { searchParams: Promise<{ salvo?: string; busca?: string; desfazer?: string }> }) {
   const actor = await requireActor();
   const team = hasGlobalView(actor);
   const sp = await searchParams;
@@ -233,9 +234,10 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
       </aside>
       <div className="min-w-0 lg:order-1">
       {sp.salvo && (
-        <div role="status" className="animate-rise mb-5 flex items-center gap-3 rounded-2xl bg-good-soft px-4 py-3 text-sm font-semibold text-good">
+        <div role="status" className="animate-rise mb-5 flex flex-wrap items-center gap-3 rounded-2xl bg-good-soft px-4 py-3 text-sm font-semibold text-good">
           <span aria-hidden className="animate-pop grid size-6 place-items-center rounded-full bg-good text-bg">✓</span>
-          Resultado salvo.
+          <span className="flex-1">Resultado salvo.</span>
+          {sp.desfazer && <AfterVisitMessage actor={actor} visitId={sp.desfazer.split(".")[0]} />}
         </div>
       )}
 
@@ -307,6 +309,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
                 </div>
                 <div className="flex flex-wrap items-center gap-2 pr-5 pb-5 pl-6">
                   {f.phoneNormalized && <ContactButtons phone={f.phoneNormalized} name={f.clientName} compact />}
+                  <AfterVisitMessage actor={actor} visitId={f.id} />
                   <FollowUpButtons visitId={f.id} />
                   <Link href={`/visitas/${f.id}/reagendar`} className="text-[13px] font-semibold text-ink underline underline-offset-4">
                     Marcar nova visita

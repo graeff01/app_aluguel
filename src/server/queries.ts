@@ -34,6 +34,7 @@ export const visitListSelect = {
   rescheduledFrom: { select: { scheduledStart: true } },
   assignmentNote: true,
   linkCode: true,
+  googleCreatedAt: true,
   sourceEventId: true,
   consultant: { select: { id: true, name: true } },
   scheduledBy: { select: { id: true, name: true, role: true } },

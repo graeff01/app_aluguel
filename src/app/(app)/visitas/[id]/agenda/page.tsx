@@ -8,7 +8,7 @@ import { hasGlobalView } from "@/lib/authz";
 
 export const metadata = { title: "Colocar na agenda" };
 
-export default async function AgendaPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ nova?: string; remarcada?: string }> }) {
+export default async function AgendaPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ nova?: string; remarcada?: string; google?: string }> }) {
   const actor = await requireActor();
   const { id } = await params;
   const sp = await searchParams;
@@ -23,7 +23,7 @@ export default async function AgendaPage({ params, searchParams }: { params: Pro
           ✓ {sp.remarcada ? "Visita remarcada" : "Nova visita marcada"} para {fmt.shortDate(visit.scheduledStart)} às {fmt.time(visit.scheduledStart)}. Já está no app.
         </p>
       )}
-      <h1 className="text-[28px] leading-tight font-bold tracking-[-0.03em]">{cal.linked ? "Já está na agenda" : "Agora, coloque na agenda"}</h1>
+      <h1 className="text-[28px] leading-tight font-bold tracking-[-0.03em]">{cal.linked || cal.created ? "Já está na agenda" : "Agora, coloque na agenda"}</h1>
       <p className="mt-1.5 mb-6 text-[15px] text-ink-2">
         {visit.clientName} · imóvel {visit.propertyCode} · {fmt.shortDate(visit.scheduledStart)}, {fmt.time(visit.scheduledStart)}–{fmt.time(visit.scheduledEnd)}
       </p>
@@ -33,7 +33,14 @@ export default async function AgendaPage({ params, searchParams }: { params: Pro
           <p className="text-[16px] font-bold">✓ O evento chegou da agenda e está ligado a esta visita.</p>
           <p className="mt-1 text-sm text-good/80">Nada mais a fazer.</p>
         </div>
+      ) : cal.created ? (
+        <div className="rounded-[26px] border border-good/20 bg-good-soft p-5 text-good">
+          <p className="text-[16px] font-bold">✓ O app criou o evento na agenda Google.</p>
+          <p className="mt-1 text-sm text-good/80">Os convidados receberam o convite{cal.guests.length ? ` (${cal.guests.join(", ")})` : ""}. Nada mais a fazer.</p>
+        </div>
       ) : (
+        <>
+        {sp.google === "error" && <p role="alert" className="mb-3 rounded-2xl bg-warn-soft px-4 py-3 text-sm font-semibold text-warn">Não consegui criar o evento sozinho no Google agora. Use o botão abaixo.</p>}
         <div className="rounded-[26px] border border-line bg-surface p-5 shadow-card sm:p-6">
           <a
             href={cal.url}
@@ -59,6 +66,7 @@ export default async function AgendaPage({ params, searchParams }: { params: Pro
             </li>
           </ol>
         </div>
+        </>
       )}
       <div className="mt-6 flex justify-center">
         <Link href={back} className="text-sm font-semibold text-ink underline underline-offset-4">

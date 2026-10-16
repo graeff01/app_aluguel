@@ -12,6 +12,7 @@ import { VisitAdminTools } from "./admin-tools";
 import { ContactButtons } from "@/components/contact-buttons";
 import { Tabs } from "@/components/tabs";
 import { PropertyCard } from "@/components/property-preview";
+import { AfterVisitMessage } from "@/components/after-visit-message";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Visita" };
@@ -136,6 +137,7 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
         <Panel>
           <h2 className="mb-3 font-semibold">Resultado</h2>
           {concluded ? (
+            <>
             <KeyValue
               items={[
                 ["Situação", STATUS_LABEL[visit.status] + (visit.autoCanceled ? " (na agenda Google)" : "")],
@@ -145,6 +147,8 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
                 ["Registrado", visit.concludedAt ? `${fmt.dateTime(visit.concludedAt)}${visit.concludedBy ? ` por ${visit.concludedBy.name}` : ""}` : "—"],
               ]}
             />
+            <AfterVisitMessage actor={actor} visitId={visit.id} className="mt-4" />
+            </>
           ) : (
             <p className="text-ink-2">Ainda sem resultado.</p>
           )}

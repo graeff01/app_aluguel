@@ -6,7 +6,7 @@ import { assignVisit, cancelVisitByStaff, correctVisitData, undoStaffCancel, cre
 import { confirmVisitClientAsDistinct, linkVisitToClient, mergeClients } from "@/server/clients";
 import { updateOpportunity, transferOpportunity } from "@/server/opportunities";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
-import { rescheduleVisit } from "@/server/reschedule";
+import { createVisitEventInGoogle, rescheduleVisit } from "@/server/reschedule";
 import { setPresence } from "@/server/presence";
 import { followUpAction } from "@/server/followups";
 import { refreshPropertyNow } from "@/server/property-preview";
@@ -154,7 +154,9 @@ export async function rescheduleAction(_: ActionState, fd: FormData): Promise<Ac
         .then(() => ensurePropertyCoords([code], { maxCalls: 2 }))
         .catch(() => undefined);
     }
-    target = `/visitas/${v.id}/agenda?${v.assignmentNote === "REAGENDADA" ? "remarcada" : "nova"}=1`;
+    // o app já cria o evento na agenda (se tiver permissão); senão a tela oferece o botão
+    const g = await createVisitEventInGoogle(a, v.id).catch(() => "error" as const);
+    target = `/visitas/${v.id}/agenda?${v.assignmentNote === "REAGENDADA" ? "remarcada" : "nova"}=1&google=${g}`;
   });
   if (s.ok && target) redirect(target);
   return s;

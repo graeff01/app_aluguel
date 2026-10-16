@@ -178,6 +178,25 @@ export function realCalendarApi(auth: OAuth2Client): CalendarApi {
         throw m;
       }
     },
+    async insertEvent(calendarId, ev) {
+      try {
+        const res = await api.events.insert({
+          calendarId,
+          sendUpdates: "all",
+          requestBody: {
+            summary: ev.summary,
+            description: ev.description,
+            location: ev.location || undefined,
+            start: { dateTime: ev.start.toISOString(), timeZone: "America/Sao_Paulo" },
+            end: { dateTime: ev.end.toISOString(), timeZone: "America/Sao_Paulo" },
+            attendees: ev.attendees.map((email) => ({ email })),
+          },
+        });
+        return res.data.id!;
+      } catch (e) {
+        throw mapGoogleError(e);
+      }
+    },
     async restoreEvent(calendarId, eventId) {
       try {
         await api.events.patch({ calendarId, eventId, sendUpdates: "all", requestBody: { status: "confirmed" } });

@@ -304,6 +304,13 @@ export async function settingsAction(_: ActionState, fd: FormData) {
           if (t.length < 10) throw new AppError("VALIDATION", "Escreva a mensagem de confirmação.", { confirmMessage: "Muito curta." });
           return t;
         })(),
+        ...Object.fromEntries(
+          (["msgAfterPositive", "msgAfterUndecided", "msgAfterNegative", "msgAfterNoShow"] as const).map((k) => {
+            const t = str(fd, k).trim().slice(0, 800);
+            if (t.length < 10) throw new AppError("VALIDATION", "Escreva as mensagens de depois da visita.", { [k]: "Muito curta." });
+            return [k, t];
+          }),
+        ),
         calendarCcEmails: (() => {
           const list = str(fd, "calendarCcEmails").split(/[\s,;]+/).map(normalizeEmail).filter(Boolean);
           for (const e of list) if (!EMAIL_RE.test(e)) throw new AppError("VALIDATION", `E-mail inválido: ${e}`, { calendarCcEmails: "Confira os e-mails." });

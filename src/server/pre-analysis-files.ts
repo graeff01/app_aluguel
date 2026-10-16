@@ -63,8 +63,16 @@ export async function addPreAnalysisFiles(actor: AuthzActor, preAnalysisId: stri
   if (p.purgedAt) throw new AppError("INVALID_STATE", "Os dados desta pré-análise já foram apagados (prazo de retenção).");
   const read = await readFiles(files, p._count.files);
   if (!read.length) throw new AppError("VALIDATION", "Escolha ao menos um documento.", { files: "Nenhum arquivo." });
-  await db.$transaction((tx) => saveFiles(tx, p.id, actor.id, read));
-  return { count: read.length, consultantId: p.consultantId, createdById: p.createdById };
+  // pendente e quem anexou não é a consultora: os documentos que faltavam chegaram → volta para ela analisar
+  const resubmit = p.status === "PENDING" && actor.id !== p.consultantId;
+  await db.$transaction(async (tx) => {
+    await saveFiles(tx, p.id, actor.id, read);
+    if (resubmit) {
+      await tx.preAnalysis.update({ where: { id: p.id }, data: { status: "AWAITING" } });
+      await audit(tx, { actorId: actor.id, action: "preanalysis.resubmitted", entityType: "PreAnalysis", entityId: p.id, changes: { faltava: p.missingItems } });
+    }
+  });
+  return { count: read.length, consultantId: p.consultantId, createdById: p.createdById, resubmitted: resubmit };
 }
 
 export async function listPreAnalysisFiles(actor: AuthzActor, preAnalysisId: string) {

@@ -329,3 +329,78 @@ describe("desfazer o cancelamento do pré-atendimento", () => {
     await expect(undoStaffCancel(jasmin, c2.undoId, new Date(Date.now() + 3 * 60_000), { calendarApi: api })).rejects.toMatchObject({ code: "INVALID_STATE" });
   });
 });
+
+// ───────────────────────── Evento criado pelo app ─────────────────────────
+describe("o app cria o evento no Google", () => {
+  it("reagendar cria o evento com título, convidados e código; a sincronização liga sem duplicar (vários imóveis)", async () => {
+    const { rescheduleVisit, createVisitEventInGoogle } = await import("@/server/reschedule");
+    await makeConnection("central@exemplo.test");
+    await db.appSettings.update({ where: { id: 1 }, data: { calendarCcEmails: "central@exemplo.test, gestora@exemplo.test" } });
+    const api = new MockCalendar();
+    const old = await visit("2026-10-13T13:00:00Z");
+    const nv = await rescheduleVisit(u.a, old.id, { requestId: "bateria-ev-1", scheduledStart: toLocalInput(new Date("2026-10-15T17:00:00Z")), durationMinutes: 60, mode: "reschedule", propertyCode: "761739;888888" }, NOW);
+    expect(await createVisitEventInGoogle(u.a, nv.id, { calendarApi: api })).toBe("created");
+    const ev = (await api.getEvent("central@exemplo.test", "app-1"))!;
+    expect(ev.summary).toBe("Visita clt - Cliente Bateria - cod 761739;888888 - (51) 99876-7777 - REAGENDADA");
+    expect(ev.description).toContain(nv.linkCode!);
+    expect((ev.attendees ?? []).map((a) => a.email).sort()).toEqual(["central@exemplo.test", "consultora.a@exemplo.test", "gestora@exemplo.test"]);
+    expect((await db.visit.findUniqueOrThrow({ where: { id: nv.id } })).googleCreatedAt).not.toBeNull();
+    // não cria duas vezes
+    expect(await createVisitEventInGoogle(u.a, nv.id, { calendarApi: api })).toBe("already");
+    await runSync({ api, now: NOW, sleep: async () => {} });
+    const group = await db.visit.findMany({ where: { OR: [{ id: nv.id }, { companionOfId: nv.id }] }, orderBy: { createdAt: "asc" } });
+    expect(group.map((v) => [v.propertyCode, v.status, v.consultantId === u.a.id])).toEqual([["761739", "SCHEDULED", true], ["888888", "SCHEDULED", true]]);
+    expect(group[0].sourceEventId).not.toBeNull();
+    expect(await db.visit.count({ where: { status: "SCHEDULED" } })).toBe(2); // nada duplicado
+  });
+
+  it("sem permissão de edição: não cria e a tela mostra o botão", async () => {
+    const { rescheduleVisit, createVisitEventInGoogle } = await import("@/server/reschedule");
+    await makeConnection("central@exemplo.test"); // conexão de teste só com leitura
+    const old = await visit("2026-10-13T13:00:00Z");
+    const nv = await rescheduleVisit(u.a, old.id, { requestId: "bateria-ev-2", scheduledStart: toLocalInput(new Date("2026-10-15T17:00:00Z")), durationMinutes: 60, mode: "reschedule" }, NOW);
+    expect(await createVisitEventInGoogle(u.a, nv.id)).toBe("no_permission");
+    await expect(createVisitEventInGoogle(u.b, nv.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+// ───────────────────────── Pendente com lista do que falta ─────────────────────────
+describe("pré-análise pendente com o que falta", () => {
+  it("salva a lista, avisa e volta para a consultora quando o pré-atendimento anexa", async () => {
+    const { resolvePreAnalysis } = await import("@/server/pre-analysis");
+    const p = await createPreAnalysis(jasmin, { consultantId: u.a.id }, NOW);
+    const renda = await db.reason.findFirstOrThrow({ where: { kind: "PRE_MISSING", label: "Comprovante de renda" } });
+    const outro = await db.reason.findFirstOrThrow({ where: { kind: "PRE_MISSING", label: "Outro" } });
+    await expect(resolvePreAnalysis(u.a, p.id, { status: "PENDING", note: "" }, NOW)).rejects.toMatchObject({ code: "VALIDATION", details: { missing: expect.any(String) } });
+    await expect(resolvePreAnalysis(u.a, p.id, { status: "PENDING", note: "", missingIds: [outro.id] }, NOW)).rejects.toMatchObject({ code: "VALIDATION" });
+    await resolvePreAnalysis(u.a, p.id, { status: "PENDING", note: "", missingIds: [renda.id] }, NOW);
+    expect(await db.preAnalysis.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "PENDING", missingItems: ["Comprovante de renda"] });
+    // a consultora anexa algo: continua pendente
+    expect((await addPreAnalysisFiles(u.a, p.id, [pdf("anotacao.pdf")])).resubmitted).toBe(false);
+    // o pré-atendimento anexa o que faltava: volta para análise
+    expect((await addPreAnalysisFiles(jasmin, p.id, [pdf("renda.pdf")])).resubmitted).toBe(true);
+    expect(await db.preAnalysis.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "AWAITING", missingItems: ["Comprovante de renda"] });
+    // aprovação limpa a lista
+    await resolvePreAnalysis(u.a, p.id, { status: "APPROVED", note: "aprovado" }, NOW);
+    expect((await db.preAnalysis.findUniqueOrThrow({ where: { id: p.id } })).missingItems).toEqual([]);
+  });
+});
+
+// ───────────────────────── Mensagens de depois da visita ─────────────────────────
+describe("mensagens prontas de depois da visita", () => {
+  it("texto e rótulo certos para cada resultado; sem telefone não oferece", async () => {
+    const { afterVisitLink } = await import("@/lib/after-visit");
+    const s = await db.appSettings.findUniqueOrThrow({ where: { id: 1 } });
+    const base = { phoneNormalized: "+5551998767777", clientName: "Ana Souza", propertyCode: "761739", scheduledStart: NOW, consultant: { name: "Eduarda Schuler" }, property: { neighborhood: "Igara" } };
+    const pos = afterVisitLink(s, { ...base, status: "DONE", evaluation: "POSITIVE" })!;
+    expect(pos.label).toBe("Pedir documentos");
+    expect(pos.text).toContain("Olá, Ana! Aqui é Eduarda");
+    expect(pos.text).toContain("comprovante de renda");
+    expect(pos.url).toMatch(/^https:\/\/wa\.me\/5551998767777\?text=/);
+    expect(afterVisitLink(s, { ...base, status: "DONE", evaluation: "UNDECIDED" })!.label).toBe("Mensagem de retorno");
+    expect(afterVisitLink(s, { ...base, status: "DONE", evaluation: "NEGATIVE" })!.label).toBe("Oferecer outras opções");
+    expect(afterVisitLink(s, { ...base, status: "NO_SHOW", evaluation: null })!.label).toBe("Propor remarcar");
+    expect(afterVisitLink(s, { ...base, status: "CANCELED", evaluation: null })).toBeNull();
+    expect(afterVisitLink(s, { ...base, phoneNormalized: null, status: "DONE", evaluation: "POSITIVE" })).toBeNull();
+  });
+});

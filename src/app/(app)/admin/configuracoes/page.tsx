@@ -56,6 +56,18 @@ export default async function SettingsPage() {
           <Field label="Mensagem de confirmação de presença (WhatsApp)" htmlFor="confirmMessage" hint="Aberta pela consultora no WhatsApp, que ela mesma envia. Use {cliente}, {consultora}, {dia}, {hora}, {codigo} e {bairro}.">
             <Textarea id="confirmMessage" name="confirmMessage" rows={3} defaultValue={s.confirmMessage} maxLength={600} />
           </Field>
+          {(
+            [
+              ["msgAfterPositive", "Depois da visita: gostou (pedir documentos)", s.msgAfterPositive],
+              ["msgAfterUndecided", "Depois da visita: ficou de pensar (retorno)", s.msgAfterUndecided],
+              ["msgAfterNegative", "Depois da visita: não gostou (outras opções)", s.msgAfterNegative],
+              ["msgAfterNoShow", "Cliente não veio (remarcar)", s.msgAfterNoShow],
+            ] as const
+          ).map(([name, label, value]) => (
+            <Field key={name} label={`Mensagem ${label}`} htmlFor={name} hint="Botão do WhatsApp que aparece depois de registrar o resultado. Mesmos campos: {cliente}, {consultora}, {dia}, {hora}, {codigo}, {bairro}.">
+              <Textarea id={name} name={name} rows={3} defaultValue={value} maxLength={800} />
+            </Field>
+          ))}
           <Field label="E-mails em cópia nos agendamentos das consultoras" htmlFor="calendarCcEmails" hint="Vão como convidados no evento que a consultora cria pelo app (Reagendar / Nova visita), além da conta central. Separe por vírgula. Ex.: o e-mail do pré-atendimento.">
             <Input id="calendarCcEmails" name="calendarCcEmails" defaultValue={s.calendarCcEmails} maxLength={500} />
           </Field>
