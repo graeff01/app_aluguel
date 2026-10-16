@@ -99,11 +99,12 @@ export async function opportunityAction(_: ActionState, fd: FormData): Promise<A
       highlightIds: fd.getAll("highlightIds").map(String).filter(Boolean),
       highlightNote: str(fd, "highlightNote"),
     });
-    revalidatePath("/", "layout");
-    return { ok: true, message: "Andamento atualizado.", at: Date.now() };
   } catch (e) {
     return toState(e);
   }
+  revalidatePath("/", "layout");
+  // o formulário recarrega com a nova versão: a confirmação fica na página
+  redirect(`/oportunidades/${str(fd, "oppId")}?salvo=${encodeURIComponent(str(fd, "toStatus"))}`);
 }
 export async function transferOpportunityAction(_: ActionState, fd: FormData) {
   return done(await runAction((a) => transferOpportunity(a, str(fd, "oppId"), str(fd, "responsibleId"), str(fd, "note")).then(() => "Responsável alterada.")));

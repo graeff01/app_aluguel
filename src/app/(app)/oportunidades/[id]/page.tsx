@@ -12,8 +12,8 @@ import { OppForm, TransferForm } from "./forms";
 
 export const metadata = { title: "Oportunidade" };
 
-export default async function OppPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ para?: string }> }) {
-  const { para } = await searchParams;
+export default async function OppPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ para?: string; salvo?: string }> }) {
+  const { para, salvo } = await searchParams;
   const actor = await requireActor();
   const { id } = await params;
   const opp = await orNotFound(getOpportunity(actor, id));
@@ -44,6 +44,11 @@ export default async function OppPage({ params, searchParams }: { params: Promis
         title={`${opp.client.name} · imóvel ${opp.property.code}`}
         subtitle={<Badge tone={opp.status === "CLOSED_WON" ? "good" : opp.status === "LOST" ? "bad" : "info"}>{OPP_STATUS_LABEL[opp.status]}</Badge>}
       />
+      {salvo && (
+        <p role="status" className="mb-5 rounded-2xl bg-good-soft px-4 py-3 text-sm font-semibold text-good">
+          {salvo === "CLOSED_WON" ? "✓ Locação fechada. O marketing foi avisado para postar." : salvo === "LOST" ? "✓ Perda registrada." : "✓ Andamento atualizado."}
+        </p>
+      )}
       <Panel className="mb-6">
         <KeyValue
           items={[

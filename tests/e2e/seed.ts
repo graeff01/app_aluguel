@@ -42,3 +42,21 @@ await db.$disconnect();
 
 // visita daqui a pouco para o pré-atendimento cancelar
 await createManualVisit(admin, { requestId: "e2e-seed-cancel", scheduledStart: toLocalInput(new Date(Date.now() + 20 * 60_000)), clientName: "Cliente Cancela", phoneRaw: "(51) 99876-0099", propertyCode: "00555", consultantId: b.id });
+
+// ── jornadas diárias (tests/e2e/jornadas.spec.ts): dados próprios, para não cruzar com os outros testes ──
+{
+  const { dayKey, addDays } = await import("../../src/lib/time");
+  const tomorrow10 = new Date(`${addDays(dayKey(new Date()), 1)}T13:00:00Z`); // amanhã 10:00 em Brasília
+  // visita de amanhã com 3 imóveis (B): Jasmin cancela só um
+  const multi = await createManualVisit(admin, { requestId: "e2e-jornada-multi", scheduledStart: toLocalInput(tomorrow10), clientName: "Cliente Multi", phoneRaw: "(51) 99876-0701", propertyCode: "00701", consultantId: b.id });
+  for (const code of ["00702", "00703"]) {
+    await db.visit.create({ data: { origin: "MANUAL", companionOfId: multi.id, scheduledStart: multi.scheduledStart, scheduledEnd: multi.scheduledEnd, clientName: "Cliente Multi", phoneRaw: "(51) 99876-0701", phoneNormalized: "+5551998760701", propertyCode: code, consultantId: b.id, assignmentStatus: "MANUAL" } });
+  }
+  // visita que já passou com 2 imóveis (A): cliente não veio → vale para os dois
+  const grupo = await createManualVisit(admin, { requestId: "e2e-jornada-grupo", scheduledStart: ago(5), clientName: "Cliente Grupo", phoneRaw: "(51) 99876-0801", propertyCode: "00801", consultantId: a.id });
+  await db.visit.create({ data: { origin: "MANUAL", companionOfId: grupo.id, scheduledStart: grupo.scheduledStart, scheduledEnd: grupo.scheduledEnd, clientName: "Cliente Grupo", phoneRaw: "(51) 99876-0801", phoneNormalized: "+5551998760801", propertyCode: "00802", consultantId: a.id, assignmentStatus: "MANUAL" } });
+  // locação para a gestora fechar e o marketing postar
+  const fecha = await createManualVisit(admin, { requestId: "e2e-jornada-fecha", scheduledStart: ago(48), clientName: "Cliente Fecha", phoneRaw: "(51) 99876-0901", propertyCode: "00901", consultantId: b.id });
+  await concludeVisit(admin, fecha.id, { requestId: "e2e-jornada-fecha-done", expectedVersion: 1, status: "DONE", evaluation: "POSITIVE", note: "Gostou, vai mandar os documentos." });
+  await db.$disconnect();
+}
