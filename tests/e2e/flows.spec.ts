@@ -198,12 +198,19 @@ test("gestora: funil, imóveis, quadro de andamento e abas da visita", async ({ 
   await page.getByRole("link", { name: /00444/ }).first().click();
   await expect(page.getByRole("heading", { name: "00444" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Por que não avançou" })).toBeVisible();
-  // quadro: mover de acompanhamento para documentação
+  // quadro do fluxo: mover de acompanhamento para "Em negociação" pede o valor e a garantia
   await page.goto("/oportunidades?vista=quadro");
   const follow = page.getByRole("region", { name: "Em acompanhamento" });
   await expect(follow.getByText("Cliente Kanban", { exact: true })).toBeVisible();
-  await follow.getByLabel("Mover Cliente Kanban para").selectOption("DOCS_REVIEW");
-  await expect(page.getByRole("region", { name: "Documentação em análise" }).getByText("Cliente Kanban", { exact: true })).toBeVisible();
+  await follow.getByLabel("Mover Cliente Kanban para").selectOption("NEGOTIATION");
+  await page.waitForURL(/para=NEGOTIATION/);
+  await page.getByLabel("Valor proposto (R$)").fill("1.950,00");
+  await page.getByLabel("Garantia pretendida").selectOption({ label: "Fiador" });
+  await page.getByRole("button", { name: "Salvar: Em negociação" }).click();
+  await expect(page.getByText("✓ Situação atualizada: Em negociação.")).toBeVisible();
+  await expect(page.getByText(/Valor proposto R\$\s?1\.950,00/).first()).toBeVisible();
+  await page.goto("/oportunidades?vista=quadro");
+  await expect(page.getByRole("region", { name: "Em negociação" }).getByText("Cliente Kanban", { exact: true })).toBeVisible();
   // abas no detalhe da visita
   await page.goto("/imoveis/00444");
   await page.locator('a[href^="/visitas/"]', { hasText: "Cliente Kanban" }).first().click();

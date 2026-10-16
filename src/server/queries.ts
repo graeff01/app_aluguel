@@ -2,6 +2,7 @@
  * Consultas de leitura — todas aplicam o escopo de autorização (visitScope/opportunityScope) no servidor.
  */
 import type { Prisma } from "@/generated/prisma/client";
+import { DEAL_STAGES } from "@/lib/deal-stages";
 import { db } from "@/lib/db";
 import { notFound } from "@/lib/errors";
 import { canViewVisit, hasGlobalView, opportunityScope, visitScope, type AuthzActor } from "@/lib/authz";
@@ -332,6 +333,8 @@ export async function listOpportunities(actor: AuthzActor, f: { status?: string;
     where.OR = [{ status: { in: ["FOLLOW_UP", "DOCS_REVIEW"] } }, { updatedAt: { gte: new Date(Date.now() - 30 * 86400_000) } }];
   } else if (f.status === "OPEN" || !f.status) where.status = { in: ["FOLLOW_UP", "DOCS_REVIEW"] };
   else if (["FOLLOW_UP", "DOCS_REVIEW", "CLOSED_WON", "LOST"].includes(f.status)) where.status = f.status as never;
+  else if (f.status === "FOLLOW") Object.assign(where, { stage: null, status: { in: ["FOLLOW_UP", "DOCS_REVIEW"] } });
+  else if ((DEAL_STAGES as readonly string[]).includes(f.status)) Object.assign(where, { stage: f.status, status: { not: "LOST" } });
   if (f.consultantId && hasGlobalView(actor)) where.responsibleId = f.consultantId;
   if (f.q?.trim()) where.AND = [{ OR: [{ client: { name: { contains: f.q.trim(), mode: "insensitive" } } }, { property: { code: { contains: f.q.trim() } } }] }];
   return db.opportunity.findMany({

@@ -198,7 +198,7 @@ export async function updateOpportunity(actor: AuthzActor, oppId: string, input:
 }
 
 /** Avisa o marketing (celular e, se configurado, e-mail) de uma locação fechada para postar. */
-async function notifyMarketing(oppId: string) {
+export async function notifyMarketing(oppId: string) {
   const o = await db.opportunity.findUnique({ where: { id: oppId }, include: { property: { select: { code: true, neighborhood: true } }, leasePost: { include: { agent: { select: { label: true } } } } } });
   if (!o?.leasePost) return;
   const people = await db.user.findMany({ where: { role: "MARKETING", active: true }, select: { id: true, email: true } });

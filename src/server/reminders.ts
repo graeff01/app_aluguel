@@ -524,6 +524,17 @@ export async function sendOperationalAlerts(now = new Date(), opts: { send?: Sen
     }
   }
 
+  // negócios parados na mesma situação há X dias (fluxo pós-visita): consultora responsável e gestão
+  if (localHour(now) >= settings.reminderHour && localWeekday(now) !== 0) {
+    const limit = new Date(now.getTime() - settings.staleOpportunityDays * 24 * H);
+    const stale = await db.opportunity.findMany({ where: { status: { in: ["FOLLOW_UP", "DOCS_REVIEW"] }, stage: { not: null }, stageChangedAt: { lt: limit } }, select: { responsibleId: true } });
+    const per = new Map<string, number>();
+    for (const o of stale) if (o.responsibleId) per.set(o.responsibleId, (per.get(o.responsibleId) ?? 0) + 1);
+    const label = (n: number) => (n === 1 ? "1 negócio parado" : `${n} negócios parados`);
+    for (const [uid, n] of per) await once(uid, "deals_stale", { title: `${label(n)} há mais de ${settings.staleOpportunityDays} dias`, body: "Atualize a situação (ou registre que caiu). Toque para ver.", url: "/oportunidades?paradas=1", tag: `negocios-${day}` });
+    if (stale.length) for (const m of staff.filter((x) => x.role === "MANAGER")) await once(m.id, "deals_stale_team", { title: `Equipe: ${label(stale.length)} há mais de ${settings.staleOpportunityDays} dias`, body: "Sem mudança de situação no fluxo. Toque para ver.", url: "/oportunidades?paradas=1", tag: `negocios-${day}` });
+  }
+
   // 16h: confirmar com os clientes as visitas de amanhã (WhatsApp com mensagem pronta)
   if (localHour(now) >= 16 && localWeekday(now) !== 0) {
     const tomorrow = addDaysKey(day, 1);

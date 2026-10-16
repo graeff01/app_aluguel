@@ -620,8 +620,56 @@ enum LostOrigin {
   LATER
 }
 
+/// Situação do negócio depois da visita (fluxo da agência: mesmas situações das planilhas).
+enum DealStage {
+  NEGOTIATION
+  OWNER_PENDING
+  KYC_SENT
+  ANALYSIS
+  DOCS
+  CONTRACT
+  SIGNED
+  POSSESSION
+}
+
+enum DealType {
+  LEASE
+  INTERMEDIATION
+}
+
 model Opportunity {
   id                   String            @id @default(cuid())
+  /// situação no fluxo (null = em acompanhamento, cliente ainda decidindo); "Caiu" = status LOST com lostStage
+  stage                DealStage?
+  stageChangedAt       DateTime          @default(now())
+  lostStage            DealStage?
+  // 1. Em negociação
+  proposedRentCents    Int?
+  intendedGuarantee    String?
+  // 2. Aguardando o proprietário
+  proposalSentAt       DateTime?         @db.Date
+  ownerAcceptedAt      DateTime?         @db.Date
+  agreedRentCents      Int?
+  // 3. KYC enviado
+  kycSentAt            DateTime?         @db.Date
+  kycDueAt             DateTime?         @db.Date
+  // 4. Análise e garantia
+  guarantee            String?
+  analysisDecidedAt    DateTime?         @db.Date
+  // 5. Documentação
+  docsMissing          String[]          @default([])
+  docsRequestedAt      DateTime?         @db.Date
+  // 6. Formalização
+  contractReleasedAt   DateTime?         @db.Date
+  contractSentAt       DateTime?         @db.Date
+  inspectionNeeded     Boolean?
+  // 7. Assinatura (entra no VGL)
+  signedAt             DateTime?         @db.Date
+  dealType             DealType?
+  contractValueCents   Int?
+  // 8. Posse
+  possessionAt         DateTime?         @db.Date
+  keysHolderChecked    Boolean           @default(false)
   clientId             String
   client               Client            @relation(fields: [clientId], references: [id])
   propertyId           String
@@ -662,6 +710,8 @@ model OpportunityEvent {
   opportunity   Opportunity        @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   fromStatus    OpportunityStatus?
   toStatus      OpportunityStatus
+  fromStage     DealStage?
+  toStage       DealStage?
   note          String?
   authorId      String?
   author        User?              @relation(fields: [authorId], references: [id])

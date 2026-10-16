@@ -224,12 +224,16 @@ test("jornada gestora: painel do pré-atendimento, cadastra agenciador e fecha a
   await go(page, J, "/oportunidades");
   await page.getByRole("link", { name: /Cliente Fecha/ }).first().click();
   await page.waitForLoadState("networkidle");
-  await page.getByLabel("Nova situação").selectOption({ label: "Locação fechada" });
+  await page.getByLabel("Nova situação").selectOption({ label: "7. Contrato assinado" });
+  await page.getByLabel(/Valor do contrato/).fill("2.100,00");
   await page.getByLabel("Agenciador").selectOption({ label: "Agenciador Jornada" });
   await expect(page.locator("label", { hasText: "Alugado na 1ª visita" }).locator("input")).toBeChecked(); // sugerido pelo app
   await page.getByLabel(/Conte o diferencial/).fill("Fechou dois dias depois da primeira visita.");
-  await page.getByRole("button", { name: "Salvar andamento" }).click();
-  await expect(page.getByText("✓ Locação fechada. O marketing foi avisado para postar.")).toBeVisible();
+  await page.getByRole("button", { name: "Salvar: Contrato assinado" }).click();
+  await expect(page.getByText("✓ Contrato assinado. O marketing foi avisado para postar.")).toBeVisible();
+  // o funil e o VGL do mês contam o contrato
+  await go(page, J, "/oportunidades");
+  await expect(page.getByText(/R\$\s?2\.100/).first()).toBeVisible();
   await go(page, J, "/marketing");
   await expect(page.getByText("Imóvel 00901")).toBeVisible();
   expect(clean(J), JSON.stringify(clean(J), null, 1)).toEqual([]);

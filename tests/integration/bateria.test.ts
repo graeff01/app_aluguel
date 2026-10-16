@@ -481,3 +481,78 @@ describe("agenda nos dois sentidos", () => {
     expect((await api.getEvent("central@exemplo.test", "g3"))?.status).toBe("cancelled");
   });
 });
+
+// ───────────────────────── Fluxo pós-visita (situações até a posse) ─────────────────────────
+describe("fluxo pós-visita", () => {
+  const ready = async () => {
+    const v = await visit("2026-10-10T13:00:00Z");
+    await concludeVisit(u.a, v.id, { requestId: `bateria-fluxo-${++seq}`, expectedVersion: 1, status: "DONE", evaluation: "POSITIVE", note: "quer seguir" }, NOW);
+    return db.opportunity.findFirstOrThrow();
+  };
+  const ver = async (id: string) => (await db.opportunity.findUniqueOrThrow({ where: { id } })).version;
+  const gid = async (label: string) => (await db.reason.findFirstOrThrow({ where: { kind: "GUARANTEE", label } })).id;
+
+  it("caminho completo até a posse: dados de cada etapa, data de cada mudança, VGL e marketing", async () => {
+    const { moveDealStage, dealFunnel } = await import("@/server/deal-flow");
+    const o = await ready();
+    expect(o.stage).toBeNull(); // em acompanhamento até a consultora registrar a negociação
+    const go = async (input: Record<string, unknown>) => moveDealStage(u.a, o.id, { expectedVersion: await ver(o.id), ...input } as never, NOW);
+    await expect(go({ to: "NEGOTIATION" })).rejects.toMatchObject({ code: "VALIDATION", details: { proposedRent: expect.any(String), intendedGuarantee: expect.any(String) } });
+    await go({ to: "NEGOTIATION", proposedRent: "2.300,00", intendedGuarantee: await gid("Seguro fiança") });
+    await go({ to: "OWNER_PENDING", proposalSentAt: "2026-10-11" });
+    await expect(go({ to: "KYC_SENT", ownerAcceptedAt: "2026-10-12", agreedRent: "2.200", kycSentAt: "2026-10-12", kycDueAt: "2026-10-10" })).rejects.toMatchObject({ details: { kycDueAt: expect.any(String) } });
+    await go({ to: "KYC_SENT", ownerAcceptedAt: "2026-10-12", agreedRent: "2.200", kycSentAt: "2026-10-12", kycDueAt: "2026-10-15" });
+    await go({ to: "ANALYSIS" });
+    const renda = await db.reason.findFirstOrThrow({ where: { kind: "PRE_MISSING", label: "Comprovante de renda" } });
+    await go({ to: "DOCS", guarantee: await gid("CredPago"), analysisDecidedAt: "2026-10-13", docsRequestedAt: "2026-10-13", docsMissingIds: [renda.id] });
+    expect((await db.opportunity.findUniqueOrThrow({ where: { id: o.id } })).status).toBe("DOCS_REVIEW"); // indicadores de sempre acompanham
+    await go({ to: "CONTRACT", contractReleasedAt: "2026-10-13", inspectionNeeded: "sim" });
+    await expect(go({ to: "SIGNED", signedAt: "2026-10-13", dealType: "LEASE", contractValue: "2.200,00" })).rejects.toMatchObject({ details: { agentId: expect.any(String), highlightNote: expect.any(String) } });
+    await go({ to: "SIGNED", signedAt: "2026-10-13", dealType: "LEASE", contractValue: "2.200,00", ...(await leaseInfo()) });
+    await expect(go({ to: "POSSESSION", possessionAt: "2026-10-13" })).rejects.toMatchObject({ details: { keysHolderChecked: expect.any(String) } });
+    await go({ to: "POSSESSION", possessionAt: "2026-10-13", keysHolderChecked: true });
+
+    const done = await db.opportunity.findUniqueOrThrow({ where: { id: o.id }, include: { events: { orderBy: { createdAt: "asc" } } } });
+    expect(done).toMatchObject({ stage: "POSSESSION", status: "CLOSED_WON", proposedRentCents: 230000, agreedRentCents: 220000, guarantee: "CredPago", intendedGuarantee: "Seguro fiança", docsMissing: ["Comprovante de renda"], contractValueCents: 220000, dealType: "LEASE", keysHolderChecked: true });
+    expect(done.events.map((e) => e.toStage).filter(Boolean)).toEqual(["NEGOTIATION", "OWNER_PENDING", "KYC_SENT", "ANALYSIS", "DOCS", "CONTRACT", "SIGNED", "POSSESSION"]);
+    expect(await db.leasePost.count({ where: { opportunityId: o.id } })).toBe(1); // marketing avisado no contrato assinado
+    const f = await dealFunnel(u.manager, { from: new Date("2026-10-01T03:00:00Z"), to: new Date("2026-11-01T03:00:00Z") });
+    expect(f.reached.find((r) => r.stage === "POSSESSION")?.count).toBe(1);
+    expect(f.vgl).toMatchObject({ totalCents: 220000, contracts: 1, lease: 1 });
+  });
+
+  it("caiu: pede motivo e observação, registra a etapa; voltar a situação pede o porquê; consultora só mexe no que é dela", async () => {
+    const { moveDealStage, dealFunnel } = await import("@/server/deal-flow");
+    const o = await ready();
+    await moveDealStage(u.a, o.id, { expectedVersion: await ver(o.id), to: "NEGOTIATION", proposedRent: "1.900", intendedGuarantee: await gid("Fiador") }, NOW);
+    await moveDealStage(u.a, o.id, { expectedVersion: await ver(o.id), to: "OWNER_PENDING", proposalSentAt: "2026-10-12" }, NOW);
+    await expect(moveDealStage(u.a, o.id, { expectedVersion: await ver(o.id), to: "NEGOTIATION", proposedRent: "1.800", intendedGuarantee: await gid("Fiador") }, NOW)).rejects.toMatchObject({ details: { note: expect.any(String) } });
+    await expect(moveDealStage(u.b, o.id, { expectedVersion: await ver(o.id), to: "ANALYSIS" }, NOW)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(moveDealStage(u.a, o.id, { expectedVersion: await ver(o.id), to: "FELL" }, NOW)).rejects.toMatchObject({ details: { lostReasonId: expect.any(String), note: expect.any(String) } });
+    const r = await db.reason.findFirstOrThrow({ where: { kind: "OPPORTUNITY_LOST", label: "Desistiu da locação" } });
+    await moveDealStage(u.a, o.id, { expectedVersion: await ver(o.id), to: "FELL", lostReasonId: r.id, note: "proprietário não aceitou o valor" }, NOW);
+    expect(await db.opportunity.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({ status: "LOST", lostStage: "OWNER_PENDING", lostReasonId: r.id });
+    const f = await dealFunnel(u.manager, { from: new Date("2026-10-01T03:00:00Z"), to: new Date("2026-11-01T03:00:00Z") });
+    expect(f.reached.find((x) => x.stage === "OWNER_PENDING")?.lost).toBe(1);
+    // gestão reabre (correção) com observação
+    await moveDealStage(u.manager, o.id, { expectedVersion: await ver(o.id), to: "OWNER_PENDING", proposalSentAt: "2026-10-12", note: "voltou a negociar" }, NOW);
+    expect(await db.opportunity.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({ status: "FOLLOW_UP", stage: "OWNER_PENDING", lostStage: null });
+  });
+
+  it("negócio parado na mesma situação: alerta para a consultora e para a gestão (uma vez por dia)", async () => {
+    const { moveDealStage } = await import("@/server/deal-flow");
+    const o = await ready();
+    await moveDealStage(u.a, o.id, { expectedVersion: await ver(o.id), to: "NEGOTIATION", proposedRent: "1.900", intendedGuarantee: await gid("Fiador") }, NOW);
+    await db.opportunity.update({ where: { id: o.id }, data: { stageChangedAt: new Date(NOW.getTime() - 10 * 24 * H) } });
+    await db.pushSubscription.createMany({ data: [{ userId: u.a.id, endpoint: "https://push.test/a", p256dh: "k", auth: "a" }, { userId: u.manager.id, endpoint: "https://push.test/m", p256dh: "k", auth: "a" }] });
+    await db.appSettings.update({ where: { id: 1 }, data: { remindersEnabled: true } });
+    const { sendOperationalAlerts } = await import("@/server/reminders");
+    const sent: string[] = [];
+    await sendOperationalAlerts(NOW, { send: async (_t, p) => (sent.push(p.title), "ok"), email: null });
+    expect(sent).toContain("1 negócio parado há mais de 7 dias");
+    expect(sent).toContain("Equipe: 1 negócio parado há mais de 7 dias");
+    const again: string[] = [];
+    await sendOperationalAlerts(new Date(NOW.getTime() + 60_000), { send: async (_t, p) => (again.push(p.title), "ok"), email: null });
+    expect(again.filter((t) => /parado/.test(t))).toEqual([]);
+  });
+});

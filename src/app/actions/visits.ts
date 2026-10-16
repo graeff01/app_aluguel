@@ -9,6 +9,7 @@ import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
 import { createVisitEventInGoogle, rescheduleVisit } from "@/server/reschedule";
 import { cancelOldEvent } from "@/server/google-write";
 import { createStaffVisit } from "@/server/staff-visit";
+import { moveDealStage } from "@/server/deal-flow";
 import { setPresence } from "@/server/presence";
 import { followUpAction } from "@/server/followups";
 import { refreshPropertyNow } from "@/server/property-preview";
@@ -240,4 +241,46 @@ export async function createStaffVisitAction(_: ActionState, fd: FormData): Prom
     redirect(target);
   }
   return s;
+}
+
+/** Fluxo pós-visita: muda a situação do negócio (com os dados da etapa). */
+export async function dealStageAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const id = str(fd, "oppId");
+  let to = "";
+  const s = await runAction(async (a) => {
+    const all = (k: string) => fd.getAll(k).map(String).filter(Boolean);
+    const r = await moveDealStage(a, id, {
+      expectedVersion: Number(str(fd, "version")),
+      to: str(fd, "to") as never,
+      note: str(fd, "note"),
+      proposedRent: str(fd, "proposedRent"),
+      intendedGuarantee: str(fd, "intendedGuarantee"),
+      proposalSentAt: str(fd, "proposalSentAt"),
+      ownerAcceptedAt: str(fd, "ownerAcceptedAt"),
+      agreedRent: str(fd, "agreedRent"),
+      kycSentAt: str(fd, "kycSentAt"),
+      kycDueAt: str(fd, "kycDueAt"),
+      guarantee: str(fd, "guarantee"),
+      analysisDecidedAt: str(fd, "analysisDecidedAt"),
+      docsMissingIds: all("docsMissingIds"),
+      docsRequestedAt: str(fd, "docsRequestedAt"),
+      contractReleasedAt: str(fd, "contractReleasedAt"),
+      contractSentAt: str(fd, "contractSentAt"),
+      inspectionNeeded: str(fd, "inspectionNeeded"),
+      signedAt: str(fd, "signedAt"),
+      dealType: str(fd, "dealType"),
+      contractValue: str(fd, "contractValue"),
+      agentId: str(fd, "agentId"),
+      highlightIds: all("highlightIds"),
+      highlightNote: str(fd, "highlightNote"),
+      possessionAt: str(fd, "possessionAt"),
+      keysHolderChecked: str(fd, "keysHolderChecked") === "1",
+      lostReasonId: str(fd, "lostReasonId"),
+    });
+    to = r.to;
+    return `Situação: ${r.label}.`;
+  });
+  if (!s.ok) return s;
+  revalidatePath("/", "layout");
+  redirect(`/oportunidades/${id}?salvo=${to}`);
 }
