@@ -279,3 +279,53 @@ describe("agenda por período no fuso de Brasília", () => {
     expect(a).toMatchObject({ total: 1, canceled: 1, byConsultant: [] });
   });
 });
+
+// ───────────────────────── Desfazer cancelamento ─────────────────────────
+describe("desfazer o cancelamento do pré-atendimento", () => {
+  const setup = async () => {
+    const { undoStaffCancel } = await import("@/server/visits");
+    await makeConnection("central@exemplo.test");
+    const api = new MockCalendar();
+    const title = "Visita clt - Cliente Exemplo 1234567 - cod 111111;222222 - 51 99876-5432";
+    api.put(visitEvent("u1", { start: "2026-10-14T15:00:00Z", title, organizer: "central@exemplo.test" }));
+    const sync = () => runSync({ api, now: NOW, sleep: async () => {} });
+    await sync();
+    const [a, b] = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
+    return { undoStaffCancel, api, sync, title, a, b, r: await cancelReason() };
+  };
+
+  it("cancelou tudo por engano: volta no app e o evento volta no Google, sem conflito", async () => {
+    const { undoStaffCancel, api, sync, a, r } = await setup();
+    const c = await cancelVisitByStaff(jasmin, a.id, { reasonId: r.id }, NOW, { calendarApi: api });
+    expect(c.google).toBe("canceled");
+    const u = await undoStaffCancel(jasmin, c.undoId, new Date(NOW.getTime() + 10_000), { calendarApi: api });
+    expect(u).toEqual({ count: 2, google: "restored" });
+    expect((await api.getEvent("central@exemplo.test", "u1"))?.status).toBe("confirmed");
+    await sync();
+    expect((await db.visit.findMany()).map((v) => [v.status, v.cancelReasonId, v.syncConflict])).toEqual([["SCHEDULED", null, "NONE"], ["SCHEDULED", null, "NONE"]]);
+    // não desfaz duas vezes
+    await expect(undoStaffCancel(jasmin, c.undoId, new Date(NOW.getTime() + 20_000), { calendarApi: api })).rejects.toMatchObject({ code: "INVALID_STATE" });
+  });
+
+  it("cancelou um imóvel por engano: o código volta ao título", async () => {
+    const { undoStaffCancel, api, title, a, r } = await setup();
+    const c = await cancelVisitByStaff(jasmin, a.id, { reasonId: r.id, onlyThis: true }, NOW, { calendarApi: api });
+    expect((await api.getEvent("central@exemplo.test", "u1"))?.summary).not.toContain("111111");
+    expect((await undoStaffCancel(jasmin, c.undoId, NOW, { calendarApi: api })).google).toBe("title_back");
+    expect((await api.getEvent("central@exemplo.test", "u1"))?.summary).toBe(title);
+  });
+
+  it("título editado à mão depois: não sobrescreve; passou do tempo: não desfaz; outra pessoa: não vê", async () => {
+    const { undoStaffCancel, api, a, b, r } = await setup();
+    const c = await cancelVisitByStaff(jasmin, a.id, { reasonId: r.id, onlyThis: true }, NOW, { calendarApi: api });
+    const ev = (await api.getEvent("central@exemplo.test", "u1"))!;
+    api.put({ ...ev, summary: `${ev.summary} - REAGENDADA` });
+    expect((await undoStaffCancel(jasmin, c.undoId, NOW, { calendarApi: api })).google).toBe("title_changed");
+    expect((await api.getEvent("central@exemplo.test", "u1"))?.summary).toContain("REAGENDADA");
+
+    const c2 = await cancelVisitByStaff(jasmin, b.id, { reasonId: r.id }, NOW, { calendarApi: api });
+    const other = { id: (await db.user.create({ data: { name: "Outra Pré", email: "outra@exemplo.test", role: "PRE_SERVICE" } })).id, role: "PRE_SERVICE" as const };
+    await expect(undoStaffCancel(other, c2.undoId, NOW, { calendarApi: api })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(undoStaffCancel(jasmin, c2.undoId, new Date(Date.now() + 3 * 60_000), { calendarApi: api })).rejects.toMatchObject({ code: "INVALID_STATE" });
+  });
+});

@@ -16,7 +16,7 @@ export default async function ReasonsPage() {
     <>
       <PageHeader title="Listas e motivos" subtitle="Itens já usados não podem ser excluídos — desative-os para preservar o histórico." />
       {groups.map((g) => (
-        <Section key={g.kind} title={g.title}>
+        <Section key={g.kind} title={g.title} id={g.kind === "LEASE_AGENT" ? "agenciadores" : undefined}>
           <ul className="mb-3 divide-y divide-line overflow-hidden rounded-3xl border border-line bg-surface shadow-card">
             {reasons
               .filter((r) => r.kind === g.kind)

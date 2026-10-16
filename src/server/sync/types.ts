@@ -42,6 +42,8 @@ export interface CalendarApi {
   cancelEvent(calendarId: string, eventId: string): Promise<"canceled" | "removed" | "already">;
   /** troca o título (só se a agenda for a organizadora): "updated", "not_owner" ou "already" (evento sumiu) */
   updateSummary(calendarId: string, eventId: string, summary: (current: string) => string): Promise<"updated" | "not_owner" | "already">;
+  /** desfazer: reabre um evento cancelado pelo app */
+  restoreEvent(calendarId: string, eventId: string): Promise<"restored" | "gone">;
 }
 
 export type GoogleErrorKind = "SYNC_TOKEN_INVALID" | "AUTH" | "PERMISSION" | "RETRYABLE" | "NOT_FOUND" | "OTHER";

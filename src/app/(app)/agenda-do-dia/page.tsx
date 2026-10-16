@@ -9,6 +9,7 @@ import { PageHeader, Segmented, cx } from "@/components/ui";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { db } from "@/lib/db";
 import { CancelVisit } from "./cancel";
+import { UndoCancel } from "./undo-cancel";
 
 export const metadata = { title: "Agenda" };
 
@@ -45,7 +46,7 @@ const prevMonth = (k: string) => {
 const dayTitle = (k: string) => new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", timeZone: "UTC" }).format(new Date(`${k}T12:00:00Z`));
 const monthTitle = (k: string) => new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${k}T12:00:00Z`));
 
-export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ dia?: string; vista?: string; ref?: string }> }) {
+export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ dia?: string; vista?: string; ref?: string; cancelado?: string; n?: string; g?: string }> }) {
   const actor = await requireActor({ preService: true });
   if (!isPreService(actor) && !hasGlobalView(actor)) redirect("/minhas");
   const sp = await searchParams;
@@ -56,6 +57,10 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const ref = isDayKey(sp.ref) ? sp.ref : today;
   const cancelReasons = await db.reason.findMany({ where: { kind: "VISIT_CANCEL", active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, label: true } });
 
+  // endereço da tela atual (sem os dados do último cancelamento): o cancelamento volta para cá
+  const keep = new URLSearchParams(Object.entries({ dia: sp.dia, vista: sp.vista, ref: sp.ref }).filter((e): e is [string, string] => !!e[1]));
+  const back = `/agenda-do-dia${keep.size ? `?${keep}` : ""}`;
+  const undo = sp.cancelado && /^[a-z0-9]{20,40}$/.test(sp.cancelado) ? <UndoCancel key={sp.cancelado} undoId={sp.cancelado} count={Number(sp.n) || 1} google={sp.g ?? ""} back={back} /> : null;
   const status = (v: Row) => {
     if (v.status !== "SCHEDULED") return v.evaluation ? EVALUATION_LABEL[v.evaluation] : STATUS_LABEL[v.status];
     if (v.scheduledStart <= now && v.scheduledEnd > now) return "Em andamento";
@@ -93,6 +98,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
             others={(openCodes.get(v.companionOfId ?? v.id) ?? []).filter((x) => x.id !== v.id).map((x) => x.code ?? "sem código")}
             label={`${fmt.shortDate(v.scheduledStart)} ${fmt.time(v.scheduledStart)} · ${v.clientName ?? "cliente"}`}
             reasons={cancelReasons}
+            back={back}
           />
         </span>
       )}
@@ -121,6 +127,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       <div className="mx-auto max-w-3xl">
         <PageHeader eyebrow={fmt.longDate(new Date(day + "T15:00:00Z"))} title={day === today ? "Visitas de hoje" : day === tomorrow ? "Visitas de amanhã" : "Visitas do dia"} subtitle={<AutoRefresh seconds={60} />} />
         {tabs}
+        {undo}
         {a.unassigned > 0 && (
           <p role="alert" className="mb-5 rounded-2xl border border-bad/20 bg-bad-soft px-4 py-3 text-sm font-semibold text-bad">
             {a.unassigned === 1 ? "1 visita está sem consultora" : `${a.unassigned} visitas estão sem consultora`}: convide a consultora no evento da agenda Google.
@@ -161,6 +168,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     <div className="mx-auto max-w-3xl">
       <PageHeader eyebrow={view === "semana" ? "Visitas da semana" : "Visitas do mês"} title={title} subtitle={<AutoRefresh seconds={60} />} />
       {tabs}
+      {undo}
       <div className="mb-5 flex flex-wrap items-center gap-2">
         {nav(`/agenda-do-dia?vista=${view}&ref=${prev}`, "←", view === "semana" ? "Semana anterior" : "Mês anterior")}
         {!isCurrent && nav(`/agenda-do-dia?vista=${view}`, view === "semana" ? "Esta semana" : "Este mês", "Voltar ao período atual")}

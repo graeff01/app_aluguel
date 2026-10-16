@@ -32,13 +32,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!actor.privacyAcceptedAt) return <div className="min-h-dvh"><PrivacyDialog name={actor.name} /></div>;
   // primeiro acesso guiado (instalar, notificações, como usar)
   if (!actor.onboardedAt) return <Onboarding name={actor.name} role={actor.role} pushKey={pushConfig()?.publicKey ?? null} />;
-  const settings = await getSettings();
   const now = new Date();
   const global = hasGlobalView(actor);
-  const preOpen = await countOpenFor(actor);
   const preService = actor.role === "PRE_SERVICE";
   const marketing = actor.role === "MARKETING";
-  const toPost = marketing || global ? await db.leasePost.count({ where: { postedAt: null } }) : 0;
+  // leituras do menu em paralelo (aparecem em todas as telas)
+  const [settings, preOpen, toPost, agents] = await Promise.all([
+    getSettings(),
+    countOpenFor(actor),
+    marketing || global ? db.leasePost.count({ where: { postedAt: null } }) : Promise.resolve(0),
+    global ? db.reason.count({ where: { kind: "LEASE_AGENT", active: true } }) : Promise.resolve(1),
+  ]);
   const [pending, health, reviewCount] = await Promise.all([
     db.visit.count({
       // "para registrar": já terminou ou já começou (em andamento)
@@ -155,6 +159,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
     </div>
   ) : null;
+  // sem agenciador cadastrado ninguém consegue marcar locação fechada: avisa a gestão em todas as telas
+  const agentsBanner =
+    global && agents === 0 ? (
+      <div role="alert" className="border-b border-warn/20 bg-warn-soft">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 md:px-8">
+          <p className="text-[14px] font-semibold text-warn">Nenhum agenciador cadastrado: enquanto isso, não dá para marcar locação como fechada.</p>
+          <Link href="/config/motivos#agenciadores" className="press inline-flex min-h-10 items-center rounded-full bg-warn px-4 text-[13px] font-semibold text-bg">
+            Cadastrar agenciadores
+          </Link>
+        </div>
+      </div>
+    ) : null;
   // consultora só vê o status da agenda quando há problema que a afeta
   const showHealth = global || health.level === "stale" || health.level === "error";
 
@@ -186,6 +202,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </header>
         {agendaBanner}
+        {agentsBanner}
         <main className="mx-auto w-full max-w-xl flex-1 px-4 pt-6 pb-16">{children}</main>
         <Suspense>
           <UndoToast />
@@ -228,6 +245,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </header>
         {agendaBanner}
+        {agentsBanner}
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-32 md:px-8 md:pt-9 md:pb-12">{children}</main>
       </div>
       <BottomNav items={preService ? preNav : marketing ? marketingNav : global ? managerBottom : consultantNav} />

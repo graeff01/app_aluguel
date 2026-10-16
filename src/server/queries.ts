@@ -249,70 +249,69 @@ export function defaultPeriod(now = new Date()) {
   return { from: today.slice(0, 8) + "01", to: today };
 }
 
-export async function dashboard(actor: AuthzActor, f: DashboardFilter, now = new Date()) {
+/** Período e filtros já resolvidos (a página usa para buscar o funil em paralelo). */
+export function dashboardFilter(actor: AuthzActor, f: DashboardFilter, now = new Date()) {
   const def = defaultPeriod(now);
   const from = isDayKey(f.from) ? f.from : def.from;
   const to = isDayKey(f.to) && f.to >= from ? f.to : def.to;
-  const settings = await getSettings();
   const consultantId = hasGlobalView(actor) ? f.consultantId || null : actor.id;
   const propertyCode = f.propertyCode?.trim() || null;
+  return { from, to, consultantId, propertyCode };
+}
 
-  const visitsRaw = await db.visit.findMany({
-    where: { ...visitScope(actor), scheduledStart: { gte: startOfDayInTz(from), lt: endOfDayInTz(to) } },
-    select: {
-      id: true, status: true, evaluation: true, scheduledStart: true, scheduledEnd: true, consultantId: true, realizedById: true,
-      propertyCode: true, clientId: true, clientMatch: true, negativeReasonId: true, excluded: true,
-      client: { select: { identityStatus: true } },
-    },
-  });
+const METRIC_VISIT_SELECT = { id: true, status: true, evaluation: true, scheduledStart: true, scheduledEnd: true, consultantId: true, realizedById: true, propertyCode: true, clientId: true, clientMatch: true, negativeReasonId: true, excluded: true } as const;
+
+export async function dashboard(actor: AuthzActor, f: DashboardFilter, now = new Date()) {
+  const { from, to, consultantId, propertyCode } = dashboardFilter(actor, f, now);
+  // período anterior de mesmo tamanho e 8 semanas (segunda a domingo) terminando na semana de `to`
+  const days = Math.round((Date.parse(to) - Date.parse(from)) / 86400_000) + 1;
+  const prevTo = addDays(from, -1);
+  const prevFrom = addDays(prevTo, -(days - 1));
+  const toDate = new Date(to + "T12:00:00Z");
+  const weekEnd = addDays(to, (7 - toDate.getUTCDay()) % 7);
+  const weeksStart = addDays(weekEnd, -8 * 7 + 1);
+
+  // todas as leituras de uma vez (antes eram em sequência: cada uma esperava a anterior)
+  const [settings, visitsRaw, oppsRaw, consultantUsers, prevVisitsRaw, weekVisitsRaw, reasons, users] = await Promise.all([
+    getSettings(),
+    db.visit.findMany({
+      where: { ...visitScope(actor), scheduledStart: { gte: startOfDayInTz(from), lt: endOfDayInTz(to) } },
+      select: { ...METRIC_VISIT_SELECT, client: { select: { identityStatus: true } } },
+    }),
+    // oportunidades relevantes: coorte, fechamentos e perdas no período, além das abertas
+    db.opportunity.findMany({
+      where: {
+        ...opportunityScope(actor),
+        OR: [
+          { firstDoneVisitAt: { gte: startOfDayInTz(from), lt: endOfDayInTz(to) } },
+          { closedAt: { gte: new Date(from + "T00:00:00Z"), lte: new Date(to + "T00:00:00Z") } },
+          { lostAt: { gte: startOfDayInTz(from), lt: endOfDayInTz(to) } },
+          { status: { in: ["FOLLOW_UP", "DOCS_REVIEW"] } },
+        ],
+      },
+      include: { property: { select: { code: true } } },
+    }),
+    hasGlobalView(actor) ? db.user.findMany({ where: { role: "CONSULTANT" }, select: { id: true, name: true, active: true }, orderBy: { name: "asc" } }) : Promise.resolve([]),
+    db.visit.findMany({ where: { ...visitScope(actor), scheduledStart: { gte: startOfDayInTz(prevFrom), lt: endOfDayInTz(prevTo) } }, select: METRIC_VISIT_SELECT }),
+    db.visit.findMany({ where: { ...visitScope(actor), scheduledStart: { gte: startOfDayInTz(weeksStart), lt: endOfDayInTz(weekEnd) } }, select: METRIC_VISIT_SELECT }),
+    db.reason.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }] }),
+    db.user.findMany({ where: hasGlobalView(actor) ? {} : { id: actor.id }, select: { id: true, name: true, role: true, active: true } }),
+  ]);
+
   const visits: MetricVisit[] = visitsRaw.map((v) => ({ ...v, clientIdentity: v.client?.identityStatus ?? null }));
-  // oportunidades relevantes: coorte, fechamentos e perdas no período, além das abertas
-  const oppsRaw = await db.opportunity.findMany({
-    where: {
-      ...opportunityScope(actor),
-      OR: [
-        { firstDoneVisitAt: { gte: startOfDayInTz(from), lt: endOfDayInTz(to) } },
-        { closedAt: { gte: new Date(from + "T00:00:00Z"), lte: new Date(to + "T00:00:00Z") } },
-        { lostAt: { gte: startOfDayInTz(from), lt: endOfDayInTz(to) } },
-        { status: { in: ["FOLLOW_UP", "DOCS_REVIEW"] } },
-      ],
-    },
-    include: { property: { select: { code: true } } },
-  });
   const opps: MetricOpportunity[] = oppsRaw.map((o) => ({ ...o, propertyCode: o.property.code }));
   const base = { from, to, now, resultsStartDate: dateOnlyKey(settings.resultsStartDate), propertyCode };
   const metrics = computeMetrics(visits, opps, { ...base, consultantId });
   // visão da equipe (para comparação na visão individual) e métricas por consultora
   const team = consultantId ? computeMetrics(visits, opps, { ...base, consultantId: null }) : metrics;
-  const consultantUsers = hasGlobalView(actor)
-    ? await db.user.findMany({ where: { role: "CONSULTANT" }, select: { id: true, name: true, active: true }, orderBy: { name: "asc" } })
-    : [];
   const perConsultant = consultantUsers
     .map((u) => ({ user: u, metrics: computeMetrics(visits, opps, { ...base, consultantId: u.id }) }))
     .filter((c) => c.user.active || c.metrics.totals.scheduled > 0);
-
-  // período anterior de mesmo tamanho para comparação
-  const days = Math.round((Date.parse(to) - Date.parse(from)) / 86400_000) + 1;
-  const prevTo = addDays(from, -1);
-  const prevFrom = addDays(prevTo, -(days - 1));
-  const prevVisitsRaw = await db.visit.findMany({
-    where: { ...visitScope(actor), scheduledStart: { gte: startOfDayInTz(prevFrom), lt: endOfDayInTz(prevTo) } },
-    select: { id: true, status: true, evaluation: true, scheduledStart: true, scheduledEnd: true, consultantId: true, realizedById: true, propertyCode: true, clientId: true, clientMatch: true, negativeReasonId: true, excluded: true },
-  });
   const previous = computeMetrics(
     prevVisitsRaw.map((v) => ({ ...v, clientIdentity: null })),
     [],
     { from: prevFrom, to: prevTo, now, resultsStartDate: dateOnlyKey(settings.resultsStartDate), consultantId, propertyCode },
   );
-
-  // Evolução semanal: 8 semanas (segunda a domingo) terminando na semana de `to`
-  const toDate = new Date(to + "T12:00:00Z");
-  const weekEnd = addDays(to, (7 - toDate.getUTCDay()) % 7); // domingo
-  const weeksStart = addDays(weekEnd, -8 * 7 + 1);
-  const weekVisitsRaw = await db.visit.findMany({
-    where: { ...visitScope(actor), scheduledStart: { gte: startOfDayInTz(weeksStart), lt: endOfDayInTz(weekEnd) } },
-    select: { id: true, status: true, evaluation: true, scheduledStart: true, scheduledEnd: true, consultantId: true, realizedById: true, propertyCode: true, clientId: true, clientMatch: true, negativeReasonId: true, excluded: true },
-  });
   const weekVisits = weekVisitsRaw.map((v) => ({ ...v, clientIdentity: null }));
   const weekly = Array.from({ length: 8 }, (_, i) => {
     const wFrom = addDays(weeksStart, i * 7);
@@ -320,11 +319,6 @@ export async function dashboard(actor: AuthzActor, f: DashboardFilter, now = new
     const wm = computeMetrics(weekVisits, [], { ...base, from: wFrom, to: wTo, consultantId });
     return { from: wFrom, to: wTo, scheduled: wm.totals.scheduled, done: wm.totals.done, positive: wm.evaluations.positive, positiveRate: wm.positiveRate, coverage: wm.coverage, awaiting: wm.totals.awaiting, future: wFrom > dayKey(now) };
   });
-
-  const [reasons, users] = await Promise.all([
-    db.reason.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }] }),
-    db.user.findMany({ where: hasGlobalView(actor) ? {} : { id: actor.id }, select: { id: true, name: true, role: true, active: true } }),
-  ]);
   return { from, to, consultantId, propertyCode, metrics, team, perConsultant, weekly, previous: { from: prevFrom, to: prevTo, totals: previous.totals, positiveRate: previous.positiveRate }, reasons, users, settings };
 }
 

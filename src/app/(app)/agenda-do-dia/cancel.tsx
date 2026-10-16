@@ -5,7 +5,7 @@ import { Select, Textarea } from "@/components/ui";
 import { cancelVisitAction } from "@/app/actions/visits";
 
 /** Pré-atendimento: cancelar a visita escolhendo o motivo (a consultora é avisada). */
-export function CancelVisit({ visitId, label, reasons, code, others = [] }: { visitId: string; label: string; reasons: { id: string; label: string }[]; code?: string | null; others?: string[] }) {
+export function CancelVisit({ visitId, label, reasons, code, others = [], back }: { visitId: string; label: string; reasons: { id: string; label: string }[]; code?: string | null; others?: string[]; back: string }) {
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<"one" | "all">("one");
   if (!open) {
@@ -20,6 +20,7 @@ export function CancelVisit({ visitId, label, reasons, code, others = [] }: { vi
       {(s) => (
         <>
           <input type="hidden" name="visitId" value={visitId} />
+          <input type="hidden" name="back" value={back} />
           <p className="mb-2 text-[13px] font-semibold">Cancelar a visita de {label}?</p>
           {others.length > 0 && (
             <fieldset className="mb-2 grid gap-1.5 text-[13px]">

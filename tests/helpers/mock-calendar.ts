@@ -79,11 +79,21 @@ export class MockCalendar implements CalendarApi {
     return "updated" as const;
   }
 
+  private deleted = new Map<string, GEvent>();
+  async restoreEvent(_cal: string, id: string) {
+    const ev = this.deleted.get(id);
+    if (!ev) return "gone" as const;
+    this.put({ ...ev, status: "confirmed" });
+    this.deleted.delete(id);
+    return "restored" as const;
+  }
+
   canceledByApp: { calendarId: string; id: string; how: string }[] = [];
   async cancelEvent(calendarId: string, id: string) {
     const s = this.events.get(id);
     if (!s || s.ev.status === "cancelled") return "already" as const;
     const own = !s.ev.organizer?.email || s.ev.organizer.email.toLowerCase() === calendarId.toLowerCase();
+    this.deleted.set(id, structuredClone(s.ev));
     this.cancel(id);
     this.canceledByApp.push({ calendarId, id, how: own ? "canceled" : "removed" });
     return own ? ("canceled" as const) : ("removed" as const);

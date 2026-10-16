@@ -104,6 +104,15 @@ test("jornada Jasmin: pré-análise com documentos, agenda da semana e cancelar 
   await row("00702").getByLabel("Motivo do cancelamento").selectOption({ label: "Cliente desistiu" });
   await row("00702").getByRole("button", { name: "Cancelar visita" }).click();
   await expect(row("00702")).toContainText("Cliente desistiu");
+  // clique errado? "Desfazer" volta a visita
+  await page.getByRole("button", { name: /^Desfazer \(\d+\)$/ }).click();
+  await expect(page.getByText(/Cancelamento desfeito/)).toBeVisible();
+  await expect(row("00702")).toContainText("Agendada");
+  // agora cancela de verdade
+  await row("00702").getByRole("button", { name: "Cancelar" }).click();
+  await row("00702").getByLabel("Motivo do cancelamento").selectOption({ label: "Cliente desistiu" });
+  await row("00702").getByRole("button", { name: "Cancelar visita" }).click();
+  await expect(row("00702")).toContainText("Cliente desistiu");
   await expect(row("00701")).toContainText("Agendada");
   await expect(row("00703")).toContainText("Agendada");
 
@@ -177,11 +186,14 @@ test("jornada gestora: painel do pré-atendimento, cadastra agenciador e fecha a
   await expect(page.getByRole("link", { name: "Rafaela Jornada da Silva" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "Seguro fiança" }).first()).toBeVisible();
 
-  // cadastra o agenciador (a lista começa vazia)
+  // a lista de agenciadores começa vazia: aviso em todas as telas da gestão
+  await expect(page.getByRole("link", { name: "Cadastrar agenciadores" })).toBeVisible();
   await go(page, J, "/config/motivos");
   await page.getByPlaceholder("Nome do agenciador").fill("Agenciador Jornada");
   await page.getByPlaceholder("Nome do agenciador").press("Enter");
   await expect(page.getByText("Agenciador Jornada")).toBeVisible();
+  await go(page, J, "/painel");
+  await expect(page.getByRole("link", { name: "Cadastrar agenciadores" })).toHaveCount(0);
 
   // fecha a locação
   await go(page, J, "/oportunidades");

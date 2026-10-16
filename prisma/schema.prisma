@@ -846,3 +846,20 @@ model PreAnalysisFile {
 
   @@index([preAnalysisId])
 }
+
+/// Cancelamento feito pelo pré-atendimento: o que mudou (no app e no Google) para poder desfazer por alguns instantes.
+model VisitCancelUndo {
+  id              String    @id @default(cuid())
+  actorId         String
+  visitIds        String[]
+  calendarId      String?
+  googleEventId   String?
+  /// canceled | code_removed | removed | (nada no Google)
+  googleAction    String?
+  previousSummary String?
+  newSummary      String?
+  createdAt       DateTime  @default(now())
+  undoneAt        DateTime?
+
+  @@index([createdAt])
+}

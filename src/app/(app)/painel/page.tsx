@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireManager } from "@/lib/require";
-import { dashboard } from "@/server/queries";
+import { dashboard, dashboardFilter } from "@/server/queries";
 import { addDays, dayKey, fmt } from "@/lib/time";
 import { formatRate } from "@/lib/metrics";
 import { Avatar, Field, Input, PageHeader, Section, Segmented, cx } from "@/components/ui";
@@ -31,7 +31,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const actor = await requireManager();
   const sp = await searchParams;
   const now = new Date();
-  const d = await dashboard(actor, { from: sp.de, to: sp.ate, consultantId: sp.consultora, propertyCode: sp.imovel }, now);
+  const filter = { from: sp.de, to: sp.ate, consultantId: sp.consultora, propertyCode: sp.imovel };
+  const f = dashboardFilter(actor, filter, now);
+  // números, funil e oportunidades paradas ao mesmo tempo
+  const [d, funnel, stale] = await Promise.all([
+    dashboard(actor, filter, now),
+    opportunityFunnel(actor, { from: f.from, to: f.to, consultantId: f.consultantId, propertyCode: f.propertyCode }),
+    staleOpportunities(actor, now),
+  ]);
   const m = d.metrics;
   const team = d.team;
   const firstNames = d.perConsultant.map((c) => c.user.name.split(" ")[0]);
@@ -40,10 +47,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     return firstNames.filter((f) => f === first).length > 1 ? name.replace(/\s*\(.*?\)/, "") : first;
   };
   const goal = d.settings.coverageGoal;
-  const [funnel, stale] = await Promise.all([
-    opportunityFunnel(actor, { from: d.from, to: d.to, consultantId: d.consultantId, propertyCode: d.propertyCode }),
-    staleOpportunities(actor, now),
-  ]);
   const staleMine = d.consultantId ? stale.filter((o) => o.responsibleId === d.consultantId) : stale;
   const attention = d.perConsultant
     .filter((c) => c.metrics.totals.awaitingOver24h > 0)

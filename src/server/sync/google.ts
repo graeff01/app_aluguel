@@ -178,6 +178,16 @@ export function realCalendarApi(auth: OAuth2Client): CalendarApi {
         throw m;
       }
     },
+    async restoreEvent(calendarId, eventId) {
+      try {
+        await api.events.patch({ calendarId, eventId, sendUpdates: "all", requestBody: { status: "confirmed" } });
+        return "restored";
+      } catch (e) {
+        const m = mapGoogleError(e);
+        if (m.kind === "NOT_FOUND" || m.status === 410) return "gone";
+        throw m;
+      }
+    },
     async getEvent(calendarId, eventId) {
       try {
         const res = await api.events.get({ calendarId, eventId });

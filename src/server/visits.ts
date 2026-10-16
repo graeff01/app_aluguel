@@ -227,27 +227,102 @@ export async function cancelVisitByStaff(actor: AuthzActor, visitId: string, inp
       await tx.visitOutcomeHistory.create({ data: { visitId: id, status: "CANCELED", note, authorId: actor.id } });
       await audit(tx, { actorId: actor.id, action: "visit.canceled_by_staff", entityType: "Visit", entityId: id, changes: { motivo: reason.label } });
     }
-    return { visit, count: ids.length, source, remaining, cancelledCodes };
+    return { visit, ids, count: ids.length, source, remaining, cancelledCodes };
   });
   // agenda Google: cancela o evento (um evento só, mesmo com vários imóveis). Falha no Google não desfaz o app.
-  const google = result.remaining > 0 ? await removeCodesInGoogle(result.source, result.cancelledCodes, opts.calendarApi) : await cancelInGoogle(result.source, opts.calendarApi);
+  const titles: { before?: string; after?: string } = {};
+  const google = result.remaining > 0 ? await removeCodesInGoogle(result.source, result.cancelledCodes, opts.calendarApi, titles) : await cancelInGoogle(result.source, opts.calendarApi);
+  // guarda o que mudou para o "Desfazer"
+  const undo = await db.visitCancelUndo.create({
+    data: {
+      actorId: actor.id,
+      visitIds: result.ids,
+      calendarId: result.source?.calendarId ?? null,
+      googleEventId: result.source?.googleEventId ?? null,
+      googleAction: google === "canceled" || google === "code_removed" || google === "removed" ? google : null,
+      previousSummary: titles.before ?? null,
+      newSummary: titles.after ?? null,
+      createdAt: now,
+    },
+  });
   if (result.visit.consultantId && result.visit.consultantId !== actor.id) {
     const when = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(result.visit.scheduledStart);
     const tail = google === "removed" ? " Apague o evento na sua agenda Google." : google === "not_owner" ? ` Tire o imóvel ${result.cancelledCodes.join(", ")} do título do evento na sua agenda Google.` : "";
     await notifyUser(result.visit.consultantId, { title: `Visita de ${when} cancelada`, body: `Motivo: ${reason.label}${result.visit.propertyCode ? ` · imóvel ${result.visit.propertyCode}` : ""}.${tail}`, url: `/visitas/${result.visit.id}`, tag: `cancelada-${result.visit.id}` }).catch(() => undefined);
   }
-  return { count: result.count, google };
+  return { count: result.count, google, undoId: undo.id };
+}
+
+/** Janela para desfazer um cancelamento do pré-atendimento. */
+export const CANCEL_UNDO_MS = 2 * 60_000;
+
+/**
+ * Desfaz o cancelamento (clique errado): as visitas voltam a agendadas e, no Google, o evento é reaberto
+ * ou o título volta a ter o código — só se ninguém mexeu no título depois.
+ */
+export async function undoStaffCancel(actor: AuthzActor, undoId: string, now = new Date(), opts: { calendarApi?: CalendarApi } = {}) {
+  assert(isPreService(actor) || hasGlobalView(actor));
+  const u = await db.visitCancelUndo.findUnique({ where: { id: undoId } });
+  if (!u || (u.actorId !== actor.id && !hasGlobalView(actor))) throw notFound();
+  if (u.undoneAt) throw new AppError("INVALID_STATE", "Este cancelamento já foi desfeito.");
+  if (now.getTime() - u.createdAt.getTime() > CANCEL_UNDO_MS) throw new AppError("INVALID_STATE", "Passou o tempo para desfazer. Peça à gestão para corrigir a visita.");
+  const restored = await db.$transaction(async (tx) => {
+    const claimed = await tx.visitCancelUndo.updateMany({ where: { id: u.id, undoneAt: null }, data: { undoneAt: now } });
+    if (claimed.count === 0) throw new AppError("INVALID_STATE", "Este cancelamento já foi desfeito.");
+    const visits = await tx.visit.findMany({ where: { id: { in: u.visitIds } } });
+    const back = visits.filter((v) => v.status === "CANCELED" && v.cancelReasonId && v.concludedById === u.actorId);
+    for (const v of back) {
+      await tx.visit.update({ where: { id: v.id }, data: { status: "SCHEDULED", cancelReasonId: null, note: null, concludedAt: null, concludedById: null, version: { increment: 1 } } });
+      await tx.visitOutcomeHistory.create({ data: { visitId: v.id, status: "SCHEDULED", note: "Cancelamento desfeito", authorId: actor.id } });
+      await audit(tx, { actorId: actor.id, action: "visit.cancel_undone", entityType: "Visit", entityId: v.id });
+    }
+    return back;
+  });
+  // Google: volta o que o app mudou
+  let google: "restored" | "title_back" | "title_changed" | "none" | "error" = "none";
+  if (u.googleAction && u.calendarId && u.googleEventId) {
+    try {
+      const conn = await db.googleConnection.findFirst({ where: { status: "CONNECTED" }, orderBy: { connectedAt: "desc" } });
+      const api = opts.calendarApi ?? (conn && conn.calendarId === u.calendarId && canEditEvents(conn.scopes) ? realCalendarApi(await authorizedClient(conn.id)) : null);
+      if (api && (u.googleAction === "canceled" || u.googleAction === "removed")) {
+        google = (await api.restoreEvent(u.calendarId, u.googleEventId)) === "restored" ? "restored" : "error";
+      } else if (api && u.googleAction === "code_removed" && u.previousSummary) {
+        let changed = false;
+        await api.updateSummary(u.calendarId, u.googleEventId, (current) => {
+          if (current !== u.newSummary) {
+            changed = true; // alguém editou depois: não sobrescreve
+            return current;
+          }
+          return u.previousSummary!;
+        });
+        google = changed ? "title_changed" : "title_back";
+      }
+    } catch (e) {
+      log.warn("google.undo_failed", { kind: (e as { kind?: string }).kind ?? "OTHER" });
+      google = "error";
+    }
+  }
+  const first = restored[0];
+  if (first?.consultantId && first.consultantId !== actor.id) {
+    const when = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(first.scheduledStart);
+    await notifyUser(first.consultantId, { title: `Visita de ${when} voltou a valer`, body: "O cancelamento foi desfeito pelo pré-atendimento.", url: `/visitas/${first.id}`, tag: `cancelada-${first.id}` }).catch(() => undefined);
+  }
+  return { count: restored.length, google };
 }
 
 /** Outros imóveis continuam: tira só o(s) código(s) cancelado(s) do título do evento. */
-async function removeCodesInGoogle(source: { calendarId: string; googleEventId: string } | null, codes: string[], injected?: CalendarApi): Promise<GoogleCancel> {
+async function removeCodesInGoogle(source: { calendarId: string; googleEventId: string } | null, codes: string[], injected?: CalendarApi, titles: { before?: string; after?: string } = {}): Promise<GoogleCancel> {
   if (!source || !codes.length) return "not_in_agenda";
   const conn = await db.googleConnection.findFirst({ where: { status: "CONNECTED" }, orderBy: { connectedAt: "desc" } });
   if (!conn || conn.calendarId !== source.calendarId) return "not_in_agenda";
   if (!injected && !canEditEvents(conn.scopes)) return "no_permission";
   try {
     const api = injected ?? realCalendarApi(await authorizedClient(conn.id));
-    const r = await api.updateSummary(source.calendarId, source.googleEventId, (title) => codes.reduce((t, c) => removeCodeFromTitle(t, c), title));
+    const r = await api.updateSummary(source.calendarId, source.googleEventId, (title) => {
+      titles.before = title;
+      titles.after = codes.reduce((t, c) => removeCodeFromTitle(t, c), title);
+      return titles.after;
+    });
     await db.$transaction((tx) => audit(tx, { actorId: null, action: "google.event_codes_removed", entityType: "SourceEvent", entityId: source.googleEventId, changes: { codigos: codes, resultado: r } }));
     return r === "updated" ? "code_removed" : r === "not_owner" ? "not_owner" : "already";
   } catch (e) {

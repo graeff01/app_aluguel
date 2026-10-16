@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { runAction, str, type ActionState } from "@/lib/action";
-import { assignVisit, cancelVisitByStaff, correctVisitData, createManualVisit, resolveConflict, setVisitExcluded, type ConflictAction } from "@/server/visits";
+import { assignVisit, cancelVisitByStaff, correctVisitData, undoStaffCancel, createManualVisit, resolveConflict, setVisitExcluded, type ConflictAction } from "@/server/visits";
 import { confirmVisitClientAsDistinct, linkVisitToClient, mergeClients } from "@/server/clients";
 import { updateOpportunity, transferOpportunity } from "@/server/opportunities";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
@@ -15,6 +15,7 @@ import { db } from "@/lib/db";
 import { getActor } from "@/lib/session";
 import { toState } from "@/lib/action";
 import { hasGlobalView } from "@/lib/authz";
+import { GOOGLE_UNDO_TEXT } from "@/lib/cancel-messages";
 
 export async function correctVisitAction(_: ActionState, fd: FormData): Promise<ActionState> {
   const id = str(fd, "visitId");
@@ -176,20 +177,25 @@ export async function followUpDoneAction(visitId: string, action: "done" | "snoo
 }
 
 export async function cancelVisitAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  let target = "";
   const s = await runAction(async (a) => {
     const r = await cancelVisitByStaff(a, str(fd, "visitId"), { reasonId: str(fd, "reasonId"), note: str(fd, "note"), onlyThis: str(fd, "scope") === "one" });
-    const app = r.count > 1 ? `Visita cancelada (${r.count} imóveis). A consultora foi avisada.` : "Visita cancelada. A consultora foi avisada.";
-    const google = {
-      canceled: " Cancelada também na agenda Google (convidados avisados).",
-      already: " Na agenda Google ela já estava cancelada.",
-      removed: " Saiu da sua agenda Google; o evento é da consultora e ela foi avisada para apagar.",
-      code_removed: " O código saiu do título do evento na agenda Google; os outros imóveis continuam.",
-      not_owner: " O evento é da consultora: ela foi avisada para tirar o código do título.",
-      no_permission: " Apague o evento na agenda Google: o app ainda não tem permissão de edição (a administração precisa reconectar a agenda).",
-      not_in_agenda: "",
-      error: " Não consegui cancelar na agenda Google agora: apague o evento lá.",
-    }[r.google];
-    return app + google;
+    // volta para a mesma tela (dia/semana/mês) com o resultado e o "Desfazer"
+    const back = str(fd, "back").startsWith("/agenda-do-dia") ? str(fd, "back") : "/agenda-do-dia";
+    target = `${back}${back.includes("?") ? "&" : "?"}cancelado=${r.undoId}&n=${r.count}&g=${r.google}`;
+    return "Visita cancelada.";
+  });
+  if (s.ok && target) {
+    revalidatePath("/agenda-do-dia");
+    redirect(target);
+  }
+  return s;
+}
+
+export async function undoCancelAction(undoId: string): Promise<ActionState> {
+  const s = await runAction(async (a) => {
+    const r = await undoStaffCancel(a, undoId);
+    return `Cancelamento desfeito${r.count > 1 ? ` (${r.count} imóveis)` : ""}. A consultora foi avisada. ${GOOGLE_UNDO_TEXT[r.google] ?? ""}`.trim();
   });
   if (s.ok) revalidatePath("/agenda-do-dia");
   return s;
