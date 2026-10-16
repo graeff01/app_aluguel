@@ -79,6 +79,24 @@ export class MockCalendar implements CalendarApi {
     return "updated" as const;
   }
 
+  patched: { id: string; patch: Record<string, unknown> }[] = [];
+  async patchEvent(calendarId: string, id: string, patch: { summary?: string; start?: Date; end?: Date; location?: string; swapAttendees?: { remove: string[]; add: string[] } }) {
+    const s = this.events.get(id);
+    if (!s || s.ev.status === "cancelled") return "gone" as const;
+    if (s.ev.organizer?.email && s.ev.organizer.email.toLowerCase() !== calendarId.toLowerCase()) return "not_owner" as const;
+    const ev = structuredClone(s.ev);
+    if (patch.summary !== undefined) ev.summary = patch.summary;
+    if (patch.location !== undefined) ev.location = patch.location;
+    if (patch.start) ev.start = { dateTime: patch.start.toISOString() };
+    if (patch.end) ev.end = { dateTime: patch.end.toISOString() };
+    if (patch.swapAttendees) {
+      const rm = new Set(patch.swapAttendees.remove.map((e) => e.toLowerCase()));
+      ev.attendees = [...(ev.attendees ?? []).filter((a) => !a.email || !rm.has(a.email.toLowerCase())), ...patch.swapAttendees.add.map((email) => ({ email, responseStatus: "needsAction" }))];
+    }
+    this.put(ev);
+    this.patched.push({ id, patch });
+    return "updated" as const;
+  }
   private deleted = new Map<string, GEvent>();
   inserted = 0;
   async insertEvent(calendarId: string, ev: { summary: string; description: string; location?: string; start: Date; end: Date; attendees: string[] }) {

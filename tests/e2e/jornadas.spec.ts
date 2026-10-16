@@ -116,6 +116,21 @@ test("jornada Jasmin: pré-análise com documentos, agenda da semana e cancelar 
   await expect(row("00701")).toContainText("Agendada");
   await expect(row("00703")).toContainText("Agendada");
 
+  // agenda uma visita pelo app colando o título no padrão
+  await go(page, J, "/agenda-do-dia/nova");
+  await page.getByText("Colar a mensagem ou o título e preencher sozinho").click();
+  await page.getByLabel("Mensagem colada").fill("Visita clt - Bruna Pelo App 2999999 - cod 00961;00962 - 51 9348-1111");
+  await page.getByRole("button", { name: "Preencher campos" }).click();
+  await expect(page.getByLabel("Imóvel(is)")).toHaveValue("00961;00962");
+  await expect(page.getByLabel("Nº do atendimento (CRM)")).toHaveValue("2999999");
+  await page.getByLabel("Dia").fill(tomorrow);
+  await page.getByLabel("Horário").fill("08:15");
+  await page.locator("label", { hasText: "Consultora B" }).click();
+  await page.getByRole("button", { name: "Agendar e pôr na agenda Google" }).click();
+  await expect(page.getByText(/✓ Visita criada para Consultora/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Colocar na agenda Google" })).toBeVisible(); // sem permissão no teste: botão de reserva
+  await expect(page.locator("li", { hasText: "Bruna Pelo App" })).toHaveCount(2); // um cartão por imóvel
+
   // o que ela NÃO acessa
   await page.goto("/painel");
   await expect(page).toHaveURL(/\/pre-analises/);
@@ -252,17 +267,17 @@ test("jornada marketing (celular): recebe a locação, copia o resumo e marca co
 
 // ─────────────── 5. Matriz de acesso ───────────────
 type Expect = "ok" | "404" | RegExp;
-const ROUTES = ["/minhas", "/rota", "/pendencias", "/historico", "/visitas/nova", "/pre-analises", "/pre-analises/nova", "/pre-analises/painel", "/agenda-do-dia", "/marketing", "/painel", "/ao-vivo", "/revisao", "/oportunidades", "/imoveis", "/clientes", "/relatorios", "/config/usuarios", "/config/motivos", "/admin/google", "/admin/configuracoes", "/admin/sincronizacao", "/config/auditoria", "/conta/senha"];
+const ROUTES = ["/agenda-do-dia/nova", "/minhas", "/rota", "/pendencias", "/historico", "/visitas/nova", "/pre-analises", "/pre-analises/nova", "/pre-analises/painel", "/agenda-do-dia", "/marketing", "/painel", "/ao-vivo", "/revisao", "/oportunidades", "/imoveis", "/clientes", "/relatorios", "/config/usuarios", "/config/motivos", "/admin/google", "/admin/configuracoes", "/admin/sincronizacao", "/config/auditoria", "/conta/senha"];
 const MATRIX: Record<string, { email: string; home: RegExp; rules: Record<string, Expect> }> = {
   consultora: {
     email: "b@e2e.test",
     home: /\/minhas/,
-    rules: { "/pre-analises/nova": "404", "/pre-analises/painel": "404", "/agenda-do-dia": /\/minhas/, "/marketing": "404", "/painel": "404", "/ao-vivo": "404", "/revisao": "404", "/imoveis": "404", "/clientes": "404", "/relatorios": "404", "/config/usuarios": "404", "/config/motivos": "404", "/admin/google": "404", "/admin/configuracoes": "404", "/admin/sincronizacao": "404", "/config/auditoria": "404" },
+    rules: { "/agenda-do-dia/nova": "404", "/pre-analises/nova": "404", "/pre-analises/painel": "404", "/agenda-do-dia": /\/minhas/, "/marketing": "404", "/painel": "404", "/ao-vivo": "404", "/revisao": "404", "/imoveis": "404", "/clientes": "404", "/relatorios": "404", "/config/usuarios": "404", "/config/motivos": "404", "/admin/google": "404", "/admin/configuracoes": "404", "/admin/sincronizacao": "404", "/config/auditoria": "404" },
   },
   "pré-atendimento": {
     email: "jasmin@e2e.test",
     home: /\/pre-analises/,
-    rules: Object.fromEntries(ROUTES.filter((r) => !["/pre-analises", "/pre-analises/nova", "/agenda-do-dia", "/conta/senha", "/pre-analises/painel"].includes(r)).map((r) => [r, /\/pre-analises$/])),
+    rules: Object.fromEntries(ROUTES.filter((r) => !["/pre-analises", "/pre-analises/nova", "/agenda-do-dia", "/agenda-do-dia/nova", "/conta/senha", "/pre-analises/painel"].includes(r)).map((r) => [r, /\/pre-analises$/])),
   },
   marketing: {
     email: "mkt@e2e.test",

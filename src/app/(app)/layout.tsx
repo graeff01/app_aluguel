@@ -136,6 +136,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/pre-analises", label: "Pré-análises", icon: "clients", badge: preOpen },
     { href: "/pre-analises/nova", label: "Nova", icon: "plus" },
     { href: "/agenda-do-dia", label: "Visitas", icon: "today" },
+    { href: "/agenda-do-dia/nova", label: "Agendar", icon: "plus" },
   ];
   // marketing: só as locações para postar
   const marketingNav: NavItem[] = [{ href: "/marketing", label: "Para postar", icon: "home", badge: toPost }];

@@ -7,6 +7,8 @@ import { confirmVisitClientAsDistinct, linkVisitToClient, mergeClients } from "@
 import { updateOpportunity, transferOpportunity } from "@/server/opportunities";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
 import { createVisitEventInGoogle, rescheduleVisit } from "@/server/reschedule";
+import { cancelOldEvent } from "@/server/google-write";
+import { createStaffVisit } from "@/server/staff-visit";
 import { setPresence } from "@/server/presence";
 import { followUpAction } from "@/server/followups";
 import { refreshPropertyNow } from "@/server/property-preview";
@@ -64,7 +66,13 @@ export async function createVisitAction(_: ActionState, fd: FormData): Promise<A
 }
 
 export async function assignVisitAction(_: ActionState, fd: FormData) {
-  return done(await runAction((a) => assignVisit(a, str(fd, "visitId"), str(fd, "consultantId"), str(fd, "note")).then(() => "Atribuição salva.")));
+  return done(
+    await runAction((a) =>
+      assignVisit(a, str(fd, "visitId"), str(fd, "consultantId"), str(fd, "note")).then((g) =>
+        g === "updated" ? "Atribuição salva. A consultora foi convidada no evento da agenda." : g === "not_owner" ? "Atribuição salva. O evento é de outra pessoa: convide a consultora na agenda." : "Atribuição salva.",
+      ),
+    ),
+  );
 }
 export async function excludeVisitAction(_: ActionState, fd: FormData) {
   return done(await runAction((a) => setVisitExcluded(a, str(fd, "visitId"), str(fd, "excluded") === "1", str(fd, "note")).then(() => "Atualizado.")));
@@ -156,6 +164,11 @@ export async function rescheduleAction(_: ActionState, fd: FormData): Promise<Ac
     }
     // o app já cria o evento na agenda (se tiver permissão); senão a tela oferece o botão
     const g = await createVisitEventInGoogle(a, v.id).catch(() => "error" as const);
+    // remarcada: o evento antigo sai da agenda (o novo já foi criado) — nada de dois eventos para a mesma visita
+    if (g === "created" && v.rescheduledFromId) {
+      const old = await db.visit.findUnique({ where: { id: v.rescheduledFromId }, select: { status: true } });
+      if (old?.status === "RESCHEDULED") await cancelOldEvent(v.rescheduledFromId).catch(() => undefined);
+    }
     target = `/visitas/${v.id}/agenda?${v.assignmentNote === "REAGENDADA" ? "remarcada" : "nova"}=1&google=${g}`;
   });
   if (s.ok && target) redirect(target);
@@ -200,5 +213,31 @@ export async function undoCancelAction(undoId: string): Promise<ActionState> {
     return `Cancelamento desfeito${r.count > 1 ? ` (${r.count} imóveis)` : ""}. A consultora foi avisada. ${GOOGLE_UNDO_TEXT[r.google] ?? ""}`.trim();
   });
   if (s.ok) revalidatePath("/agenda-do-dia");
+  return s;
+}
+
+/** Pré-atendimento agenda a visita pelo app (o evento vai para a agenda Google já no padrão). */
+export async function createStaffVisitAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  let target = "";
+  const s = await runAction(async (a) => {
+    const r = await createStaffVisit(a, {
+      requestId: str(fd, "requestId"),
+      clientName: str(fd, "clientName"),
+      externalRef: str(fd, "externalRef"),
+      phoneRaw: str(fd, "phoneRaw"),
+      propertyCodes: str(fd, "propertyCodes"),
+      consultantId: str(fd, "consultantId"),
+      scheduledStart: `${str(fd, "date")}T${str(fd, "time")}`,
+      durationMinutes: Number(str(fd, "duration")) || 60,
+      note: str(fd, "note"),
+      allowOverlap: str(fd, "allowOverlap") === "1",
+    });
+    target = `/agenda-do-dia?dia=${str(fd, "date")}&criada=${r.visit.id}&g=${r.google}`;
+    return "Visita criada.";
+  });
+  if (s.ok && target) {
+    revalidatePath("/agenda-do-dia");
+    redirect(target);
+  }
   return s;
 }

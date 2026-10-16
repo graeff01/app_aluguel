@@ -277,6 +277,7 @@ export const ISSUE_LABEL: Record<ParseIssue, string> = {
 export const ASSIGNMENT_NOTE_LABEL: Record<string, string> = {
   NENHUMA_CONSULTORA: "Nenhuma consultora reconhecida entre os convidados",
   QUEM_AGENDOU: "Consultora que criou o evento na agenda",
+  PRE_ATENDIMENTO: "Agendada pelo pré-atendimento no app",
   MAIS_DE_UMA: "Mais de uma consultora entre os convidados",
   CONVIDADOS_INACESSIVEIS: "Lista de convidados inacessível",
   CORRECAO_MANUAL: "Atribuição corrigida manualmente",

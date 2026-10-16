@@ -404,3 +404,80 @@ describe("mensagens prontas de depois da visita", () => {
     expect(afterVisitLink(s, { ...base, phoneNormalized: null, status: "DONE", evaluation: "POSITIVE" })).toBeNull();
   });
 });
+
+// ───────────────────────── Jasmin agenda pelo app + edições vão para o Google ─────────────────────────
+describe("agenda nos dois sentidos", () => {
+  const ready = async () => {
+    await makeConnection("central@exemplo.test");
+    await db.appSettings.update({ where: { id: 1 }, data: { calendarCcEmails: "" } });
+    const api = new MockCalendar();
+    const sync = () => runSync({ api, now: NOW, sleep: async () => {} });
+    return { api, sync };
+  };
+  const input = (o: Record<string, unknown> = {}) => ({ requestId: `staff-${++seq}`, clientName: "Ana Souza", externalRef: "2864969", phoneRaw: "51 9348-4750", propertyCodes: "111111;222222", consultantId: u.a.id, scheduledStart: toLocalInput(new Date("2026-10-15T17:00:00Z")), durationMinutes: 60, ...o });
+
+  it("Jasmin agenda: visita + imóveis + evento no padrão; sincronização liga sem duplicar", async () => {
+    const { createStaffVisit } = await import("@/server/staff-visit");
+    const { api, sync } = await ready();
+    await expect(createStaffVisit(u.a, input(), NOW, { calendarApi: api })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(createStaffVisit(jasmin, input({ clientName: "", propertyCodes: "" }), NOW, { calendarApi: api })).rejects.toMatchObject({ code: "VALIDATION", details: { clientName: expect.any(String), propertyCodes: expect.any(String) } });
+    const i = input();
+    const r = await createStaffVisit(jasmin, i, NOW, { calendarApi: api });
+    expect(r.google).toBe("created");
+    expect((await createStaffVisit(jasmin, i, NOW, { calendarApi: api })).visit.id).toBe(r.visit.id); // toque duplo
+    const ev = (await api.getEvent("central@exemplo.test", "app-1"))!;
+    expect(ev.summary).toBe("Visita clt - Ana Souza 2864969 - cod 111111;222222 - 51 9348-4750");
+    expect((ev.attendees ?? []).map((a) => a.email)).toContain("consultora.a@exemplo.test");
+    await sync();
+    const all = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
+    expect(all.map((v) => [v.propertyCode, v.consultantId === u.a.id, v.phoneNormalized, v.externalRef])).toEqual([
+      ["111111", true, "+5551993484750", "2864969"],
+      ["222222", true, "+5551993484750", "2864969"],
+    ]);
+    expect(all[0].sourceEventId).not.toBeNull();
+    // título lido de volta igual ao que o app escreveu: nada de conflito nem cartão extra
+    expect(all.every((v) => v.syncConflict === "NONE")).toBe(true);
+  });
+
+  it("horário corrigido no app move o evento (também visita vinda da agenda); acompanhante não muda sozinha", async () => {
+    const { correctVisitData } = await import("@/server/visits");
+    const { api, sync } = await ready();
+    api.put(visitEvent("g1", { start: "2026-10-15T13:00:00Z", title: "Visita clt - Cliente Exemplo 1234567 - cod 111111;222222 - 51 99876-5432", organizer: "central@exemplo.test" }));
+    await sync();
+    const [main, comp] = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
+    await expect(correctVisitData(u.manager, comp.id, { expectedVersion: comp.version, scheduledStart: toLocalInput(new Date("2026-10-15T18:00:00Z")) }, { calendarApi: api })).rejects.toMatchObject({ code: "VALIDATION" });
+    await correctVisitData(u.manager, main.id, { expectedVersion: main.version, scheduledStart: toLocalInput(new Date("2026-10-15T18:00:00Z")), scheduledEnd: toLocalInput(new Date("2026-10-15T19:00:00Z")) }, { calendarApi: api });
+    expect((await api.getEvent("central@exemplo.test", "g1"))?.start?.dateTime).toBe("2026-10-15T18:00:00.000Z");
+    await sync();
+    const after = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
+    expect(after.map((v) => v.scheduledStart.toISOString())).toEqual(["2026-10-15T18:00:00.000Z", "2026-10-15T18:00:00.000Z"]); // a acompanhante segue o evento
+    expect(after.every((v) => v.syncConflict === "NONE")).toBe(true);
+  });
+
+  it("evento de outra pessoa: o horário não muda e o app avisa", async () => {
+    const { correctVisitData } = await import("@/server/visits");
+    const { api, sync } = await ready();
+    api.put(visitEvent("g2", { start: "2026-10-15T13:00:00Z", organizer: "consultora.a@exemplo.test" }));
+    await sync();
+    const v = await db.visit.findFirstOrThrow();
+    await expect(correctVisitData(u.manager, v.id, { expectedVersion: v.version, scheduledStart: toLocalInput(new Date("2026-10-15T18:00:00Z")), scheduledEnd: toLocalInput(new Date("2026-10-15T19:00:00Z")) }, { calendarApi: api })).rejects.toMatchObject({ code: "INVALID_STATE" });
+    expect((await db.visit.findUniqueOrThrow({ where: { id: v.id } })).scheduledStart.toISOString()).toBe("2026-10-15T13:00:00.000Z");
+  });
+
+  it("gestão troca a consultora: o convite muda no evento; remarcar tira o evento antigo", async () => {
+    const { assignVisit } = await import("@/server/visits");
+    const { cancelOldEvent } = await import("@/server/google-write");
+    const { api, sync } = await ready();
+    api.put(visitEvent("g3", { start: "2026-10-15T13:00:00Z", organizer: "central@exemplo.test" }));
+    await sync();
+    const v = await db.visit.findFirstOrThrow();
+    expect(await assignVisit(u.manager, v.id, u.b.id, "troca", { calendarApi: api })).toBe("updated");
+    const emails = ((await api.getEvent("central@exemplo.test", "g3"))?.attendees ?? []).map((a) => a.email);
+    expect(emails).toContain("consultora.b@exemplo.test");
+    expect(emails).not.toContain("consultora.a@exemplo.test");
+    await sync();
+    expect((await db.visit.findUniqueOrThrow({ where: { id: v.id } })).consultantId).toBe(u.b.id); // atribuição manual mantida
+    expect(await cancelOldEvent(v.id, api)).toBe("canceled");
+    expect((await api.getEvent("central@exemplo.test", "g3"))?.status).toBe("cancelled");
+  });
+});

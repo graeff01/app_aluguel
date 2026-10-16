@@ -10,6 +10,8 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { db } from "@/lib/db";
 import { CancelVisit } from "./cancel";
 import { UndoCancel } from "./undo-cancel";
+import { calendarLinkFor } from "@/server/reschedule";
+import { LinkButton } from "@/components/ui";
 
 export const metadata = { title: "Agenda" };
 
@@ -46,7 +48,7 @@ const prevMonth = (k: string) => {
 const dayTitle = (k: string) => new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", timeZone: "UTC" }).format(new Date(`${k}T12:00:00Z`));
 const monthTitle = (k: string) => new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${k}T12:00:00Z`));
 
-export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ dia?: string; vista?: string; ref?: string; cancelado?: string; n?: string; g?: string }> }) {
+export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ dia?: string; vista?: string; ref?: string; cancelado?: string; n?: string; g?: string; criada?: string }> }) {
   const actor = await requireActor({ preService: true });
   if (!isPreService(actor) && !hasGlobalView(actor)) redirect("/minhas");
   const sp = await searchParams;
@@ -61,6 +63,30 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const keep = new URLSearchParams(Object.entries({ dia: sp.dia, vista: sp.vista, ref: sp.ref }).filter((e): e is [string, string] => !!e[1]));
   const back = `/agenda-do-dia${keep.size ? `?${keep}` : ""}`;
   const undo = sp.cancelado && /^[a-z0-9]{20,40}$/.test(sp.cancelado) ? <UndoCancel key={sp.cancelado} undoId={sp.cancelado} count={Number(sp.n) || 1} google={sp.g ?? ""} back={back} /> : null;
+  // acabou de agendar pelo app: confirmação (e o botão do Google, se o app não conseguiu criar o evento)
+  let created: React.ReactNode = null;
+  if (sp.criada && /^[a-z0-9]{20,40}$/.test(sp.criada)) {
+    const nv = await db.visit.findUnique({ where: { id: sp.criada }, select: { id: true, scheduledStart: true, googleCreatedAt: true, consultant: { select: { name: true } } } });
+    if (nv) {
+      const link = nv.googleCreatedAt ? null : await calendarLinkFor(actor, nv.id).catch(() => null);
+      created = (
+        <div role="status" className="mb-5 rounded-2xl bg-good-soft px-4 py-3 text-[14px] text-good">
+          <p className="font-semibold">
+            ✓ Visita criada para {nv.consultant?.name.split(" ")[0] ?? "a consultora"} · {fmt.shortDate(nv.scheduledStart)} às {fmt.time(nv.scheduledStart)}.
+            {nv.googleCreatedAt ? " Evento criado na agenda Google e convite enviado." : ""}
+          </p>
+          {link && (
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-ink-2">
+              {sp.g === "error" ? "Não consegui criar o evento no Google agora." : "O app ainda não tem permissão para criar na agenda."}
+              <a href={link.url} target="_blank" rel="noopener noreferrer" className="press inline-flex min-h-10 items-center rounded-full bg-primary px-4 text-[13px] font-semibold text-on-primary">
+                Colocar na agenda Google
+              </a>
+            </p>
+          )}
+        </div>
+      );
+    }
+  }
   const status = (v: Row) => {
     if (v.status !== "SCHEDULED") return v.evaluation ? EVALUATION_LABEL[v.evaluation] : STATUS_LABEL[v.status];
     if (v.scheduledStart <= now && v.scheduledEnd > now) return "Em andamento";
@@ -125,8 +151,9 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     track(a.groups.flatMap((g) => g.items));
     return (
       <div className="mx-auto max-w-3xl">
-        <PageHeader eyebrow={fmt.longDate(new Date(day + "T15:00:00Z"))} title={day === today ? "Visitas de hoje" : day === tomorrow ? "Visitas de amanhã" : "Visitas do dia"} subtitle={<AutoRefresh seconds={60} />} />
+        <PageHeader eyebrow={fmt.longDate(new Date(day + "T15:00:00Z"))} title={day === today ? "Visitas de hoje" : day === tomorrow ? "Visitas de amanhã" : "Visitas do dia"} subtitle={<AutoRefresh seconds={60} />} action={<LinkButton href="/agenda-do-dia/nova">+ Nova visita</LinkButton>} />
         {tabs}
+        {created}
         {undo}
         {a.unassigned > 0 && (
           <p role="alert" className="mb-5 rounded-2xl border border-bad/20 bg-bad-soft px-4 py-3 text-sm font-semibold text-bad">
@@ -166,8 +193,9 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   );
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader eyebrow={view === "semana" ? "Visitas da semana" : "Visitas do mês"} title={title} subtitle={<AutoRefresh seconds={60} />} />
+      <PageHeader eyebrow={view === "semana" ? "Visitas da semana" : "Visitas do mês"} title={title} subtitle={<AutoRefresh seconds={60} />} action={<LinkButton href="/agenda-do-dia/nova">+ Nova visita</LinkButton>} />
       {tabs}
+      {created}
       {undo}
       <div className="mb-5 flex flex-wrap items-center gap-2">
         {nav(`/agenda-do-dia?vista=${view}&ref=${prev}`, "←", view === "semana" ? "Semana anterior" : "Mês anterior")}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { canEditInGoogle } from "@/server/google-write";
 import { notFound } from "next/navigation";
 import { requireActor, orNotFound } from "@/lib/require";
 import { getVisitDetail } from "@/server/queries";
@@ -38,7 +39,7 @@ export default async function CorrectPage({ params, searchParams }: { params: Pr
         visitId={visit.id}
         version={visit.version}
         back={voltar === "registrar" ? "registrar" : ""}
-        manual={visit.origin === "MANUAL"}
+        manual={!visit.companionOfId && (visit.origin === "MANUAL" || (await canEditInGoogle(visit.id)))}
         initial={{
           clientName: visit.clientName ?? "",
           phoneRaw: visit.phoneRaw ?? "",

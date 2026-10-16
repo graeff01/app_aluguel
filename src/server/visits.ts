@@ -28,6 +28,7 @@ import { log } from "@/lib/log";
 import { removeCodeFromTitle } from "@/lib/parser";
 import type { CalendarApi } from "./sync/types";
 import { authorizedClient, canEditEvents, realCalendarApi } from "./sync/google";
+import { canEditInGoogle, pushVisitChange } from "./google-write";
 import { addDays, dateOnlyFromKey, dayKey, fromLocalInput } from "@/lib/time";
 import { resolveClient, cleanupOrphanClient } from "./clients";
 import { applyDoneVisit, detachVisitFromOpportunity } from "./opportunities";
@@ -361,10 +362,13 @@ export const correctionSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
-export async function correctVisitData(actor: AuthzActor, visitId: string, input: z.input<typeof correctionSchema>) {
+export async function correctVisitData(actor: AuthzActor, visitId: string, input: z.input<typeof correctionSchema>, opts: { calendarApi?: CalendarApi } = {}) {
   const data = correctionSchema.parse(input);
   const settings = await getSettings();
-  return db.$transaction(async (tx) => {
+  // visita da agenda: o horário pode mudar pelo app quando o app consegue mudar o mesmo evento no Google
+  const googleEditable = (data.scheduledStart || data.scheduledEnd) && (opts.calendarApi ? true : await canEditInGoogle(visitId));
+  const before = await db.visit.findUnique({ where: { id: visitId }, select: { scheduledStart: true, scheduledEnd: true, origin: true, sourceEventId: true, companionOfId: true, clientName: true, phoneRaw: true, propertyCode: true } });
+  const result = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Visit" WHERE id = ${visitId} FOR UPDATE`;
     const visit = await tx.visit.findUnique({ where: { id: visitId } });
     if (!visit || !canViewVisit(actor, visit)) throw notFound();
@@ -389,7 +393,8 @@ export async function correctVisitData(actor: AuthzActor, visitId: string, input
       manual.add("propertyCode");
     }
     if (data.scheduledStart || data.scheduledEnd) {
-      if (visit.origin !== "MANUAL") throw new AppError("VALIDATION", "O horário de visitas importadas vem da agenda Google. Corrija o evento na agenda.");
+      if (visit.origin !== "MANUAL" && !googleEditable) throw new AppError("VALIDATION", "O horário de visitas importadas vem da agenda Google. Corrija o evento na agenda.");
+      if (visit.companionOfId) throw new AppError("VALIDATION", "Os imóveis desta visita são no mesmo horário: mude o horário na visita principal.", { scheduledStart: "Mude na visita principal." });
       const start = data.scheduledStart ? fromLocalInput(data.scheduledStart) : visit.scheduledStart;
       const end = data.scheduledEnd ? fromLocalInput(data.scheduledEnd) : visit.scheduledEnd;
       if (!start || !end || end < start) throw new AppError("VALIDATION", "Horário inválido.", { scheduledEnd: "O fim deve ser após o início." });
@@ -428,12 +433,32 @@ export async function correctVisitData(actor: AuthzActor, visitId: string, input
     await applyDoneVisit(tx, visit.id, actor.id);
     return tx.visit.findUniqueOrThrow({ where: { id: visit.id } });
   });
+  // leva a correção para o mesmo evento na agenda Google
+  const changed = result && before && (result.scheduledStart.getTime() !== before.scheduledStart.getTime() || result.scheduledEnd.getTime() !== before.scheduledEnd.getTime());
+  const titleFields = !!result && !!before && (result.clientName !== before.clientName || result.phoneRaw !== before.phoneRaw || result.propertyCode !== before.propertyCode);
+  if (result && (changed || titleFields)) {
+    const g = await pushVisitChange(visitId, { time: !!changed, title: titleFields }, opts.calendarApi);
+    if (changed && before && before.origin !== "MANUAL" && g !== "updated") {
+      // não ficou igual no Google: volta o horário (senão a sincronização desfaria sozinha)
+      await db.visit.update({ where: { id: visitId }, data: { scheduledStart: before.scheduledStart, scheduledEnd: before.scheduledEnd } });
+      throw new AppError("INVALID_STATE", g === "not_owner" ? "O evento é da consultora: mude o horário na agenda dela." : "Não consegui mudar o horário no Google agora. Tente de novo ou mude na agenda.");
+    }
+    return Object.assign(result, { google: g });
+  }
+  return result;
 }
 
 // ─────────────── Atribuição ───────────────
 
-export async function assignVisit(actor: AuthzActor, visitId: string, consultantId: string, note: string) {
+export async function assignVisit(actor: AuthzActor, visitId: string, consultantId: string, note: string, opts: { calendarApi?: CalendarApi } = {}) {
   assert(canAssignVisit(actor));
+  const previous = await assignVisitInDb(actor, visitId, consultantId, note);
+  // a nova consultora entra como convidada no evento (e a anterior sai)
+  if (previous !== consultantId) return pushVisitChange(visitId, { consultant: { from: previous, to: consultantId } }, opts.calendarApi);
+  return "updated" as const;
+}
+
+async function assignVisitInDb(actor: AuthzActor, visitId: string, consultantId: string, note: string) {
   return db.$transaction(async (tx) => {
     const visit = await tx.visit.findUnique({ where: { id: visitId } });
     if (!visit) throw notFound();
@@ -458,6 +483,7 @@ export async function assignVisit(actor: AuthzActor, visitId: string, consultant
       entityId: visitId,
       changes: { de: visit.consultantId, para: consultantId, observacao: note || null },
     });
+    return visit.consultantId;
   });
 }
 

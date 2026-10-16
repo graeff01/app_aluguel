@@ -197,6 +197,31 @@ export function realCalendarApi(auth: OAuth2Client): CalendarApi {
         throw mapGoogleError(e);
       }
     },
+    async patchEvent(calendarId, eventId, patch) {
+      try {
+        const ev = (await api.events.get({ calendarId, eventId })).data;
+        if (ev.status === "cancelled") return "gone";
+        const own = !ev.organizer?.email || ev.organizer.self === true || ev.organizer.email.toLowerCase() === calendarId.toLowerCase();
+        if (!own) return "not_owner";
+        const body: calendar_v3.Schema$Event = {};
+        if (patch.summary !== undefined) body.summary = patch.summary;
+        if (patch.location !== undefined) body.location = patch.location;
+        if (patch.start) body.start = { dateTime: patch.start.toISOString(), timeZone: "America/Sao_Paulo" };
+        if (patch.end) body.end = { dateTime: patch.end.toISOString(), timeZone: "America/Sao_Paulo" };
+        if (patch.swapAttendees) {
+          const remove = new Set(patch.swapAttendees.remove.map((e) => e.toLowerCase()));
+          const kept = (ev.attendees ?? []).filter((a) => !a.email || !remove.has(a.email.toLowerCase()));
+          const have = new Set(kept.map((a) => a.email?.toLowerCase()));
+          body.attendees = [...kept, ...patch.swapAttendees.add.filter((e) => !have.has(e.toLowerCase())).map((email) => ({ email }))];
+        }
+        await api.events.patch({ calendarId, eventId, sendUpdates: "all", requestBody: body });
+        return "updated";
+      } catch (e) {
+        const m = mapGoogleError(e);
+        if (m.kind === "NOT_FOUND" || m.status === 410) return "gone";
+        throw m;
+      }
+    },
     async restoreEvent(calendarId, eventId) {
       try {
         await api.events.patch({ calendarId, eventId, sendUpdates: "all", requestBody: { status: "confirmed" } });
