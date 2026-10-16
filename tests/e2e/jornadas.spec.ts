@@ -216,6 +216,7 @@ test("jornada marketing (celular): recebe a locação, copia o resumo e marca co
   expect(copied).toContain("Imóvel 00901");
   expect(copied).not.toContain("Cliente Fecha"); // marketing não recebe dado do cliente
   await card.getByRole("button", { name: "Marcar como postado" }).click();
+  await expect(page.locator("li", { hasText: "Imóvel 00901" })).toHaveCount(0); // saiu de "Para postar"
   await go(page, J, "/marketing?aba=postadas");
   await expect(page.getByText("Imóvel 00901")).toBeVisible();
   await page.goto("/pre-analises");
