@@ -6,7 +6,7 @@ import { normalizePhone } from "@/lib/phone";
 import { classifyTitle, DEFAULT_PATTERNS, parseVisitEvent, removeCodeFromTitle } from "@/lib/parser";
 import { assignmentQueue, createPreAnalysis, runPreAnalysisRetention } from "@/server/pre-analysis";
 import { addPreAnalysisFiles, readFiles, readPreAnalysisFile, MAX_FILE_BYTES } from "@/server/pre-analysis-files";
-import { cancelVisitByStaff, concludeVisit, createManualVisit } from "@/server/visits";
+import { cancelVisitByStaff, concludeVisit, createManualVisit, setCancelReason } from "@/server/visits";
 import { markLeasePosted, updateOpportunity } from "@/server/opportunities";
 import { rangeAgenda } from "@/server/day-agenda";
 import { runSync } from "@/server/sync/engine";
@@ -554,5 +554,43 @@ describe("fluxo pós-visita", () => {
     const again: string[] = [];
     await sendOperationalAlerts(new Date(NOW.getTime() + 60_000), { send: async (_t, p) => (again.push(p.title), "ok"), email: null });
     expect(again.filter((t) => /parado/.test(t))).toEqual([]);
+  });
+});
+
+describe("motivo depois do cancelamento (caso Antonio, 16/10)", () => {
+  it("imóveis retirados pela agenda e 'cliente cancelou' da consultora: o pré-atendimento informa o motivo depois", async () => {
+    await makeConnection("central@exemplo.test");
+    const api = new MockCalendar();
+    const ev = (codes: string) => visitEvent("ant", { start: "2026-10-13T12:00:00Z", title: `Visita clt - Antonio Exemplo 2930024 - cod ${codes} - 51 99361-8788`, organizer: "central@exemplo.test" });
+    api.put(ev("111111;222222;333333;444444"));
+    const sync = () => runSync({ api, now: new Date("2026-10-13T10:00:00Z"), sleep: async () => {} });
+    await sync();
+    // Jasmin tira dois códigos do título: esses dois são cancelados pela sincronização, sem motivo da lista
+    api.put(ev("111111;333333"));
+    await sync();
+    const byCode = (c: string) => db.visit.findFirstOrThrow({ where: { propertyCode: c }, include: { concludedBy: true } });
+    const gone = await byCode("222222");
+    expect(gone).toMatchObject({ status: "CANCELED", autoCanceled: true, cancelReasonId: null, concludedById: null });
+    // a consultora registra "cliente cancelou" (vale para os dois imóveis restantes)
+    const main = await byCode("111111");
+    await concludeVisit(u.a, main.id, { requestId: "antonio-cancelou-1", expectedVersion: main.version, status: "CANCELED", note: "Cliente cancelou a visita.", applyToSameVisit: true }, NOW);
+    expect((await byCode("333333")).status).toBe("CANCELED");
+
+    const r = await cancelReason();
+    await expect(setCancelReason(u.a, main.id, { reasonId: r.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(setCancelReason(jasmin, main.id, { reasonId: (await cancelReason("Outro")).id })).rejects.toMatchObject({ code: "VALIDATION" });
+    // um motivo vale para os imóveis cancelados juntos; o texto da consultora é mantido
+    expect(await setCancelReason(jasmin, main.id, { reasonId: r.id })).toEqual({ count: 2 });
+    for (const c of ["111111", "333333"]) expect(await byCode(c)).toMatchObject({ cancelReasonId: r.id, note: "Cliente desistiu — Cliente cancelou a visita." });
+    expect((await byCode("222222")).cancelReasonId).toBeNull();
+    await expect(setCancelReason(jasmin, main.id, { reasonId: r.id })).rejects.toMatchObject({ code: "INVALID_STATE" });
+    // imóveis retirados pela agenda: motivo separado (cancelados em outro momento)
+    expect(await setCancelReason(jasmin, gone.id, { reasonId: r.id, note: "não quis mais esses" })).toEqual({ count: 2 });
+    expect((await byCode("444444")).note).toBe("Cliente desistiu — não quis mais esses — Imóvel retirado do evento na agenda Google");
+    // visita agendada não aceita
+    const open = await visit("2026-10-15T15:00:00Z", "555555");
+    await expect(setCancelReason(jasmin, open.id, { reasonId: r.id })).rejects.toMatchObject({ code: "INVALID_STATE" });
+    const hist = await db.visitOutcomeHistory.findMany({ where: { visitId: main.id }, orderBy: { createdAt: "asc" } });
+    expect(hist.at(-1)).toMatchObject({ authorId: jasmin.id, note: "Motivo informado: Cliente desistiu — Cliente cancelou a visita." });
   });
 });

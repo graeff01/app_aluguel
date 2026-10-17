@@ -8,7 +8,7 @@ import { EVALUATION_LABEL, STATUS_LABEL } from "@/lib/labels";
 import { PageHeader, Segmented, cx } from "@/components/ui";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { db } from "@/lib/db";
-import { CancelVisit } from "./cancel";
+import { CancelReason, CancelVisit } from "./cancel";
 import { UndoCancel } from "./undo-cancel";
 import { calendarLinkFor } from "@/server/reschedule";
 import { LinkButton } from "@/components/ui";
@@ -28,6 +28,9 @@ type Row = {
   rescheduledFromId: string | null;
   companionOfId: string | null;
   cancelReason: { label: string } | null;
+  note: string | null;
+  autoCanceled: boolean;
+  concludedBy: { name: string } | null;
   consultant?: { name: string } | null;
   property: { neighborhood: string | null } | null;
 };
@@ -116,6 +119,18 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         {v.status === "SCHEDULED" && v.confirmStatus === "NO_REPLY" && <span className="text-warn">sem resposta</span>}
         {v.status === "CANCELED" && v.cancelReason && <span className="font-normal text-ink-3">{v.cancelReason.label}</span>}
       </span>
+      {v.status === "CANCELED" && (
+        <span className="basis-full text-[12px] text-ink-3">
+          {/* quem cancelou: pela agenda Google (sincronização) ou alguém no app */}
+          Cancelada {v.concludedBy ? `por ${v.concludedBy.name.split(" ")[0]}` : v.autoCanceled ? "pela agenda Google" : ""}
+          {v.note && v.note !== v.cancelReason?.label ? `: ${v.note}` : ""}
+        </span>
+      )}
+      {v.status === "CANCELED" && !v.cancelReason && (
+        <span className="basis-full sm:basis-auto">
+          <CancelReason visitId={v.id} reasons={cancelReasons} />
+        </span>
+      )}
       {v.status === "SCHEDULED" && v.scheduledEnd > now && (
         <span className="basis-full sm:basis-auto">
           <CancelVisit

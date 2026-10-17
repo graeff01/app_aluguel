@@ -58,5 +58,8 @@ await createManualVisit(admin, { requestId: "e2e-seed-cancel", scheduledStart: t
   // locação para a gestora fechar e o marketing postar
   const fecha = await createManualVisit(admin, { requestId: "e2e-jornada-fecha", scheduledStart: ago(48), clientName: "Cliente Fecha", phoneRaw: "(51) 99876-0901", propertyCode: "00901", consultantId: b.id });
   await concludeVisit(admin, fecha.id, { requestId: "e2e-jornada-fecha-done", expectedVersion: 1, status: "DONE", evaluation: "POSITIVE", note: "Gostou, vai mandar os documentos." });
+  // negócio da Consultora A: ela muda a etapa pelo celular
+  const cel = await createManualVisit(admin, { requestId: "e2e-jornada-celular", scheduledStart: ago(30), clientName: "Cliente Celular", phoneRaw: "(51) 99876-0902", propertyCode: "00902", consultantId: a.id });
+  await concludeVisit(admin, cel.id, { requestId: "e2e-jornada-celular-done", expectedVersion: 1, status: "DONE", evaluation: "POSITIVE", note: "Quer fazer proposta." });
   await db.$disconnect();
 }

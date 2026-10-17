@@ -193,6 +193,16 @@ test("jornada consultora (celular): responde a pré-análise, anexa documento, a
   await go(page, J, "/minhas");
   await expect(page.getByRole("link", { name: /Registrar resultado: Cliente Grupo/ })).toHaveCount(0);
   await go(page, J, "/rota");
+  // negócios: no celular ela também muda a etapa
+  await go(page, J, "/minhas");
+  await page.getByRole("link", { name: /Negócios em andamento/ }).click();
+  await page.getByRole("link", { name: /Cliente Celular/ }).first().click();
+  await page.waitForLoadState("networkidle");
+  await page.getByLabel("Nova situação").selectOption({ label: "1. Em negociação" });
+  await page.getByLabel("Valor proposto (R$)").fill("1.800,00");
+  await page.getByLabel("Garantia pretendida").selectOption({ label: "Fiador" });
+  await page.getByRole("button", { name: "Salvar: Em negociação" }).click();
+  await expect(page.getByText("✓ Situação atualizada: Em negociação.")).toBeVisible();
   failed = false;
   } finally {
     await closePhone(ctx, page, failed, "consultora");

@@ -14,10 +14,11 @@ import { PushPrompt } from "@/components/push-toggle";
 import { PropertyThumb } from "@/components/property-preview";
 import { LockedRegisterButton } from "@/components/locked-register";
 import { InstallHint } from "@/components/install-hint";
-import { historyWhere } from "@/server/queries";
+import { historyWhere, listOpportunities } from "@/server/queries";
 import { db } from "@/lib/db";
 import { countOpenFor } from "@/server/pre-analysis";
-import { PreAnalysisCard, RouteCard } from "@/components/feature-cards";
+import { DealsCard, PreAnalysisCard, RouteCard } from "@/components/feature-cards";
+import { lastActivityOf } from "@/server/insights";
 import { ConfirmPresence } from "@/components/confirm-presence";
 import { AfterVisitMessage } from "@/components/after-visit-message";
 import { FollowUpButtons } from "@/components/follow-up-buttons";
@@ -138,6 +139,10 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
   const busca = sp.busca?.trim().slice(0, 80) ?? "";
   const { awaiting, upcoming, done, today } = await listMine(actor, now);
   const preOpen = team ? 0 : await countOpenFor(actor);
+  // negócios abertos da consultora (e quantos estão parados) para o atalho do Andamento
+  const openDeals = team ? [] : await listOpportunities(actor, { status: "OPEN" });
+  const staleDays = (await getSettings()).staleOpportunityDays;
+  const staleDeals = openDeals.filter((o) => Date.now() - Math.max(o.stageChangedAt.getTime(), lastActivityOf(o).getTime()) >= staleDays * 86400_000).length;
   const confirmTemplate = (await getSettings()).confirmMessage;
   const followUps = team ? [] : await dueFollowUps(actor.id, now);
   const results = busca
@@ -188,6 +193,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         <>
           <RouteCard stops={todayTotal} next={nextToday ? fmt.time(nextToday.scheduledStart) : null} delay={60} />
           <PreAnalysisCard open={preOpen} delay={140} />
+          <DealsCard open={openDeals.length} stale={staleDeals} delay={220} />
         </>
       )}
 

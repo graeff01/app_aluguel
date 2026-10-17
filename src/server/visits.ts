@@ -254,6 +254,34 @@ export async function cancelVisitByStaff(actor: AuthzActor, visitId: string, inp
   return { count: result.count, google, undoId: undo.id };
 }
 
+/**
+ * Visita já cancelada sem motivo da lista (a consultora marcou "cancelou" ou a agenda Google cancelou):
+ * o pré-atendimento/gestão informa o motivo. Vale também para os outros imóveis cancelados no mesmo momento.
+ */
+export async function setCancelReason(actor: AuthzActor, visitId: string, input: { reasonId: string; note?: string }) {
+  assert(isPreService(actor) || hasGlobalView(actor));
+  const reason = await db.reason.findUnique({ where: { id: input.reasonId } });
+  if (!reason || reason.kind !== "VISIT_CANCEL" || !reason.active) throw new AppError("VALIDATION", "Escolha o motivo do cancelamento.", { reasonId: "Escolha o motivo." });
+  const extra = (input.note ?? "").trim().slice(0, 500);
+  if (normalizeText(reason.label) === "outro" && !extra) throw new AppError("VALIDATION", "Descreva o motivo.", { note: "Obrigatório quando o motivo é Outro." });
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Visit" WHERE id = ${visitId} FOR UPDATE`;
+    const visit = await tx.visit.findUnique({ where: { id: visitId } });
+    if (!visit || visit.excluded) throw notFound();
+    if (visit.status !== "CANCELED") throw new AppError("INVALID_STATE", "Esta visita não está cancelada.");
+    if (visit.cancelReasonId) throw new AppError("INVALID_STATE", "Esta visita já tem motivo de cancelamento.");
+    const same = (await sameVisitGroup(tx, visit)).filter((s) => s.status === "CANCELED" && !s.cancelReasonId && s.concludedAt?.getTime() === visit.concludedAt?.getTime());
+    for (const v of [visit, ...same]) {
+      // mantém o que já estava escrito (ex.: "Cliente cancelou a visita.")
+      const note = [reason.label, extra, v.note && v.note !== reason.label ? v.note : ""].filter(Boolean).join(" — ").slice(0, 1000);
+      await tx.visit.update({ where: { id: v.id }, data: { cancelReasonId: reason.id, note, version: { increment: 1 } } });
+      await tx.visitOutcomeHistory.create({ data: { visitId: v.id, status: "CANCELED", note: `Motivo informado: ${note}`, authorId: actor.id } });
+      await audit(tx, { actorId: actor.id, action: "visit.cancel_reason_set", entityType: "Visit", entityId: v.id, changes: { motivo: reason.label } });
+    }
+    return { count: same.length + 1 };
+  });
+}
+
 /** Janela para desfazer um cancelamento do pré-atendimento. */
 export const CANCEL_UNDO_MS = 2 * 60_000;
 

@@ -79,3 +79,27 @@ export function PreAnalysisCard({ open, delay = 0 }: { open: number; delay?: num
     </Link>
   );
 }
+
+/** Negócios depois da visita (Andamento): a consultora atualiza a etapa também pelo celular. */
+export function DealsCard({ open, stale, delay = 0 }: { open: number; stale: number; delay?: number }) {
+  return (
+    <Link
+      href="/oportunidades"
+      className="fc-card press animate-rise mb-4 flex items-center gap-4 rounded-[24px] border border-line bg-surface px-4 py-4 shadow-card transition-shadow hover:shadow-float"
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-2xl bg-accent text-white">
+        <svg viewBox="0 0 40 40" className="size-8" fill="none">
+          <path d="M8 30V20M16 30V14M24 30V18M32 30V9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+        </svg>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[16px] font-bold tracking-[-0.01em]">Negócios em andamento</span>
+        <span className="block text-[13px] text-ink-3">
+          {open ? `${open} em aberto${stale ? ` · ${stale} parado${stale === 1 ? "" : "s"}` : ""} · mudar a etapa` : "Nenhum em aberto agora"}
+        </span>
+      </span>
+      <Icon name="arrow" className="fc-arrow size-5 shrink-0 text-ink-3" />
+    </Link>
+  );
+}

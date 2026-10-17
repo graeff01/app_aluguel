@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { runAction, str, type ActionState } from "@/lib/action";
-import { assignVisit, cancelVisitByStaff, correctVisitData, undoStaffCancel, createManualVisit, resolveConflict, setVisitExcluded, type ConflictAction } from "@/server/visits";
+import { assignVisit, cancelVisitByStaff, correctVisitData, setCancelReason, undoStaffCancel, createManualVisit, resolveConflict, setVisitExcluded, type ConflictAction } from "@/server/visits";
 import { confirmVisitClientAsDistinct, linkVisitToClient, mergeClients } from "@/server/clients";
 import { updateOpportunity, transferOpportunity } from "@/server/opportunities";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
@@ -205,6 +205,15 @@ export async function cancelVisitAction(_: ActionState, fd: FormData): Promise<A
     revalidatePath("/agenda-do-dia");
     redirect(target);
   }
+  return s;
+}
+
+export async function setCancelReasonAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const s = await runAction(async (a) => {
+    const r = await setCancelReason(a, str(fd, "visitId"), { reasonId: str(fd, "reasonId"), note: str(fd, "note") });
+    return `Motivo registrado${r.count > 1 ? ` (${r.count} imóveis)` : ""}.`;
+  });
+  if (s.ok) revalidatePath("/agenda-do-dia");
   return s;
 }
 
