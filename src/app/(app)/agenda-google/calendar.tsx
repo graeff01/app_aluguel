@@ -112,6 +112,19 @@ export function CalendarMirror(p: Props) {
   const colsRef = useRef<(HTMLDivElement | null)[]>([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [height, setHeight] = useState<number | null>(null);
+  // ocupa da posição dela até o fim da tela (no celular, acima da barra de navegação)
+  useEffect(() => {
+    const fit = () => {
+      const top = rootRef.current?.getBoundingClientRect().top ?? 0;
+      const bottomNav = window.innerWidth < 768 ? 84 : 0;
+      setHeight(Math.max(420, window.innerHeight - top - bottomNav));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
 
   // preferências salvas neste aparelho
   useEffect(() => {
@@ -362,7 +375,7 @@ export function CalendarMirror(p: Props) {
   })();
 
   return (
-    <div className="flex h-[calc(100dvh-57px-76px)] flex-col bg-surface text-ink md:h-[calc(100dvh-57px)]" onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+    <div ref={rootRef} className="isolate flex flex-col bg-surface text-ink" style={{ height: height ?? "calc(100dvh - 140px)" }} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
       {/* barra do topo */}
       <header className="flex shrink-0 items-center gap-2 border-b border-line px-2 py-2 sm:gap-3 sm:px-4">
         <button type="button" onClick={() => setSidebar((s) => (s === null ? window.innerWidth < 1024 : !s))} aria-label="Menu principal" className="grid size-10 place-items-center rounded-full hover:bg-tint">
@@ -419,10 +432,10 @@ export function CalendarMirror(p: Props) {
       )}
       {p.mirror.status === "ok" && !p.mirror.canWrite && <p className="mx-4 mt-3 rounded-2xl bg-accent-soft px-4 py-2.5 text-[13px] text-accent-strong">Só leitura: o app ainda não tem permissão para editar a agenda Google.</p>}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         {/* lateral */}
         {sidebar !== false && (
-          <aside className={`${sidebar === null ? "max-lg:hidden" : ""} w-64 shrink-0 overflow-y-auto border-r border-line px-3 py-3 max-lg:absolute max-lg:z-30 max-lg:h-[calc(100dvh-110px)] max-lg:bg-surface max-lg:shadow-float`}>
+          <aside className={`${sidebar === null ? "max-lg:hidden" : ""} w-64 shrink-0 overflow-y-auto border-r border-line px-3 py-3 max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-30 max-lg:bg-surface max-lg:shadow-float`}>
             <button type="button" onClick={openCreateDefault} disabled={!writable.length} className="mb-5 flex min-h-14 items-center gap-3 rounded-2xl bg-surface px-5 text-[15px] font-semibold shadow-[0_1px_3px_rgb(0_0_0/0.3),0_4px_8px_3px_rgb(0_0_0/0.15)] hover:bg-tint disabled:opacity-50">
               <svg viewBox="0 0 36 36" className="size-7" aria-hidden>
                 <path fill="#34A853" d="M16 16v14h4V20z" />
@@ -905,7 +918,7 @@ function Popover({ x, y, onClose, children }: { x: number; y: number; onClose: (
     const w = el.offsetWidth;
     const h = el.offsetHeight;
     const left = x + 16 + w < window.innerWidth ? x + 16 : Math.max(8, x - w - 16);
-    const top = Math.max(8, Math.min(y - 40, window.innerHeight - h - 8));
+    const top = Math.max(76, Math.min(y - 40, window.innerHeight - h - 8));
     setPos({ left, top });
   }, [x, y]);
   return (
