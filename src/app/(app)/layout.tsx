@@ -135,6 +135,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const preNav: NavItem[] = [
     { href: "/pre-analises", label: "Pré-análises", icon: "clients", badge: preOpen },
     { href: "/pre-analises/nova", label: "Nova", icon: "plus" },
+    { href: "/agenda-google", label: "Agenda Google", icon: "today" },
     { href: "/agenda-do-dia", label: "Visitas", icon: "today" },
     { href: "/agenda-do-dia/nova", label: "Agendar", icon: "plus" },
   ];
@@ -247,7 +248,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </header>
         {agendaBanner}
         {agentsBanner}
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-32 md:px-8 md:pt-9 md:pb-12">{children}</main>
+        {/* páginas de tela cheia (Agenda Google) usam toda a largura */}
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-32 has-[[data-full-bleed]]:max-w-none has-[[data-full-bleed]]:px-0 has-[[data-full-bleed]]:pt-0 has-[[data-full-bleed]]:pb-20 md:px-8 md:pt-9 md:pb-12 md:has-[[data-full-bleed]]:px-0 md:has-[[data-full-bleed]]:pt-0 md:has-[[data-full-bleed]]:pb-0">{children}</main>
       </div>
       <BottomNav items={preService ? preNav : marketing ? marketingNav : global ? managerBottom : consultantNav} />
       <Suspense>

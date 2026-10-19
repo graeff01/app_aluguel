@@ -197,7 +197,7 @@ export async function cancelVisitAction(_: ActionState, fd: FormData): Promise<A
   const s = await runAction(async (a) => {
     const r = await cancelVisitByStaff(a, str(fd, "visitId"), { reasonId: str(fd, "reasonId"), note: str(fd, "note"), onlyThis: str(fd, "scope") === "one" });
     // volta para a mesma tela (dia/semana/mês) com o resultado e o "Desfazer"
-    const back = str(fd, "back").startsWith("/agenda-do-dia") ? str(fd, "back") : "/agenda-do-dia";
+    const back = /^\/agenda-(do-dia|google)(\?|$)/.test(str(fd, "back")) ? str(fd, "back") : "/agenda-do-dia";
     target = `${back}${back.includes("?") ? "&" : "?"}cancelado=${r.undoId}&n=${r.count}&g=${r.google}`;
     return "Visita cancelada.";
   });
@@ -242,11 +242,13 @@ export async function createStaffVisitAction(_: ActionState, fd: FormData): Prom
       note: str(fd, "note"),
       allowOverlap: str(fd, "allowOverlap") === "1",
     });
-    target = `/agenda-do-dia?dia=${str(fd, "date")}&criada=${r.visit.id}&g=${r.google}`;
+    // veio da Agenda Google: volta para ela (no dia da visita)
+    target = str(fd, "volta") === "google" ? `/agenda-google?ref=${str(fd, "date")}&criada=${r.visit.id}&g=${r.google}` : `/agenda-do-dia?dia=${str(fd, "date")}&criada=${r.visit.id}&g=${r.google}`;
     return "Visita criada.";
   });
   if (s.ok && target) {
     revalidatePath("/agenda-do-dia");
+    revalidatePath("/agenda-google");
     redirect(target);
   }
   return s;

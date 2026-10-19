@@ -22,7 +22,7 @@ function readPasted(text: string) {
   };
 }
 
-export function StaffVisitForm({ consultants, today }: { consultants: Consultant[]; today: string }) {
+export function StaffVisitForm({ consultants, today, initial }: { consultants: Consultant[]; today: string; initial?: { date: string; time: string; duration: string; back: string } }) {
   const [chosen, setChosen] = useState("");
   const [pasted, setPasted] = useState("");
   const [filled, setFilled] = useState<string[] | null>(null);
@@ -48,6 +48,7 @@ export function StaffVisitForm({ consultants, today }: { consultants: Consultant
       {(st) => (
         <>
           <input type="hidden" name="requestId" value={requestId} />
+          {initial?.back && <input type="hidden" name="volta" value={initial.back} />}
           <details className="group mb-5 rounded-2xl border border-line bg-surface-2">
             <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 text-[14px] font-semibold">
               Colar a mensagem ou o título e preencher sozinho
@@ -77,14 +78,14 @@ export function StaffVisitForm({ consultants, today }: { consultants: Consultant
               <Input id="propertyCodes" name="propertyCodes" placeholder="339541;835840" autoComplete="off" required />
             </Field>
             <Field label="Dia" htmlFor="date">
-              <Input id="date" name="date" type="date" defaultValue={today} min={today} required />
+              <Input id="date" name="date" type="date" defaultValue={initial?.date ?? today} min={today} required />
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Horário" htmlFor="time" error={st.fieldErrors?.scheduledStart}>
-                <Input id="time" name="time" type="time" required />
+                <Input id="time" name="time" type="time" defaultValue={initial?.time || undefined} required />
               </Field>
               <Field label="Duração" htmlFor="duration">
-                <Select id="duration" name="duration" defaultValue="60">
+                <Select id="duration" name="duration" defaultValue={initial?.duration ?? "60"}>
                   {[30, 45, 60, 90, 120].map((m) => (
                     <option key={m} value={m}>
                       {m} min

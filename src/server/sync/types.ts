@@ -18,9 +18,13 @@ export type GEvent = {
   creator?: { email?: string | null } | null;
   attendees?: { email?: string | null; organizer?: boolean | null; resource?: boolean | null; responseStatus?: string | null; self?: boolean | null }[] | null;
   attendeesOmitted?: boolean | null;
+  /** cor do evento (paleta do Google, "1"–"11"); sem cor = cor da agenda */
+  colorId?: string | null;
+  /** endereço do evento no Google Agenda */
+  htmlLink?: string | null;
 };
 
-export type GCalendar = { id: string; summary: string; accessRole: string; primary?: boolean };
+export type GCalendar = { id: string; summary: string; accessRole: string; primary?: boolean; backgroundColor?: string | null; selected?: boolean };
 
 export type ListParams = {
   calendarId: string;
@@ -43,9 +47,9 @@ export interface CalendarApi {
   /** troca o título (só se a agenda for a organizadora): "updated", "not_owner" ou "already" (evento sumiu) */
   updateSummary(calendarId: string, eventId: string, summary: (current: string) => string): Promise<"updated" | "not_owner" | "already">;
   /** cria o evento da visita marcada no app (convidados recebem o convite); devolve o id do evento */
-  insertEvent(calendarId: string, ev: { summary: string; description: string; location?: string; start: Date; end: Date; attendees: string[] }): Promise<string>;
+  insertEvent(calendarId: string, ev: { summary: string; description: string; location?: string; start: Date; end: Date; attendees: string[]; allDay?: { startDay: string; endDay: string } }): Promise<string>;
   /** atualiza o evento (só se a agenda for a organizadora): horário, título, local e troca de convidada */
-  patchEvent(calendarId: string, eventId: string, patch: { summary?: string; start?: Date; end?: Date; location?: string; swapAttendees?: { remove: string[]; add: string[] } }): Promise<"updated" | "not_owner" | "gone">;
+  patchEvent(calendarId: string, eventId: string, patch: { summary?: string; description?: string; start?: Date; end?: Date; allDay?: { startDay: string; endDay: string }; location?: string; swapAttendees?: { remove: string[]; add: string[] } }): Promise<"updated" | "not_owner" | "gone">;
   /** desfazer: reabre um evento cancelado pelo app */
   restoreEvent(calendarId: string, eventId: string): Promise<"restored" | "gone">;
 }

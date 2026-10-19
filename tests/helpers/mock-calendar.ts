@@ -80,7 +80,7 @@ export class MockCalendar implements CalendarApi {
   }
 
   patched: { id: string; patch: Record<string, unknown> }[] = [];
-  async patchEvent(calendarId: string, id: string, patch: { summary?: string; start?: Date; end?: Date; location?: string; swapAttendees?: { remove: string[]; add: string[] } }) {
+  async patchEvent(calendarId: string, id: string, patch: { summary?: string; description?: string; start?: Date; end?: Date; allDay?: { startDay: string; endDay: string }; location?: string; swapAttendees?: { remove: string[]; add: string[] } }) {
     const s = this.events.get(id);
     if (!s || s.ev.status === "cancelled") return "gone" as const;
     if (s.ev.organizer?.email && s.ev.organizer.email.toLowerCase() !== calendarId.toLowerCase()) return "not_owner" as const;
@@ -89,6 +89,11 @@ export class MockCalendar implements CalendarApi {
     if (patch.location !== undefined) ev.location = patch.location;
     if (patch.start) ev.start = { dateTime: patch.start.toISOString() };
     if (patch.end) ev.end = { dateTime: patch.end.toISOString() };
+    if (patch.description !== undefined) ev.description = patch.description;
+    if (patch.allDay) {
+      ev.start = { date: patch.allDay.startDay };
+      ev.end = { date: patch.allDay.endDay };
+    }
     if (patch.swapAttendees) {
       const rm = new Set(patch.swapAttendees.remove.map((e) => e.toLowerCase()));
       ev.attendees = [...(ev.attendees ?? []).filter((a) => !a.email || !rm.has(a.email.toLowerCase())), ...patch.swapAttendees.add.map((email) => ({ email, responseStatus: "needsAction" }))];
@@ -99,15 +104,15 @@ export class MockCalendar implements CalendarApi {
   }
   private deleted = new Map<string, GEvent>();
   inserted = 0;
-  async insertEvent(calendarId: string, ev: { summary: string; description: string; location?: string; start: Date; end: Date; attendees: string[] }) {
+  async insertEvent(calendarId: string, ev: { summary: string; description: string; location?: string; start: Date; end: Date; attendees: string[]; allDay?: { startDay: string; endDay: string } }) {
     const id = `app-${++this.inserted}`;
     this.put({
       id,
       summary: ev.summary,
       description: ev.description,
       location: ev.location ?? null,
-      start: { dateTime: ev.start.toISOString() },
-      end: { dateTime: ev.end.toISOString() },
+      start: ev.allDay ? { date: ev.allDay.startDay } : { dateTime: ev.start.toISOString() },
+      end: ev.allDay ? { date: ev.allDay.endDay } : { dateTime: ev.end.toISOString() },
       organizer: { email: calendarId },
       attendees: [{ email: calendarId, organizer: true, responseStatus: "accepted" }, ...ev.attendees.map((email) => ({ email, responseStatus: "needsAction" }))],
     });

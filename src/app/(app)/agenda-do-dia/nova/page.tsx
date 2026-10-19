@@ -10,7 +10,8 @@ import { StaffVisitForm } from "./form";
 
 export const metadata = { title: "Nova visita" };
 
-export default async function NewStaffVisitPage() {
+export default async function NewStaffVisitPage({ searchParams }: { searchParams: Promise<{ data?: string; hora?: string; duracao?: string; volta?: string }> }) {
+  const sp = await searchParams;
   const actor = await requireActor({ preService: true });
   if (!isPreService(actor) && !hasGlobalView(actor)) notFound();
   const today = dayKey(new Date());
@@ -19,12 +20,13 @@ export default async function NewStaffVisitPage() {
   const byId = new Map(counts.map((c) => [c.consultantId, c._count._all]));
   return (
     <>
-      <Link href="/agenda-do-dia" className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
-        ← Visitas
+      <Link href={sp.volta === "google" ? `/agenda-google${sp.data ? `?ref=${sp.data}` : ""}` : "/agenda-do-dia"} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
+        ← {sp.volta === "google" ? "Agenda Google" : "Visitas"}
       </Link>
       <PageHeader title="Nova visita" subtitle="O app cria a visita e o evento na agenda Google já no padrão, com a consultora convidada." />
       <StaffVisitForm
         today={today}
+        initial={{ date: /^\d{4}-\d{2}-\d{2}$/.test(sp.data ?? "") && sp.data! >= today ? sp.data! : today, time: /^\d{2}:\d{2}$/.test(sp.hora ?? "") ? sp.hora! : "", duration: ["30", "45", "60", "90", "120"].includes(sp.duracao ?? "") ? sp.duracao! : "60", back: sp.volta === "google" ? "google" : "" }}
         consultants={consultants.map((c) => ({ id: c.id, name: c.name, away: isAway(c.awayUntil) ? c.awayUntil!.toISOString().slice(0, 10).split("-").reverse().slice(0, 2).join("/") : null, today: byId.get(c.id) ?? 0 }))}
       />
     </>

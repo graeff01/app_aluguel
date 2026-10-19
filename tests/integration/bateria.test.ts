@@ -12,6 +12,8 @@ import { rangeAgenda } from "@/server/day-agenda";
 import { preServiceDashboard } from "@/server/pre-service-dashboard";
 import { captureLeasePhotosNow, captureMissingLeasePhotos, leasePhotosZip, readLeasePhoto, siteDomain } from "@/server/lease-photos";
 import { refreshPropertyPreviews } from "@/server/property-preview";
+import { createMirrorEvent, deleteMirrorEvent, editMirrorEvent, loadMirror, moveMirrorEvent } from "@/server/calendar-mirror";
+import type { CalendarApi } from "@/server/sync/types";
 import { runSync } from "@/server/sync/engine";
 import { toLocalInput } from "@/lib/time";
 import { MockCalendar, visitEvent } from "../helpers/mock-calendar";
@@ -705,5 +707,94 @@ describe("marketing: fotos do anúncio guardadas na locação", () => {
     expect(prop.photos).toHaveLength(8);
     expect(prop.photoUrl).toBe(imgs[0]);
     expect(await db.leasePhoto.count({ where: { leasePostId: post.id } })).toBe(12);
+  });
+});
+
+describe("Agenda Google dentro do app (espelho do pré-atendimento)", () => {
+  const FROM = new Date("2026-10-18T03:00:00Z");
+  const TO = new Date("2026-10-25T03:00:00Z");
+  const setup = async () => {
+    await makeConnection("central@exemplo.test");
+    const own = new MockCalendar();
+    const shared = new MockCalendar();
+    own.pageSize = 50;
+    shared.pageSize = 50;
+    own.put(visitEvent("vis", { start: "2026-10-20T13:00:00Z", title: "Visita clt - Cliente Espelho 1234567 - cod 111111;222222 - 51 99876-5432", organizer: "central@exemplo.test" }));
+    own.put({ id: "almoco", summary: "almoço", colorId: "11", start: { dateTime: "2026-10-20T14:30:00Z" }, end: { dateTime: "2026-10-20T15:30:00Z" }, organizer: { email: "central@exemplo.test" }, htmlLink: "https://calendar.google.com/x" });
+    own.put({ id: "plantao", summary: "Plantao do Dia - Tami", start: { date: "2026-10-20" }, end: { date: "2026-10-21" }, organizer: { email: "central@exemplo.test" } });
+    own.put({ id: "convite", summary: "Reunião Q", start: { dateTime: "2026-10-19T17:30:00Z" }, end: { dateTime: "2026-10-19T18:30:00Z" }, organizer: { email: "vitoria@exemplo.test" }, attendees: [{ email: "central@exemplo.test", self: true, responseStatus: "accepted" }] });
+    own.put({ id: "apagado", summary: "x", start: { dateTime: "2026-10-21T12:00:00Z" }, end: { dateTime: "2026-10-21T13:00:00Z" } });
+    own.cancel("apagado");
+    shared.put({ id: "vit", summary: "1:1 — Jasmine", start: { dateTime: "2026-10-22T12:30:00Z" }, end: { dateTime: "2026-10-22T13:00:00Z" }, organizer: { email: "vitoria@exemplo.test" } });
+    await runSync({ api: own, now: new Date("2026-10-19T10:00:00Z"), sleep: async () => {} });
+    const api: CalendarApi = {
+      listCalendars: async () => [
+        { id: "central@exemplo.test", summary: "central", accessRole: "owner", primary: true, backgroundColor: "#039be5", selected: true },
+        { id: "vitoria@exemplo.test", summary: "vitoria souza", accessRole: "reader", backgroundColor: "#d50000", selected: true },
+      ],
+      listEvents: (q) => (q.calendarId === "vitoria@exemplo.test" ? shared : own).listEvents(q),
+      getEvent: own.getEvent.bind(own),
+      cancelEvent: own.cancelEvent.bind(own),
+      updateSummary: own.updateSummary.bind(own),
+      insertEvent: own.insertEvent.bind(own),
+      patchEvent: own.patchEvent.bind(own),
+      restoreEvent: own.restoreEvent.bind(own),
+    };
+    return { own, api };
+  };
+
+  it("mostra todas as agendas da conta (próprias e compartilhadas), com visitas ligadas ao app", async () => {
+    expect((await loadMirror(jasmin, FROM, TO)).status).toBe("no_connection");
+    const { api } = await setup();
+    await expect(loadMirror(u.a, FROM, TO, { calendarApi: api })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(loadMirror(u.manager, FROM, TO, { calendarApi: api })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const m = await loadMirror(jasmin, FROM, TO, { calendarApi: api });
+    if (m.status !== "ok") throw new Error(m.status);
+    expect(m.calendars.map((c) => [c.name, c.canWrite])).toEqual([["agenda.central@exemplo.test", true], ["vitoria souza", false]]);
+    const by = (id: string) => m.events.find((e) => e.id === id)!;
+    expect(m.events.map((e) => e.id).sort()).toEqual(["almoco", "convite", "plantao", "vis", "vit"]);
+    expect(by("vis").visit).toMatchObject({ status: "SCHEDULED", consultant: "Consultora A", codes: ["111111", "222222"], openCodes: ["111111", "222222"] });
+    expect(by("vis").canEdit).toBe(true);
+    expect(by("almoco")).toMatchObject({ title: "almoço", color: "#d50000", visit: null, canEdit: true, htmlLink: "https://calendar.google.com/x" });
+    expect(by("plantao")).toMatchObject({ allDay: true, startDay: "2026-10-20", endDay: "2026-10-21" });
+    expect(by("convite").canEdit).toBe(false); // convite de outra pessoa
+    expect(by("vit")).toMatchObject({ calendarId: "vitoria@exemplo.test", canEdit: false, color: "#d50000" });
+    expect((await loadMirror(u.admin, FROM, TO, { calendarApi: api })).status).toBe("ok");
+  });
+
+  it("mover, criar, editar e excluir vão para o Google; visita e evento dos outros têm proteção", async () => {
+    const { own, api } = await setup();
+    const o = { calendarApi: api };
+    // arrastar a visita: muda no Google e pede sincronização (o app acompanha)
+    await moveMirrorEvent(jasmin, { calendarId: "central@exemplo.test", eventId: "vis", start: "2026-10-20T16:00:00.000Z", end: "2026-10-20T17:00:00.000Z" }, o);
+    expect((await own.getEvent("central@exemplo.test", "vis"))?.start?.dateTime).toBe("2026-10-20T16:00:00.000Z");
+    expect(await db.syncRun.count({ where: { trigger: "MANUAL" } })).toBe(1);
+    await expect(moveMirrorEvent(jasmin, { calendarId: "central@exemplo.test", eventId: "convite", start: "2026-10-19T18:00:00Z", end: "2026-10-19T19:00:00Z" }, o)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(moveMirrorEvent(jasmin, { calendarId: "vitoria@exemplo.test", eventId: "vit", start: "2026-10-22T13:00:00Z", end: "2026-10-22T14:00:00Z" }, o)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(moveMirrorEvent(jasmin, { calendarId: "central@exemplo.test", eventId: "almoco", start: "2026-10-20T16:00:00Z", end: "2026-10-20T15:00:00Z" }, o)).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(moveMirrorEvent(u.a, { calendarId: "central@exemplo.test", eventId: "almoco", start: "2026-10-20T16:00:00Z", end: "2026-10-20T17:00:00Z" }, o)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // dia inteiro: muda o dia
+    await moveMirrorEvent(jasmin, { calendarId: "central@exemplo.test", eventId: "plantao", startDay: "2026-10-21", endDay: "2026-10-22" }, o);
+    expect((await own.getEvent("central@exemplo.test", "plantao"))?.start?.date).toBe("2026-10-21");
+
+    // criar evento comum (com horário e de dia inteiro)
+    const r1 = await createMirrorEvent(jasmin, { calendarId: "central@exemplo.test", title: " Reunião de equipe ", start: "2026-10-21T13:00:00Z", end: "2026-10-21T14:00:00Z" }, o);
+    expect(await own.getEvent("central@exemplo.test", r1.id)).toMatchObject({ summary: "Reunião de equipe", start: { dateTime: "2026-10-21T13:00:00.000Z" } });
+    const r2 = await createMirrorEvent(jasmin, { calendarId: "central@exemplo.test", title: "DAY OFF - Michele", startDay: "2026-10-21" }, o);
+    expect((await own.getEvent("central@exemplo.test", r2.id))?.end?.date).toBe("2026-10-22");
+    await expect(createMirrorEvent(jasmin, { calendarId: "central@exemplo.test", title: "  ", start: "2026-10-21T13:00:00Z", end: "2026-10-21T14:00:00Z" }, o)).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(createMirrorEvent(jasmin, { calendarId: "vitoria@exemplo.test", title: "x", start: "2026-10-21T13:00:00Z", end: "2026-10-21T14:00:00Z" }, o)).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    // editar: evento comum sim; visita pela ficha
+    await editMirrorEvent(jasmin, { calendarId: "central@exemplo.test", eventId: "almoco", title: "Almoço", description: "sala 2" }, o);
+    expect(await own.getEvent("central@exemplo.test", "almoco")).toMatchObject({ summary: "Almoço", description: "sala 2" });
+    await expect(editMirrorEvent(jasmin, { calendarId: "central@exemplo.test", eventId: "vis", title: "outro" }, o)).rejects.toMatchObject({ code: "INVALID_STATE" });
+
+    // excluir: evento comum sim; visita é cancelada com motivo; convite dos outros não
+    await deleteMirrorEvent(jasmin, { calendarId: "central@exemplo.test", eventId: "almoco" }, o);
+    expect((await own.getEvent("central@exemplo.test", "almoco"))?.status ?? "cancelled").toBe("cancelled");
+    await expect(deleteMirrorEvent(jasmin, { calendarId: "central@exemplo.test", eventId: "vis" }, o)).rejects.toMatchObject({ code: "INVALID_STATE" });
+    await expect(deleteMirrorEvent(jasmin, { calendarId: "central@exemplo.test", eventId: "convite" }, o)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await db.auditLog.count({ where: { action: { startsWith: "calendar." } } })).toBe(6);
   });
 });

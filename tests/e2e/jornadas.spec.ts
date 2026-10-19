@@ -286,17 +286,17 @@ test("jornada marketing (celular): recebe a locação, copia o resumo e marca co
 
 // ─────────────── 5. Matriz de acesso ───────────────
 type Expect = "ok" | "404" | RegExp;
-const ROUTES = ["/agenda-do-dia/nova", "/minhas", "/rota", "/pendencias", "/historico", "/visitas/nova", "/pre-analises", "/pre-analises/nova", "/pre-analises/painel", "/agenda-do-dia", "/marketing", "/painel", "/ao-vivo", "/revisao", "/oportunidades", "/imoveis", "/clientes", "/relatorios", "/config/usuarios", "/config/motivos", "/admin/google", "/admin/configuracoes", "/admin/sincronizacao", "/config/auditoria", "/conta/senha"];
+const ROUTES = ["/agenda-google", "/agenda-do-dia/nova", "/minhas", "/rota", "/pendencias", "/historico", "/visitas/nova", "/pre-analises", "/pre-analises/nova", "/pre-analises/painel", "/agenda-do-dia", "/marketing", "/painel", "/ao-vivo", "/revisao", "/oportunidades", "/imoveis", "/clientes", "/relatorios", "/config/usuarios", "/config/motivos", "/admin/google", "/admin/configuracoes", "/admin/sincronizacao", "/config/auditoria", "/conta/senha"];
 const MATRIX: Record<string, { email: string; home: RegExp; rules: Record<string, Expect> }> = {
   consultora: {
     email: "b@e2e.test",
     home: /\/minhas/,
-    rules: { "/agenda-do-dia/nova": "404", "/pre-analises/nova": "404", "/pre-analises/painel": "404", "/agenda-do-dia": /\/minhas/, "/marketing": "404", "/painel": "404", "/ao-vivo": "404", "/revisao": "404", "/imoveis": "404", "/clientes": "404", "/relatorios": "404", "/config/usuarios": "404", "/config/motivos": "404", "/admin/google": "404", "/admin/configuracoes": "404", "/admin/sincronizacao": "404", "/config/auditoria": "404" },
+    rules: { "/agenda-google": "404", "/agenda-do-dia/nova": "404", "/pre-analises/nova": "404", "/pre-analises/painel": "404", "/agenda-do-dia": /\/minhas/, "/marketing": "404", "/painel": "404", "/ao-vivo": "404", "/revisao": "404", "/imoveis": "404", "/clientes": "404", "/relatorios": "404", "/config/usuarios": "404", "/config/motivos": "404", "/admin/google": "404", "/admin/configuracoes": "404", "/admin/sincronizacao": "404", "/config/auditoria": "404" },
   },
   "pré-atendimento": {
     email: "jasmin@e2e.test",
     home: /\/pre-analises/,
-    rules: Object.fromEntries(ROUTES.filter((r) => !["/pre-analises", "/pre-analises/nova", "/agenda-do-dia", "/agenda-do-dia/nova", "/conta/senha", "/pre-analises/painel"].includes(r)).map((r) => [r, /\/pre-analises$/])),
+    rules: Object.fromEntries(ROUTES.filter((r) => !["/pre-analises", "/pre-analises/nova", "/agenda-google", "/agenda-do-dia", "/agenda-do-dia/nova", "/conta/senha", "/pre-analises/painel"].includes(r)).map((r) => [r, /\/pre-analises$/])),
   },
   marketing: {
     email: "mkt@e2e.test",
@@ -306,7 +306,7 @@ const MATRIX: Record<string, { email: string; home: RegExp; rules: Record<string
   gestora: {
     email: "gestora@e2e.test",
     home: /\/painel/,
-    rules: { "/admin/google": "404", "/admin/configuracoes": "404", "/admin/sincronizacao": "404", "/config/auditoria": "404" },
+    rules: { "/agenda-google": "404", "/admin/google": "404", "/admin/configuracoes": "404", "/admin/sincronizacao": "404", "/config/auditoria": "404" },
   },
 };
 

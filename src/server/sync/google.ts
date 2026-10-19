@@ -9,7 +9,7 @@ import { db } from "@/lib/db";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { log } from "@/lib/log";
-import { GoogleApiError, type CalendarApi, type GEvent, type ListPage, type ListParams } from "./types";
+import { GoogleApiError, type CalendarApi, type GCalendar, type GEvent, type ListPage, type ListParams } from "./types";
 
 export const GOOGLE_SCOPES = [
   "openid",
@@ -109,13 +109,13 @@ export function realCalendarApi(auth: OAuth2Client): CalendarApi {
   const api = calendar({ version: "v3", auth });
   return {
     async listCalendars() {
-      const out: { id: string; summary: string; accessRole: string; primary?: boolean }[] = [];
+      const out: GCalendar[] = [];
       let pageToken: string | undefined;
       try {
         do {
           const res = await api.calendarList.list({ maxResults: 250, pageToken, showHidden: true });
           for (const c of res.data.items ?? []) {
-            if (c.id) out.push({ id: c.id, summary: c.summaryOverride || c.summary || c.id, accessRole: c.accessRole ?? "none", primary: !!c.primary });
+            if (c.id) out.push({ id: c.id, summary: c.summaryOverride || c.summary || c.id, accessRole: c.accessRole ?? "none", primary: !!c.primary, backgroundColor: c.backgroundColor ?? null, selected: !!c.selected });
           }
           pageToken = res.data.nextPageToken ?? undefined;
         } while (pageToken);
@@ -187,8 +187,9 @@ export function realCalendarApi(auth: OAuth2Client): CalendarApi {
             summary: ev.summary,
             description: ev.description,
             location: ev.location || undefined,
-            start: { dateTime: ev.start.toISOString(), timeZone: "America/Sao_Paulo" },
-            end: { dateTime: ev.end.toISOString(), timeZone: "America/Sao_Paulo" },
+            // dia inteiro: datas (o fim é o dia seguinte ao último, como no Google)
+            start: ev.allDay ? { date: ev.allDay.startDay } : { dateTime: ev.start.toISOString(), timeZone: "America/Sao_Paulo" },
+            end: ev.allDay ? { date: ev.allDay.endDay } : { dateTime: ev.end.toISOString(), timeZone: "America/Sao_Paulo" },
             attendees: ev.attendees.map((email) => ({ email })),
           },
         });
@@ -206,8 +207,13 @@ export function realCalendarApi(auth: OAuth2Client): CalendarApi {
         const body: calendar_v3.Schema$Event = {};
         if (patch.summary !== undefined) body.summary = patch.summary;
         if (patch.location !== undefined) body.location = patch.location;
+        if (patch.description !== undefined) body.description = patch.description;
         if (patch.start) body.start = { dateTime: patch.start.toISOString(), timeZone: "America/Sao_Paulo" };
         if (patch.end) body.end = { dateTime: patch.end.toISOString(), timeZone: "America/Sao_Paulo" };
+        if (patch.allDay) {
+          body.start = { date: patch.allDay.startDay };
+          body.end = { date: patch.allDay.endDay };
+        }
         if (patch.swapAttendees) {
           const remove = new Set(patch.swapAttendees.remove.map((e) => e.toLowerCase()));
           const kept = (ev.attendees ?? []).filter((a) => !a.email || !remove.has(a.email.toLowerCase()));
