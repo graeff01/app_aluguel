@@ -155,7 +155,7 @@ describe("rodízio e cliente da consultora", () => {
 });
 
 describe("cancelar um imóvel ou todos, também no Google", () => {
-  it("só um imóvel tira o código do título; todos cancela o evento; a sincronização não cria conflito", async () => {
+  it("só um imóvel tira o código do título; todos move o evento para as 22h; a sincronização não cria conflito", async () => {
     const { MockCalendar, visitEvent } = await import("../helpers/mock-calendar");
     const { runSync } = await import("@/server/sync/engine");
     const { makeConnection } = await import("../helpers/db");
@@ -183,9 +183,10 @@ describe("cancelar um imóvel ou todos, também no Google", () => {
     ]);
     expect(await db.visit.count()).toBe(3);
 
-    // depois desiste de tudo: o evento é cancelado no Google
+    // depois desiste de tudo: o evento vai para as 22h no Google (continua na agenda)
     const all = await cancelVisitByStaff(jasmin, after[1].id, { reasonId: r.id }, NOW, { calendarApi: api });
-    expect(all).toMatchObject({ count: 2, google: "canceled" });
+    expect(all).toMatchObject({ count: 2, google: "moved" });
+    expect((await api.getEvent("central@exemplo.test", "multi"))?.start?.dateTime).toBe("2026-10-15T01:00:00.000Z");
     await sync();
     expect((await db.visit.findMany()).every((v) => v.status === "CANCELED" && v.syncConflict === "NONE")).toBe(true);
   });

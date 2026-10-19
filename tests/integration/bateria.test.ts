@@ -158,12 +158,13 @@ describe("cancelamento pelo pré-atendimento", () => {
 
     // evento organizado pela consultora: só um imóvel → não dá para editar o título dela
     expect((await cancelVisitByStaff(jasmin, (await byCode("111111")).id, { reasonId: r.id, onlyThis: true }, NOW, { calendarApi: api })).google).toBe("not_owner");
-    // o restante → sai só da agenda conectada (cópia de convidada)
-    expect((await cancelVisitByStaff(jasmin, (await byCode("222222")).id, { reasonId: r.id }, NOW, { calendarApi: api })).google).toBe("removed");
+    // o restante → o evento é da consultora: não dá para mover para as 22h (ela é avisada) e nada é apagado
+    expect((await cancelVisitByStaff(jasmin, (await byCode("222222")).id, { reasonId: r.id }, NOW, { calendarApi: api })).google).toBe("move_not_owner");
+    expect((await api.getEvent("central@exemplo.test", "e1"))?.status).not.toBe("cancelled");
 
     // Google fora do ar: a visita fica cancelada no app mesmo assim
     const v3 = await byCode("444444");
-    const broken = { cancelEvent: async () => Promise.reject(Object.assign(new Error("Google fora"), { kind: "RETRYABLE" })) } as unknown as MockCalendar;
+    const broken = { patchEvent: async () => Promise.reject(Object.assign(new Error("Google fora"), { kind: "RETRYABLE" })) } as unknown as MockCalendar;
     expect((await cancelVisitByStaff(jasmin, v3.id, { reasonId: r.id }, NOW, { calendarApi: broken })).google).toBe("error");
     expect((await db.visit.findUniqueOrThrow({ where: { id: v3.id } })).status).toBe("CANCELED");
   });
@@ -297,13 +298,23 @@ describe("desfazer o cancelamento do pré-atendimento", () => {
     return { undoStaffCancel, api, sync, title, a, b, r: await cancelReason() };
   };
 
-  it("cancelou tudo por engano: volta no app e o evento volta no Google, sem conflito", async () => {
+  it("cancelou tudo: o evento vai para as 22h (não some); por engano: volta ao horário, sem conflito", async () => {
     const { undoStaffCancel, api, sync, a, r } = await setup();
     const c = await cancelVisitByStaff(jasmin, a.id, { reasonId: r.id }, NOW, { calendarApi: api });
-    expect(c.google).toBe("canceled");
+    expect(c.google).toBe("moved");
+    // 14/10 12h (Brasília) → 14/10 22h, mesma duração; continua na agenda
+    const night = (await api.getEvent("central@exemplo.test", "u1"))!;
+    expect(night.status).not.toBe("cancelled");
+    expect([night.start?.dateTime, night.end?.dateTime]).toEqual(["2026-10-15T01:00:00.000Z", "2026-10-15T02:00:00.000Z"]);
+    // a sincronização vê o evento às 22h: as visitas continuam canceladas com o motivo e no horário original
+    await sync();
+    expect((await db.visit.findMany()).map((v) => [v.status, !!v.cancelReasonId, v.scheduledStart.toISOString(), v.syncConflict])).toEqual([
+      ["CANCELED", true, "2026-10-14T15:00:00.000Z", "NONE"],
+      ["CANCELED", true, "2026-10-14T15:00:00.000Z", "NONE"],
+    ]);
     const u = await undoStaffCancel(jasmin, c.undoId, new Date(NOW.getTime() + 10_000), { calendarApi: api });
-    expect(u).toEqual({ count: 2, google: "restored" });
-    expect((await api.getEvent("central@exemplo.test", "u1"))?.status).toBe("confirmed");
+    expect(u).toEqual({ count: 2, google: "time_back" });
+    expect((await api.getEvent("central@exemplo.test", "u1"))?.start?.dateTime).toBe("2026-10-14T15:00:00.000Z");
     await sync();
     expect((await db.visit.findMany()).map((v) => [v.status, v.cancelReasonId, v.syncConflict])).toEqual([["SCHEDULED", null, "NONE"], ["SCHEDULED", null, "NONE"]]);
     // não desfaz duas vezes

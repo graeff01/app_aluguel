@@ -939,10 +939,13 @@ model VisitCancelUndo {
   visitIds        String[]
   calendarId      String?
   googleEventId   String?
-  /// canceled | code_removed | removed | (nada no Google)
+  /// moved | code_removed | (antigos: canceled | removed) | (nada no Google)
   googleAction    String?
   previousSummary String?
   newSummary      String?
+  /// "moved": horário do evento antes de ir para as 22h (o desfazer volta para ele)
+  previousStart   DateTime?
+  previousEnd     DateTime?
   createdAt       DateTime  @default(now())
   undoneAt        DateTime?
 
