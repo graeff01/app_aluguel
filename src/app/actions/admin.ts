@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { runAction, str, type ActionState } from "@/lib/action";
+import { getSettings } from "@/lib/settings";
 import { REASON_KINDS, REASON_USAGE, reasonUsage } from "@/lib/reasons";
 import { assert, canManageIntegration, canManageReasons, canManageSettings, canManageUser, isAdmin } from "@/lib/authz";
 import { AppError } from "@/lib/errors";
@@ -361,6 +362,22 @@ export async function selectCalendarAction(_: ActionState, fd: FormData) {
       });
       await requestManualSync(actor.id);
       return `Calendário “${cal.summary}” selecionado. A primeira sincronização foi solicitada.`;
+    }),
+  );
+}
+
+/** O app do Google saiu do "modo teste" (publicado): a conexão não vence mais, o aviso semanal para. */
+export async function googleTestingModeAction(_: ActionState, fd: FormData) {
+  return done(
+    await runAction(async (actor) => {
+      assert(canManageIntegration(actor));
+      const on = str(fd, "testing") === "1";
+      await getSettings();
+      await db.$transaction(async (tx) => {
+        await tx.appSettings.update({ where: { id: 1 }, data: { googleTestingMode: on } });
+        await audit(tx, { actorId: actor.id, action: "settings.google_testing_mode", entityType: "AppSettings", entityId: "1", changes: { modoTeste: on } });
+      });
+      return on ? "Modo teste: o app avisa 1 dia antes de a conexão vencer." : "App publicado: a conexão não vence mais e os avisos param.";
     }),
   );
 }

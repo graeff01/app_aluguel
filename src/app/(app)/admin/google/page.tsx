@@ -7,7 +7,9 @@ import { authorizedClient, googleConfigured, realCalendarApi, canEditEvents } fr
 import { DETAIL_ROLES, type GCalendar } from "@/server/sync/types";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Alert, Badge, KeyValue, PageHeader, Panel, Section } from "@/components/ui";
-import { disconnectGoogleAction, selectCalendarAction } from "@/app/actions/admin";
+import { disconnectGoogleAction, googleTestingModeAction, selectCalendarAction } from "@/app/actions/admin";
+import { googleExpiry } from "@/server/google-expiry";
+import { getSettings } from "@/lib/settings";
 import { GoogleSetupGuide } from "./setup-guide";
 
 export const metadata = { title: "Agenda Google" };
@@ -29,6 +31,7 @@ export default async function GooglePage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const conn = await db.googleConnection.findFirst({ where: { status: { not: "DISCONNECTED" } }, orderBy: { connectedAt: "desc" } });
   const state = conn?.calendarId ? await db.syncState.findUnique({ where: { calendarId: conn.calendarId } }) : null;
+  const [expiry, settings] = await Promise.all([googleExpiry(), getSettings()]);
   let calendars: GCalendar[] = [];
   let listError = "";
   if (conn?.status === "CONNECTED") {
@@ -65,6 +68,9 @@ export default async function GooglePage({ searchParams }: { searchParams: Promi
                 ["Situação", conn.status === "CONNECTED" ? <Badge tone="good">✓ Conectada</Badge> : <Badge tone="bad">✕ Reconectar</Badge>],
                 ["Permissão", canEditEvents(conn.scopes) ? "Lê a agenda e cancela eventos de visitas canceladas no app" : "Só leitura"],
                 ["Conectada em", fmt.dateTime(conn.connectedAt)],
+                ...(expiry
+                  ? [["Vence em", <span key="v" className={expiry.level === "ok" ? "" : "font-semibold text-bad"}>{fmt.dateTime(expiry.expiresAt)}{expiry.level === "expired" ? " (venceu: reconecte)" : ` (faltam ${expiry.hoursLeft >= 48 ? `${Math.floor(expiry.hoursLeft / 24)} dias` : `${Math.max(1, Math.round(expiry.hoursLeft))} h`})`}</span>] as [string, React.ReactNode]]
+                  : []),
                 ["Calendário", conn.calendarSummary ? `${conn.calendarSummary} (${ROLE[conn.calendarAccessRole ?? ""] ?? conn.calendarAccessRole})` : <Badge tone="warn">não selecionado</Badge>],
                 ["Última sincronização bem-sucedida", state?.lastSuccessAt ? fmt.dateTime(state.lastSuccessAt) : "—"],
               ]}
@@ -88,6 +94,18 @@ export default async function GooglePage({ searchParams }: { searchParams: Promi
                 <SubmitButton variant="danger">Desconectar</SubmitButton>
               </ActionForm>
             )}
+          </div>
+          <div className="mt-5 rounded-2xl bg-surface-2 p-4 text-sm">
+            <p className="font-semibold">{settings.googleTestingMode ? "App do Google em modo teste" : "App do Google publicado"}</p>
+            <p className="mt-1 text-ink-2">
+              {settings.googleTestingMode
+                ? "Em modo teste, o Google encerra a conexão 7 dias depois de conectar. O app avisa você 1 dia antes (notificação e faixa no topo). Reconectar com a mesma conta renova por mais 7 dias."
+                : "A conexão não vence por tempo. Se o app voltar para modo teste no Google, marque aqui de novo."}
+            </p>
+            <ActionForm action={googleTestingModeAction} className="mt-3">
+              <input type="hidden" name="testing" value={settings.googleTestingMode ? "0" : "1"} />
+              <SubmitButton variant="secondary">{settings.googleTestingMode ? "Já publiquei o app no Google" : "Voltou para modo teste"}</SubmitButton>
+            </ActionForm>
           </div>
           <p className="mt-3 text-xs text-ink-3">Callback OAuth: {env.googleRedirectUri}</p>
         </Panel>

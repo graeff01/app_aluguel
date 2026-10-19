@@ -661,3 +661,27 @@ test("pré-atendimento cancela visita com motivo; marketing só vê a tela dele"
   await page.goto("/minhas");
   await expect(page).toHaveURL(/\/marketing/);
 });
+
+test("novidades aparecem uma vez no próximo acesso e o “?” mostra a ajuda da tela", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  await login(page, "novidades@e2e.test");
+  const dialog = page.getByRole("dialog", { name: "O que mudou" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText(/Central de ajuda/).first()).toBeVisible();
+  await expect(dialog.getByText(/Agenda Google dentro do app/)).toHaveCount(0); // é do pré-atendimento
+  await dialog.getByRole("button", { name: "Entendi" }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("dialog", { name: "O que mudou" })).toHaveCount(0);
+  // ajuda da tela atual
+  await page.getByRole("button", { name: "Ajuda desta tela" }).click();
+  await expect(page.getByRole("dialog", { name: "Ajuda" }).getByText("Minhas visitas")).toBeVisible();
+  await page.getByRole("dialog", { name: "Ajuda" }).getByRole("link", { name: "Central de ajuda" }).click();
+  await expect(page.getByRole("heading", { name: "Central de ajuda" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Registrar o resultado da visita" })).toBeVisible();
+  await page.getByText("Esqueci minha senha. E agora?").click();
+  await expect(page.getByText(/gera um link/)).toBeVisible();
+  await page.goto("/ajuda/novidades");
+  await expect(page.getByRole("heading", { name: "O que mudou" })).toBeVisible();
+});

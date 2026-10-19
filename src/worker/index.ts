@@ -10,7 +10,7 @@ import { db } from "@/lib/db";
 import { log, errorCode } from "@/lib/log";
 import { getSettings } from "@/lib/settings";
 import { executeRun } from "@/server/sync/runner";
-import { sendDailyReminders, sendMonthlyReportNotice, sendOperationalAlerts, sendResultReminders, sendSyncAlerts, sendUpcomingVisitReminders, sendWeeklySummary } from "@/server/reminders";
+import { sendDailyReminders, sendGoogleExpiryAlerts, sendMonthlyReportNotice, sendOperationalAlerts, sendResultReminders, sendSyncAlerts, sendUpcomingVisitReminders, sendWeeklySummary } from "@/server/reminders";
 import { refreshPropertyPreviews } from "@/server/property-preview";
 import { captureMissingLeasePhotos } from "@/server/lease-photos";
 import { refreshGeocodes } from "@/server/geo";
@@ -75,6 +75,7 @@ async function main() {
         await sendUpcomingVisitReminders().catch((e) => log.error("upcoming_reminders.failed", { code: errorCode(e) }));
         await sendResultReminders().catch((e) => log.error("result_reminders.failed", { code: errorCode(e) }));
         await sendSyncAlerts().catch((e) => log.error("sync_alerts.failed", { code: errorCode(e) }));
+        await sendGoogleExpiryAlerts().catch((e) => log.error("google_expiry_alerts.failed", { code: errorCode(e) }));
         await sendOperationalAlerts().catch((e) => log.error("operational_alerts.failed", { code: errorCode(e) }));
       }
       if (Date.now() - lastPreviewCheck > 2 * 60_000) {

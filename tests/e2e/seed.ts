@@ -24,7 +24,9 @@ await db.user.create({ data: { name: "Jasmin Pré", email: "jasmin@e2e.test", ro
 await db.user.create({ data: { name: "Gisele Nova", email: "guia@e2e.test", role: "CONSULTANT", passwordHash: hash, privacyAcceptedAt: new Date() } });
 await db.user.create({ data: { name: "Marketing E2E", email: "mkt@e2e.test", role: "MARKETING", passwordHash: hash, privacyAcceptedAt: new Date() } });
 // todos já passaram pelo guia de primeiro acesso, exceto a usuária do teste do guia
-await db.user.updateMany({ where: { email: { not: "guia@e2e.test" } }, data: { onboardedAt: new Date() } });
+await db.user.updateMany({ where: { email: { not: "guia@e2e.test" } }, data: { onboardedAt: new Date(), seenChangelog: "9999" } }); // novidades já vistas (o teste de novidades usa a própria pessoa)
+// quem ainda não viu as novidades da última atualização (teste "O que mudou")
+await db.user.create({ data: { name: "Nina Novidades", email: "novidades@e2e.test", role: "CONSULTANT", passwordHash: hash, privacyAcceptedAt: new Date(), onboardedAt: new Date() } });
 const ago = (h: number) => toLocalInput(new Date(Date.now() - h * 3600_000));
 await createManualVisit(admin, { requestId: "e2e-seed-a1", scheduledStart: ago(3), clientName: "Cliente Alfa", phoneRaw: "(51) 99876-0001", propertyCode: "00777", consultantId: a.id });
 await createManualVisit(admin, { requestId: "e2e-seed-a2", scheduledStart: ago(30), clientName: "Cliente Beta", phoneRaw: "", propertyCode: "00888", consultantId: a.id });

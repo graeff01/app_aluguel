@@ -1,0 +1,259 @@
+/**
+ * Central de ajuda: passo a passo curto de cada tela, por perfil, e dúvidas frequentes.
+ * O botão "?" mostra o tópico da tela atual (pelo endereço); /ajuda mostra tudo do perfil.
+ */
+import type { Audience } from "./changelog";
+
+export type HelpTopic = { id: string; title: string; who: Audience[]; href?: string; paths: RegExp[]; summary: string; steps: string[]; tips?: string[] };
+export type Faq = { q: string; a: string; who: Audience[] };
+
+const ALL: Audience[] = ["CONSULTANT", "PRE_SERVICE", "MANAGER", "MARKETING"];
+
+export const HELP: HelpTopic[] = [
+  // ─────────────── Consultora ───────────────
+  {
+    id: "minhas",
+    title: "Minhas visitas",
+    who: ["CONSULTANT"],
+    href: "/minhas",
+    paths: [/^\/minhas/, /^\/$/],
+    summary: "A tela inicial: suas visitas de hoje, as próximas e as que esperam o seu registro.",
+    steps: [
+      "No topo aparece quantas visitas esperam o seu registro.",
+      "Toque numa visita para abrir a ficha: imóvel, fotos, valores e telefone do cliente.",
+      "Use os botões do cartão para ligar ou chamar no WhatsApp.",
+      "“Confirmar presença” abre o WhatsApp com a mensagem de confirmação pronta.",
+      "Os cartões Rota, Pré-análises e Negócios em andamento levam direto para essas telas.",
+    ],
+    tips: ["A busca encontra visitas por nome, telefone ou código do imóvel."],
+  },
+  {
+    id: "resultado",
+    title: "Registrar o resultado da visita",
+    who: ["CONSULTANT"],
+    paths: [/^\/visitas\/[^/]+/],
+    summary: "Depois de cada visita, registre o que aconteceu. Leva menos de um minuto.",
+    steps: [
+      "Toque em “Registrar resultado” na visita.",
+      "Escolha: realizada, cliente não compareceu, cancelou ou remarcou.",
+      "Se foi realizada, marque positiva, negativa (com o motivo) ou ainda decidindo (com o dia para ligar de volta).",
+      "Escreva a observação. As respostas rápidas ajudam.",
+      "Salve. O app abre a próxima pendente e mostra uma mensagem pronta para o cliente.",
+    ],
+    tips: ["Visita com vários imóveis: “não compareceu” e “cancelou” valem para todos de uma vez.", "Para mudar a data, use “Remarcar”; o app prepara o evento da agenda."],
+  },
+  {
+    id: "rota",
+    title: "Rota de hoje",
+    who: ["CONSULTANT"],
+    href: "/rota",
+    paths: [/^\/rota/],
+    summary: "Suas visitas do dia no mapa, na ordem.",
+    steps: ["Abra “Rota de hoje”.", "Veja as paradas na ordem dos horários.", "Toque em Maps ou Waze para navegar até cada endereço."],
+  },
+  {
+    id: "pre-consultora",
+    title: "Responder a pré-análise",
+    who: ["CONSULTANT"],
+    href: "/pre-analises",
+    paths: [/^\/pre-analises/],
+    summary: "O pré-atendimento envia os dados do cliente; você analisa e responde.",
+    steps: [
+      "Abra a pré-análise que está esperando a sua resposta.",
+      "Confira os dados e abra os documentos anexados.",
+      "Responda: Aprovado, Pendente (marque o que falta) ou Reprovado, com uma observação.",
+      "Se faltou um documento, você mesma pode anexar.",
+      "Aprovado: já dá para agendar a visita dali mesmo.",
+    ],
+  },
+  {
+    id: "negocios",
+    title: "Negócios (Andamento)",
+    who: ["CONSULTANT"],
+    href: "/oportunidades",
+    paths: [/^\/oportunidades/],
+    summary: "Toda visita positiva vira um negócio. Atualize a etapa até a posse.",
+    steps: [
+      "No celular: toque no cartão “Negócios em andamento”. No computador: menu Andamento.",
+      "Abra o cliente.",
+      "Em “Nova situação”, escolha a etapa (ex.: Em negociação, Contrato assinado).",
+      "Preencha só o que a etapa pede e salve.",
+      "Se o negócio não seguir, escolha “Caiu” e informe o motivo.",
+    ],
+    tips: ["Contrato assinado avisa o marketing automaticamente.", "Negócio parado há muitos dias aparece com o aviso “Parado”."],
+  },
+  // ─────────────── Pré-atendimento ───────────────
+  {
+    id: "agenda-google",
+    title: "Agenda Google (no app)",
+    who: ["PRE_SERVICE"],
+    href: "/agenda-google",
+    paths: [/^\/agenda-google/],
+    summary: "Sua agenda do Google dentro do app. O que você muda aqui vai na hora para o Google.",
+    steps: [
+      "Escolha Dia, Semana ou Mês no canto de cima. “Hoje” e as setas mudam o período.",
+      "Para mudar o horário, arraste o evento. Para mudar a duração, puxe a borda de baixo. Se errar, use “Desfazer”.",
+      "Para criar, clique num horário vazio: “Visita” abre o formulário no padrão e “Evento” cria almoço, reunião ou dia inteiro.",
+      "Clique no evento para ver os detalhes, abrir a visita ou cancelar com o motivo.",
+      "Na lateral, escolha quais agendas e quais consultoras mostrar e a cor das visitas.",
+    ],
+    tips: [
+      "Atalhos: T (hoje), D/W/M (dia, semana, mês), J/K (avançar, voltar), C (criar), / (buscar).",
+      "Evento criado pela consultora só ela pode mudar, como no Google.",
+      "Visita movida para depois das 21h é considerada cancelada. Para cancelar com o motivo, use “Cancelar visita”.",
+      "A tela atualiza sozinha a cada minuto.",
+    ],
+  },
+  {
+    id: "agendar",
+    title: "Agendar uma visita",
+    who: ["PRE_SERVICE", "MANAGER"],
+    href: "/agenda-do-dia/nova",
+    paths: [/^\/agenda-do-dia\/nova/],
+    summary: "O app cria a visita e o evento no Google já no padrão, com a consultora convidada.",
+    steps: [
+      "Cole a mensagem do cliente (ou o título do evento) e toque em “Preencher campos”.",
+      "Confira o nome, o telefone e o(s) imóvel(is). Para vários imóveis, separe com ; (ponto e vírgula).",
+      "Escolha o dia, o horário e a duração.",
+      "Escolha a consultora: aparece quem está de folga e quantas visitas cada uma tem hoje.",
+      "Toque em agendar. O evento vai para a agenda Google e a consultora recebe o convite.",
+    ],
+  },
+  {
+    id: "visitas-lista",
+    title: "Visitas (agenda em lista) e cancelamento",
+    who: ["PRE_SERVICE", "MANAGER"],
+    href: "/agenda-do-dia",
+    paths: [/^\/agenda-do-dia(?!\/nova)/],
+    summary: "Todas as visitas por dia, semana ou mês, com a situação de cada uma.",
+    steps: [
+      "Escolha Hoje, Amanhã, Semana ou Mês.",
+      "Cada visita mostra a situação: agendada, confirmada, sem resposta, aguardando resultado ou cancelada.",
+      "Para cancelar, toque em “Cancelar”, escolha só aquele imóvel ou todos e o motivo.",
+      "O evento vai para as 22h do mesmo dia na agenda Google. Clicou errado? “Desfazer” aparece por 15 segundos.",
+      "Cancelada sem motivo (pela consultora ou pela agenda): use “Informar motivo”.",
+    ],
+  },
+  {
+    id: "pre-envio",
+    title: "Enviar uma pré-análise",
+    who: ["PRE_SERVICE"],
+    href: "/pre-analises/nova",
+    paths: [/^\/pre-analises/],
+    summary: "Cadastre o cliente e os documentos; o app envia para a consultora da vez.",
+    steps: [
+      "Toque em “Nova”.",
+      "Preencha o que tiver; nenhum campo é obrigatório.",
+      "Anexe os documentos (RG, renda etc.).",
+      "Envie. A consultora da vez recebe e responde.",
+      "Se voltar como pendente, aparece o que falta: anexe e ela reenvia automaticamente.",
+    ],
+  },
+  // ─────────────── Gestão ───────────────
+  {
+    id: "painel",
+    title: "Painel da equipe",
+    who: ["MANAGER"],
+    href: "/painel",
+    paths: [/^\/painel/],
+    summary: "Os números da equipe, de cada consultora e do pré-atendimento.",
+    steps: [
+      "Escolha a visão: Equipe, uma consultora ou o pré-atendimento (“pré”).",
+      "Escolha o período (este mês, mês passado, 7 ou 30 dias) ou use “Personalizar”.",
+      "Veja visitas realizadas, taxa de positivas, pendências e o funil de locação.",
+      "Pendência acumulada aparece em vermelho, com o botão para cobrar.",
+    ],
+  },
+  {
+    id: "andamento-gestao",
+    title: "Andamento (negócios)",
+    who: ["MANAGER"],
+    href: "/oportunidades",
+    paths: [/^\/oportunidades/],
+    summary: "Todos os negócios depois da visita, com o funil do mês e o VGL.",
+    steps: [
+      "Use Lista ou Quadro. No quadro, arraste o cartão para a nova etapa.",
+      "Filtros: situação, responsável, cliente ou imóvel e “só paradas”.",
+      "Abra o negócio para ver a linha do tempo, mudar a etapa ou transferir o responsável.",
+    ],
+  },
+  {
+    id: "revisao",
+    title: "Revisão",
+    who: ["MANAGER"],
+    href: "/revisao",
+    paths: [/^\/revisao/],
+    summary: "O que precisa de uma decisão sua: visitas sem consultora, conflitos com a agenda e clientes a confirmar.",
+    steps: ["Resolva cada item com os botões do próprio cartão.", "“Vínculo de clientes”: diga se é a mesma pessoa ou uma pessoa diferente."],
+  },
+  {
+    id: "motivos",
+    title: "Listas e motivos",
+    who: ["MANAGER"],
+    href: "/config/motivos",
+    paths: [/^\/config\/motivos/],
+    summary: "As opções que aparecem nos formulários.",
+    steps: ["Edite os motivos de cancelamento, de perda e negativos, as garantias, os agenciadores, os diferenciais e o que falta na pré-análise.", "Desativar tira a opção da lista sem apagar o histórico."],
+  },
+  {
+    id: "usuarios",
+    title: "Usuários",
+    who: ["MANAGER"],
+    href: "/config/usuarios",
+    paths: [/^\/config\/usuarios/],
+    summary: "Cadastre a equipe e os acessos.",
+    steps: [
+      "Cadastre com o nome, o e-mail e o perfil (consultora, pré-atendimento, gestão, marketing).",
+      "Em “E-mails da agenda”, coloque o e-mail que a pessoa usa no Google Agenda, se for diferente do login.",
+      "Para a senha: dê uma senha provisória (troca obrigatória no 1º acesso) ou gere o link para a pessoa criar a dela.",
+    ],
+  },
+  {
+    id: "google",
+    title: "Integração Google",
+    who: ["ADMIN"],
+    href: "/admin/google",
+    paths: [/^\/admin\/google/],
+    summary: "A conexão com a agenda do Google.",
+    steps: [
+      "Enquanto o app estiver em “modo teste” no Google, a conexão vence 7 dias depois de conectar.",
+      "Um dia antes, o app avisa (notificação e faixa no topo).",
+      "Toque em “Reconectar / trocar conta”, entre com a mesma conta da agenda e aceite as permissões. Isso vale por mais 7 dias.",
+    ],
+  },
+  // ─────────────── Marketing ───────────────
+  {
+    id: "marketing",
+    title: "Locações para postar",
+    who: ["MARKETING", "MANAGER"],
+    href: "/marketing",
+    paths: [/^\/marketing/],
+    summary: "Cada contrato assinado chega aqui com o diferencial, o agenciador e as fotos.",
+    steps: [
+      "Abra a locação em “Para postar”.",
+      "“Copiar resumo” copia o texto pronto (sem dados do cliente).",
+      "Fotos: toque numa foto para baixar ou use “Baixar todas (.zip)” e leve para o Canva.",
+      "Depois de postar, toque em “Marcar como postado”. Errou? Em “Postadas”, use “Desfazer”.",
+    ],
+    tips: ["As fotos ficam guardadas mesmo depois que o imóvel sai do site da Auxiliadora."],
+  },
+];
+
+export const FAQ: Faq[] = [
+  { q: "Esqueci minha senha. E agora?", a: "Peça à gestão: ela gera um link para você criar uma senha nova (vale 24 h).", who: ALL },
+  { q: "Não recebo as notificações.", a: "No menu da conta (sua foto, no alto), toque em “Ativar notificações”. No iPhone, primeiro adicione o app à Tela de Início (Safari → Compartilhar → Adicionar à Tela de Início) e abra por ele.", who: ALL },
+  { q: "Como instalo o app no celular?", a: "iPhone: no Safari, Compartilhar → Adicionar à Tela de Início. Android: no Chrome, menu ⋮ → Instalar app.", who: ALL },
+  { q: "Como mudo a etapa do negócio pelo celular?", a: "Na tela inicial, toque no cartão “Negócios em andamento”, abra o cliente e use “Nova situação”.", who: ["CONSULTANT"] },
+  { q: "A visita apareceu cancelada e eu não cancelei.", a: "Na agenda aparece quem cancelou: a consultora pode ter registrado “cliente cancelou”, ou o imóvel saiu do título do evento no Google. Se ficou sem motivo, use “Informar motivo”.", who: ["PRE_SERVICE", "MANAGER"] },
+  { q: "Cancelei e o evento continua na agenda Google.", a: "É assim mesmo: ele vai para as 22h do mesmo dia, para as consultoras verem o que caiu. Se o evento foi criado pela consultora, ela precisa arrastar.", who: ["PRE_SERVICE", "MANAGER"] },
+  { q: "Mudei algo direto no Google e o app ainda não mostra.", a: "O app lê a agenda a cada 5 minutos (a tela Agenda Google, a cada 1 minuto). A gestão pode tocar em “Sincronizar agora” no Painel.", who: ["PRE_SERVICE", "MANAGER", "CONSULTANT"] },
+  { q: "A agenda Google parou de atualizar.", a: "Provavelmente a conexão venceu. Em Integração Google, toque em “Reconectar” com a mesma conta.", who: ["MANAGER", "ADMIN"] },
+  { q: "O imóvel saiu do site. Perdi as fotos?", a: "Não: as fotos são guardadas na locação quando o contrato é assinado. Use “Baixar todas (.zip)”.", who: ["MARKETING"] },
+];
+
+const sees = (role: string, who: Audience[]) => who.includes(role as Audience) || (role === "ADMIN" && who.includes("MANAGER"));
+
+export const topicsFor = (role: string) => HELP.filter((t) => sees(role, t.who));
+export const faqFor = (role: string) => FAQ.filter((f) => sees(role, f.who));
+/** Tópico da tela atual (o primeiro que combina com o endereço). */
+export const topicForPath = (role: string, path: string) => topicsFor(role).find((t) => t.paths.some((r) => r.test(path))) ?? null;

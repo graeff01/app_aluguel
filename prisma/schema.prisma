@@ -36,6 +36,8 @@ model User {
   privacyAcceptedAt  DateTime?
   /// primeiro acesso guiado concluído (ou pulado)
   onboardedAt        DateTime?
+  /// "O que mudou": última novidade que a pessoa já viu (id da entrada em src/lib/changelog.ts)
+  seenChangelog      String?
   /// conta Google vinculada no "Entrar com Google" (identificador estável do Google)
   googleSub          String?   @unique
   /// consultora ausente (folga/férias) até esta data, inclusive: o rodízio da pré-análise pula
@@ -120,6 +122,8 @@ model RateLimit {
 model AppSettings {
   id                       Int      @id @default(1)
   productName              String   @default("Visitas Locação")
+  /// app do Google em "modo teste": a conexão expira 7 dias depois de conectar (avisa o admin 1 dia antes)
+  googleTestingMode        Boolean  @default(true)
   primaryColor             String   @default("#dc7519")
   timezone                 String   @default("America/Sao_Paulo")
   syncIntervalMinutes      Int      @default(5)

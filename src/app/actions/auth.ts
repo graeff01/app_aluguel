@@ -9,6 +9,7 @@ import { normalizeEmail } from "@/lib/text";
 import { env } from "@/lib/env";
 import { ensureReferenceData } from "@/lib/settings";
 import { audit } from "@/lib/audit";
+import { LATEST_CHANGE } from "@/lib/changelog";
 import { str, type ActionState } from "@/lib/action";
 import { log } from "@/lib/log";
 
@@ -154,7 +155,8 @@ export async function completeOnboardingAction(skipped: boolean): Promise<{ ok: 
   const actor = await readActor();
   if (!actor) return { ok: false };
   await db.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: actor.id }, data: { onboardedAt: new Date() } });
+    // quem acabou de chegar não precisa das novidades antigas
+    await tx.user.update({ where: { id: actor.id }, data: { onboardedAt: new Date(), seenChangelog: LATEST_CHANGE } });
     await audit(tx, { actorId: actor.id, action: skipped ? "user.onboarding_skipped" : "user.onboarding_done", entityType: "User", entityId: actor.id });
   });
   return { ok: true };
@@ -171,4 +173,12 @@ export async function logoutAllAction() {
   }
   await destroySession();
   redirect("/login?saiu=1");
+}
+
+/** "O que mudou": marca as novidades como vistas (não aparecem de novo). */
+export async function markChangelogSeenAction(): Promise<{ ok: boolean }> {
+  const actor = await readActor();
+  if (!actor) return { ok: false };
+  await db.user.update({ where: { id: actor.id }, data: { seenChangelog: LATEST_CHANGE } });
+  return { ok: true };
 }

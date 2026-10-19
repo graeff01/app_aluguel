@@ -16,6 +16,7 @@ import { computeMetrics } from "@/lib/metrics";
 import { appLink, emailConfig, sendEmail, type EmailSender } from "@/lib/email";
 import { notDemo } from "./demo";
 import { syncHealth } from "./sync-status";
+import { googleExpiry } from "./google-expiry";
 import { decryptSecret } from "@/lib/crypto";
 
 const DAY = 86400_000;
@@ -457,6 +458,42 @@ export async function sendSyncAlerts(now = new Date(), opts: { send?: Sender; em
   }
   if (sent) log.info("sync_alerts.sent", { notifications: sent, broken });
   return { sent, broken };
+}
+
+/**
+ * App do Google em modo teste: avisa o admin 1 dia antes (e de novo 3 h antes) de a conexão expirar,
+ * para reconectar e ganhar mais 7 dias. Uma vez por conexão em cada etapa.
+ */
+export async function sendGoogleExpiryAlerts(now = new Date(), opts: { send?: Sender; email?: EmailSender | null } = {}) {
+  const send = opts.send ?? sendPush;
+  const email = opts.email !== undefined ? opts.email : emailConfig() ? sendEmail : null;
+  const pushOn = !!opts.send || !!pushConfig();
+  if (!pushOn && !email) return { skipped: "NO_CHANNEL" as const };
+  const exp = await googleExpiry(now);
+  if (!exp || exp.level === "ok" || exp.level === "expired") return { sent: 0 };
+  const when = new Intl.DateTimeFormat("pt-BR", { timeZone: TZ, weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(exp.expiresAt);
+  const stage = exp.level === "urgent" ? "3h" : "24h";
+  const admins = await db.user.findMany({ where: { role: "ADMIN", active: true }, select: { id: true, email: true, _count: { select: { pushSubscriptions: true } } } });
+  let sent = 0;
+  for (const u of admins) {
+    const id = await claim(u.id, dayKey(exp.expiresAt), `google_expiry_${stage}_${exp.connectionId}`, 1);
+    if (!id) continue;
+    const delivered = await notify(
+      { id: u.id, email: u.email, subs: pushOn ? u._count.pushSubscriptions : 0 },
+      {
+        title: exp.level === "urgent" ? "Agenda Google expira em poucas horas" : "Agenda Google expira amanhã",
+        body: `A conexão com o Google vence ${when}. Toque para reconectar (mesma conta) e ganhar mais ${7} dias.`,
+        url: "/admin/google",
+        tag: `google-expiry-${exp.connectionId}`,
+      },
+      send,
+      email,
+    );
+    await db.reminderLog.update({ where: { id }, data: { delivered } });
+    sent += delivered;
+  }
+  if (sent) log.info("google_expiry_alerts.sent", { notifications: sent, stage });
+  return { sent };
 }
 
 // ─────────────── Barreiras operacionais (gargalos do dia a dia) ───────────────

@@ -6,7 +6,8 @@ import { env } from "@/lib/env";
 import { createManualVisit } from "@/server/visits";
 import { decryptBackup, encryptBackup, exportDatabase, maybeDailyBackup, restoreInto, retentionToDelete, runBackup, type BackupConfig, type Storage } from "@/server/backup";
 import { resolveGoogleUser } from "@/server/google-login";
-import { sendSyncAlerts, type Sender } from "@/server/reminders";
+import { sendGoogleExpiryAlerts, sendSyncAlerts, type Sender } from "@/server/reminders";
+import { googleExpiry } from "@/server/google-expiry";
 import { toLocalInput } from "@/lib/time";
 import { makeConnection, makeUsers, resetDb } from "../helpers/db";
 
@@ -131,5 +132,46 @@ describe("alerta de agenda parada", () => {
     await db.syncState.create({ data: { calendarId: conn.calendarId!, lastSuccessAt: new Date(now.getTime() + 100_000) } });
     await sendSyncAlerts(new Date(now.getTime() + 120_000), { send, email: null });
     expect(sent.filter((s) => s.title === "Agenda Google normalizada")).toHaveLength(2);
+  });
+});
+
+describe("aviso antes de a conexão Google vencer (modo teste)", () => {
+  it("avisa o admin 1 dia antes e 3 h antes, uma vez cada; reconectar zera; app publicado não avisa", async () => {
+    const connectedAt = new Date("2026-10-12T22:00:00Z");
+    const conn = await makeConnection();
+    await db.googleConnection.update({ where: { id: conn.id }, data: { connectedAt } });
+    await db.pushSubscription.createMany({ data: [
+      { userId: u.admin.id, endpoint: "https://push.test/admin", p256dh: "k", auth: "a" },
+      { userId: u.manager.id, endpoint: "https://push.test/m", p256dh: "k", auth: "a" },
+    ] });
+    const sent: { endpoint: string; title: string; url: string; body: string }[] = [];
+    const send: Sender = async (t, p) => (sent.push({ endpoint: t.endpoint, title: p.title, url: p.url, body: p.body }), "ok");
+    const at = (h: number) => new Date(connectedAt.getTime() + h * 3600_000);
+    // vence em 7 dias (19/10 22:00 UTC = 19h em Brasília)
+    expect((await googleExpiry(at(0)))?.expiresAt.toISOString()).toBe("2026-10-19T22:00:00.000Z");
+    expect((await googleExpiry(at(100)))?.level).toBe("ok");
+    await sendGoogleExpiryAlerts(at(100), { send, email: null });
+    expect(sent).toHaveLength(0);
+    // faltando 20 h: avisa só o admin, uma vez
+    expect((await googleExpiry(at(148)))?.level).toBe("soon");
+    await sendGoogleExpiryAlerts(at(148), { send, email: null });
+    await sendGoogleExpiryAlerts(at(149), { send, email: null });
+    expect(sent.map((s) => s.endpoint)).toEqual(["https://push.test/admin"]);
+    expect(sent[0]).toMatchObject({ title: "Agenda Google expira amanhã", url: "/admin/google" });
+    expect(sent[0].body).toContain("19:00");
+    // faltando 2 h: segundo aviso
+    await sendGoogleExpiryAlerts(at(166), { send, email: null });
+    await sendGoogleExpiryAlerts(at(166.5), { send, email: null });
+    expect(sent.map((s) => s.title)).toEqual(["Agenda Google expira amanhã", "Agenda Google expira em poucas horas"]);
+    expect((await googleExpiry(at(169)))?.level).toBe("expired");
+    // reconectou: nova conexão, mais 7 dias
+    await db.googleConnection.update({ where: { id: conn.id }, data: { status: "DISCONNECTED" } });
+    await db.googleConnection.update({ where: { id: (await makeConnection()).id }, data: { connectedAt: at(150) } });
+    expect((await googleExpiry(at(151)))?.level).toBe("ok");
+    // app publicado no Google: não expira, não avisa
+    await db.appSettings.update({ where: { id: 1 }, data: { googleTestingMode: false } });
+    expect(await googleExpiry(at(300))).toBeNull();
+    await sendGoogleExpiryAlerts(at(300), { send, email: null });
+    expect(sent).toHaveLength(2);
   });
 });

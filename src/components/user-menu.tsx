@@ -40,6 +40,9 @@ export function UserMenu({ name, email, role, showProfile, pushKey, simpleMobile
             </button>
           </form>
         )}
+        <Link href="/ajuda" className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium hover:bg-tint">
+          <Icon name="list" className="size-[18px] text-ink-3" /> Central de ajuda
+        </Link>
         <Link href="/privacidade" className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium hover:bg-tint">
           <Icon name="audit" className="size-[18px] text-ink-3" /> Privacidade
         </Link>

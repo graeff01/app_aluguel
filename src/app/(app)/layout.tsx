@@ -6,6 +6,10 @@ import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { dateOnlyKey, startOfDayInTz } from "@/lib/time";
 import { syncHealth } from "@/server/sync-status";
+import { googleExpiry } from "@/server/google-expiry";
+import { WhatsNew } from "@/components/whats-new";
+import { HelpButton } from "@/components/help-button";
+import { unseenChanges } from "@/lib/changelog";
 import { BottomNav, SideNav, type NavItem } from "@/components/nav";
 import { OfflineBanner } from "@/components/online-status";
 import { UserMenu } from "@/components/user-menu";
@@ -173,6 +177,26 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </div>
     ) : null;
+  // app do Google em modo teste: avisa o admin antes de a conexão expirar (reconectar ganha mais 7 dias)
+  const expiry = isAdmin(actor) ? await googleExpiry(now) : null;
+  const expiryBanner =
+    expiry && expiry.level !== "ok" && !agendaDown ? (
+      <div role="alert" className={cx("border-b", expiry.level === "soon" ? "border-warn/20 bg-warn-soft" : "border-bad/20 bg-bad-soft")}>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 md:px-8">
+          <p className={cx("text-[14px] font-semibold", expiry.level === "soon" ? "text-warn" : "text-bad")}>
+            {expiry.level === "expired"
+              ? "A conexão com a agenda Google venceu (modo teste do Google). Reconecte para a agenda voltar."
+              : `A conexão com a agenda Google vence ${new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", hour: "2-digit", minute: "2-digit" }).format(expiry.expiresAt)} (em ${Math.max(1, Math.round(expiry.hoursLeft))} h). Reconecte para ganhar mais 7 dias.`}
+          </p>
+          <Link href="/admin/google" className={cx("press inline-flex min-h-10 items-center rounded-full px-4 text-[13px] font-semibold", expiry.level === "soon" ? "bg-warn text-bg" : "bg-bad text-white")}>
+            Reconectar agora
+          </Link>
+        </div>
+      </div>
+    ) : null;
+  // "O que mudou" desde o último acesso (uma vez por novidade)
+  const news = unseenChanges(actor.role, actor.seenChangelog);
+  const newsDialog = news.length ? <WhatsNew entries={news} /> : null;
   // consultora só vê o status da agenda quando há problema que a afeta
   const showHealth = global || health.level === "stale" || health.level === "error";
 
@@ -204,11 +228,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </header>
         {agendaBanner}
+        {expiryBanner}
         {agentsBanner}
         <main className="mx-auto w-full max-w-xl flex-1 px-4 pt-6 pb-16">{children}</main>
         <Suspense>
           <UndoToast />
         </Suspense>
+        <HelpButton role={actor.role} low />
+        {newsDialog}
       </div>
     );
   }
@@ -247,6 +274,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </header>
         {agendaBanner}
+        {expiryBanner}
         {agentsBanner}
         {/* páginas de tela cheia (Agenda Google) usam toda a largura */}
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-32 has-[[data-full-bleed]]:max-w-none has-[[data-full-bleed]]:px-0 has-[[data-full-bleed]]:pt-0 has-[[data-full-bleed]]:pb-20 md:px-8 md:pt-9 md:pb-12 md:has-[[data-full-bleed]]:px-0 md:has-[[data-full-bleed]]:pt-0 md:has-[[data-full-bleed]]:pb-0">{children}</main>
@@ -255,6 +283,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Suspense>
         <UndoToast />
       </Suspense>
+      <HelpButton role={actor.role} />
+      {newsDialog}
     </div>
   );
 }
