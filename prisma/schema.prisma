@@ -422,6 +422,8 @@ model Property {
   iptu          Int?
   /// até 8 fotos do anúncio (galeria da ficha da visita)
   photos        String[] @default([])
+  /// todas as fotos do anúncio (até 40), mantidas quando o anúncio sai do site (cópia do marketing na locação)
+  gallery       String[] @default([])
   area          Int?
   bedrooms      Int?
   /// endereço para a rota do dia (não é dado pessoal: é o endereço do imóvel)
@@ -886,8 +888,30 @@ model LeasePost {
   postedAt      DateTime?
   postedById    String?
   postedBy      User?       @relation("LeasePostPostedBy", fields: [postedById], references: [id])
+  /// cópia das fotos do anúncio para o marketing (o anúncio sai do site depois de alugado)
+  photos          LeasePhoto[]
+  /// OK = fotos guardadas; NONE = anúncio sem fotos; ERROR = falhou (o worker tenta de novo)
+  photosStatus    String?
+  photosCheckedAt DateTime?
+  photoAttempts   Int         @default(0)
 
   @@index([postedAt])
+}
+
+/// Foto do anúncio guardada para o marketing baixar (não é dado pessoal: é a foto pública do imóvel).
+model LeasePhoto {
+  id          String    @id @default(cuid())
+  leasePostId String
+  leasePost   LeasePost @relation(fields: [leasePostId], references: [id], onDelete: Cascade)
+  position    Int
+  sourceUrl   String
+  mime        String
+  size        Int
+  data        Bytes
+  createdAt   DateTime  @default(now())
+
+  @@unique([leasePostId, sourceUrl])
+  @@index([leasePostId, position])
 }
 
 /// Documentos do cliente anexados à pré-análise (RG, comprovante de renda…).

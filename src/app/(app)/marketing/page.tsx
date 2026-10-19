@@ -8,7 +8,7 @@ import { dateOnlyKey, fmt } from "@/lib/time";
 import { InlineAction } from "@/components/inline-action";
 import { PageHeader, Segmented, cx } from "@/components/ui";
 import { PropertyThumb } from "@/components/property-thumb";
-import { leasePostedAction } from "@/app/actions/manager";
+import { leasePhotosAction, leasePostedAction } from "@/app/actions/manager";
 import { CopySummary } from "./copy-summary";
 
 export const metadata = { title: "Marketing" };
@@ -29,6 +29,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       include: {
         agent: { select: { label: true } },
         postedBy: { select: { name: true } },
+        photos: { orderBy: { position: "asc" }, select: { id: true } },
         opportunity: {
           select: {
             closedAt: true,
@@ -97,6 +98,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
                     </div>
                   )}
                   <p className="whitespace-pre-wrap text-ink-2">{p.highlightNote}</p>
+                  <PhotoStrip postId={p.id} code={pr.code} photos={p.photos.map((x) => x.id)} status={p.photosStatus} />
                   {posted && p.postedAt && (
                     <p className="text-[12px] text-ink-3">
                       Postado em {fmt.date(p.postedAt)}
@@ -122,6 +124,57 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           })}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** Fotos do anúncio guardadas na locação: baixar uma a uma ou todas (.zip) para usar no Canva. */
+function PhotoStrip({ postId, code, photos, status }: { postId: string; code: string; photos: string[]; status: string | null }) {
+  const SHOW = 8;
+  if (photos.length === 0) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-surface-2 px-3 py-2.5 text-[13px] text-ink-3">
+        <span className="flex-1">{status === null ? "Guardando as fotos do anúncio… aparecem aqui em alguns minutos." : status === "NONE" ? "O anúncio não tinha fotos para guardar." : "Não consegui guardar as fotos do anúncio ainda."}</span>
+        <InlineAction action={leasePhotosAction} fields={{ postId }} label="Buscar fotos agora" />
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-2xl border border-line p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[13px] font-semibold">
+          Fotos do anúncio <span className="num font-normal text-ink-3">({photos.length})</span>
+        </p>
+        <a href={`/api/marketing/locacoes/${postId}/fotos`} download className="press inline-flex min-h-10 items-center rounded-full bg-primary px-3.5 text-[13px] font-semibold text-on-primary">
+          Baixar todas (.zip)
+        </a>
+      </div>
+      <ul className="grid grid-cols-4 gap-1.5">
+        {photos.slice(0, SHOW).map((id, i) => (
+          <li key={id}>
+            <a href={`/api/marketing/fotos/${id}?baixar=1`} download title={`Baixar foto ${i + 1}`} className="press block overflow-hidden rounded-xl bg-tint">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/api/marketing/fotos/${id}`} alt={`Imóvel ${code}, foto ${i + 1}`} loading="lazy" className="aspect-square w-full object-cover" />
+            </a>
+          </li>
+        ))}
+      </ul>
+      {photos.length > SHOW && (
+        <details className="mt-1.5">
+          <summary className="cursor-pointer py-1.5 text-[13px] font-semibold text-ink-2">Ver mais {photos.length - SHOW} fotos</summary>
+          <ul className="grid grid-cols-4 gap-1.5">
+            {photos.slice(SHOW).map((id, i) => (
+              <li key={id}>
+                <a href={`/api/marketing/fotos/${id}?baixar=1`} download title={`Baixar foto ${SHOW + i + 1}`} className="press block overflow-hidden rounded-xl bg-tint">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/api/marketing/fotos/${id}`} alt={`Imóvel ${code}, foto ${SHOW + i + 1}`} loading="lazy" className="aspect-square w-full object-cover" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      <p className="mt-1.5 text-[12px] text-ink-3">Toque numa foto para baixar. Ficam guardadas aqui mesmo depois que o anúncio sai do site.</p>
     </div>
   );
 }

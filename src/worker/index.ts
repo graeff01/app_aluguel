@@ -12,6 +12,7 @@ import { getSettings } from "@/lib/settings";
 import { executeRun } from "@/server/sync/runner";
 import { sendDailyReminders, sendMonthlyReportNotice, sendOperationalAlerts, sendResultReminders, sendSyncAlerts, sendUpcomingVisitReminders, sendWeeklySummary } from "@/server/reminders";
 import { refreshPropertyPreviews } from "@/server/property-preview";
+import { captureMissingLeasePhotos } from "@/server/lease-photos";
 import { refreshGeocodes } from "@/server/geo";
 import { maybeDailyBackup } from "@/server/backup";
 import { recordError } from "@/lib/error-tracking";
@@ -80,6 +81,7 @@ async function main() {
         lastPreviewCheck = Date.now();
         await refreshPropertyPreviews().catch((e) => log.error("property_preview.failed", { code: errorCode(e) }));
         await refreshGeocodes().catch((e) => log.error("geo.refresh_failed", { code: errorCode(e) }));
+        await captureMissingLeasePhotos().catch((e) => log.error("lease_photos.failed", { code: errorCode(e) }));
       }
       if (Date.now() - lastReminderCheck > 10 * 60_000) {
         lastReminderCheck = Date.now();

@@ -41,10 +41,12 @@ export type Listing = {
   area: number | null;
   bedrooms: number | null;
   photos: string[];
+  /** todas as fotos (até 40): o marketing guarda uma cópia na locação */
+  gallery: string[];
 };
 export type Preview = { status: "OK" | "NOT_FOUND" | "ERROR"; photoUrl: string | null; title: string | null; listing?: Listing };
 
-const EMPTY_LISTING: Listing = { category: null, neighborhood: null, city: null, rent: null, totalPrice: null, condoFee: null, iptu: null, area: null, bedrooms: null, photos: [] };
+const EMPTY_LISTING: Listing = { category: null, neighborhood: null, city: null, rent: null, totalPrice: null, condoFee: null, iptu: null, area: null, bedrooms: null, photos: [], gallery: [] };
 
 type Json = Record<string, unknown>;
 const obj = (v: unknown): Json | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null);
@@ -75,8 +77,8 @@ function findListingNode(v: unknown, depth = 0): Json | null {
  * O endereço do JSON-LD é o da agência, não o do imóvel — por isso não é usado.
  * Bairro/cidade vêm do nome "Tipo - Bairro - Cidade" ou do og:title "... em Bairro, Cidade.".
  */
-export function parseListing(html: string, ogTitle: string | null): Listing {
-  const out: Listing = { ...EMPTY_LISTING, photos: [] };
+export function parseListing(html: string, ogTitle: string | null, code?: string): Listing {
+  const out: Listing = { ...EMPTY_LISTING, photos: [], gallery: [] };
   for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
     let data: unknown;
     try {
@@ -95,7 +97,8 @@ export function parseListing(html: string, ogTitle: string | null): Listing {
     out.condoFee = spec("condom");
     out.iptu = spec("iptu");
     const imgs = [...arr(node.image), ...arr(item?.image)].map((i) => (typeof i === "string" ? i : obj(i)?.url)).filter((u): u is string => typeof u === "string" && /^https:\/\//i.test(u));
-    out.photos = [...new Set(imgs)].slice(0, 8);
+    out.gallery = [...new Set(imgs)].slice(0, 40);
+    out.photos = out.gallery.slice(0, 8);
     out.category = txt(item?.accommodationCategory, 40);
     out.area = num(obj(item?.floorSize)?.value);
     out.bedrooms = num(item?.numberOfRooms);
@@ -107,6 +110,12 @@ export function parseListing(html: string, ogTitle: string | null): Listing {
     }
     break;
   }
+  // a galeria da página tem mais fotos que o JSON-LD: links "/pictures/{codigo}-…" em tamanho cheio (sem as miniaturas)
+  if (code && /^[\w-]+$/.test(code)) {
+    const page = [...html.matchAll(new RegExp(`https://[^"'\\s)\\\\]+/pictures/${code}-[^"'\\s)\\\\]+\\.(?:jpe?g|png|webp)`, "gi"))].map((m) => m[0]).filter((u) => !/\/thumbnail\//i.test(u));
+    out.gallery = [...new Set([...out.gallery, ...page])].slice(0, 40);
+    if (out.photos.length === 0) out.photos = out.gallery.slice(0, 8);
+  }
   if (!out.neighborhood && ogTitle) {
     const mm = ogTitle.match(/\bem ([^,]+), ([^.]+)\.?$/);
     if (mm) {
@@ -117,7 +126,7 @@ export function parseListing(html: string, ogTitle: string | null): Listing {
   return out;
 }
 
-export async function fetchPreview(url: string, fetchImpl: typeof fetch = fetch): Promise<Preview> {
+export async function fetchPreview(url: string, fetchImpl: typeof fetch = fetch, code?: string): Promise<Preview> {
   try {
     const res = await fetchImpl(url, {
       headers: { "user-agent": "VisitasLocacao/1.0 (+pre-visualizacao de imovel)", accept: "text/html" },
@@ -131,7 +140,7 @@ export async function fetchPreview(url: string, fetchImpl: typeof fetch = fetch)
     const title = meta(html, "og:title");
     const photoUrl = image && /^https:\/\//i.test(image) ? image : null;
     if (!photoUrl && !title) return { status: "NOT_FOUND", photoUrl: null, title: null };
-    return { status: "OK", photoUrl, title: title ? title.slice(0, 200) : null, listing: parseListing(html, title) };
+    return { status: "OK", photoUrl, title: title ? title.slice(0, 200) : null, listing: parseListing(html, title, code) };
   } catch {
     return { status: "ERROR", photoUrl: null, title: null };
   }
@@ -156,14 +165,14 @@ export async function refreshPropertyPreviews(opts: { limit?: number; fetchImpl?
   });
   let updated = 0;
   for (const p of candidates) {
-    const pv = await fetchPreview(propertyUrl(settings.propertyUrlTemplate, p.code), opts.fetchImpl);
+    const pv = await fetchPreview(propertyUrl(settings.propertyUrlTemplate, p.code), opts.fetchImpl, p.code);
     await db.property.update({
       where: { id: p.id },
       data: {
         pageStatus: pv.status,
         pageCheckedAt: now,
-        // falha temporária não apaga a foto já conhecida
-        ...(pv.status === "ERROR" ? {} : { photoUrl: pv.photoUrl, title: pv.title, ...(pv.listing ?? EMPTY_LISTING) }),
+        // falha temporária não apaga nada; anúncio fora do ar (alugado) mantém as fotos e os dados que já conhecíamos
+        ...(pv.status === "OK" ? { photoUrl: pv.photoUrl, title: pv.title, ...(pv.listing ?? EMPTY_LISTING) } : {}),
       },
     });
     updated++;
@@ -177,9 +186,10 @@ export async function refreshPropertyPreviews(opts: { limit?: number; fetchImpl?
 export async function refreshPropertyNow(code: string, opts: { fetchImpl?: typeof fetch } = {}) {
   const settings = await getSettings();
   if (!settings.propertyUrlTemplate.includes("{codigo}")) return null;
-  const pv = await fetchPreview(propertyUrl(settings.propertyUrlTemplate, code), opts.fetchImpl);
+  const pv = await fetchPreview(propertyUrl(settings.propertyUrlTemplate, code), opts.fetchImpl, code);
   if (pv.status === "ERROR") return pv; // falha temporária: o worker tenta de novo
-  const data = { pageStatus: pv.status, pageCheckedAt: new Date(), photoUrl: pv.photoUrl, title: pv.title, ...(pv.listing ?? EMPTY_LISTING) };
+  // anúncio fora do ar: guarda só a situação (as fotos e dados conhecidos ficam)
+  const data = pv.status === "OK" ? { pageStatus: pv.status, pageCheckedAt: new Date(), photoUrl: pv.photoUrl, title: pv.title, ...(pv.listing ?? EMPTY_LISTING) } : { pageStatus: pv.status, pageCheckedAt: new Date() };
   await db.property.upsert({ where: { code }, update: data, create: { code, ...data } });
   return pv;
 }

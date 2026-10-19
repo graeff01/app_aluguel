@@ -50,7 +50,13 @@ describe("dados do anúncio", () => {
     ],
   })}</script></head></html>`;
   it("lê tipo, bairro, cidade, valores, área e quartos (e ignora o endereço da agência)", () => {
-    expect(parseListing(html, null)).toEqual({ category: "Apartamento", neighborhood: "Nossa Senhora das Graças", city: "Canoas", rent: 4500, totalPrice: 5190, condoFee: 560, iptu: 130, area: 91, bedrooms: 2, photos: ["https://img.test/1.jpg", "https://img.test/2.jpg"] });
+    expect(parseListing(html, null)).toEqual({ category: "Apartamento", neighborhood: "Nossa Senhora das Graças", city: "Canoas", rent: 4500, totalPrice: 5190, condoFee: 560, iptu: 130, area: 91, bedrooms: 2, photos: ["https://img.test/1.jpg", "https://img.test/2.jpg"], gallery: ["https://img.test/1.jpg", "https://img.test/2.jpg"] });
+  });
+  it("galeria: junta as fotos da página (tamanho cheio, sem miniaturas e sem fotos de outros imóveis)", () => {
+    const P = "https://gestor.site.test/rest/image/Product/1/pictures";
+    const page = `${html}<div><img src="${P}/thumbnail/761739-a.jpg"><a href="${P}/761739-a.jpg"></a><a href='${P}/761739-b.jpg'></a><img src="${P}/999999-x.jpg"><a href="${P}/761739-a.jpg"></a></div>`;
+    expect(parseListing(page, null, "761739").gallery).toEqual(["https://img.test/1.jpg", "https://img.test/2.jpg", `${P}/761739-a.jpg`, `${P}/761739-b.jpg`]);
+    expect(parseListing(page, null).gallery).toHaveLength(2); // sem o código, só o JSON-LD
   });
   it("sem JSON-LD, usa o bairro do título", () => {
     expect(parseListing("<html></html>", "Casa com 3 quartos para alugar em Igara, Canoas.")).toMatchObject({ neighborhood: "Igara", city: "Canoas", rent: null });

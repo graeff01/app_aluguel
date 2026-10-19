@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { runAction, str, type ActionState } from "@/lib/action";
 import { nudgeConsultant } from "@/server/insights";
 import { markLeasePosted, updateOpportunity } from "@/server/opportunities";
+import { captureLeasePhotosNow } from "@/server/lease-photos";
 
 export async function nudgeAction(_: ActionState, fd: FormData) {
   return runAction((a) => nudgeConsultant(a, str(fd, "consultantId")));
@@ -21,6 +22,16 @@ export async function moveOpportunityAction(_: ActionState, fd: FormData) {
 }
 
 /** Marketing: marcar locação como postada (ou desfazer). */
+/** Marketing: buscar as fotos do anúncio agora (sem esperar o worker). */
+export async function leasePhotosAction(_: ActionState, fd: FormData) {
+  const s = await runAction(async (a) => {
+    const r = await captureLeasePhotosNow(a, str(fd, "postId"));
+    return r.total ? `${r.total} foto${r.total === 1 ? "" : "s"} guardada${r.total === 1 ? "" : "s"}.` : "O anúncio não tem fotos disponíveis (talvez já tenha saído do site).";
+  });
+  if (s.ok) revalidatePath("/marketing");
+  return s;
+}
+
 export async function leasePostedAction(_: ActionState, fd: FormData) {
   const s = await runAction(async (a) => {
     const posted = str(fd, "posted") === "1";

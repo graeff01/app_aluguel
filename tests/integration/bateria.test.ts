@@ -10,6 +10,8 @@ import { cancelVisitByStaff, concludeVisit, createManualVisit, setCancelReason }
 import { markLeasePosted, updateOpportunity } from "@/server/opportunities";
 import { rangeAgenda } from "@/server/day-agenda";
 import { preServiceDashboard } from "@/server/pre-service-dashboard";
+import { captureLeasePhotosNow, captureMissingLeasePhotos, leasePhotosZip, readLeasePhoto, siteDomain } from "@/server/lease-photos";
+import { refreshPropertyPreviews } from "@/server/property-preview";
 import { runSync } from "@/server/sync/engine";
 import { toLocalInput } from "@/lib/time";
 import { MockCalendar, visitEvent } from "../helpers/mock-calendar";
@@ -620,5 +622,77 @@ describe("painel: visão do pré-atendimento", () => {
     expect(d.pre.total).toBe(0);
     // fora do período: nada
     expect((await preServiceDashboard(u.admin, jasmin.id, "2026-09-01", "2026-09-30", NOW))!.visits.total).toBe(0);
+  });
+});
+
+describe("marketing: fotos do anúncio guardadas na locação", () => {
+  const jpg = (n: number) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, n, n, n, 0xff, 0xd9]);
+  const page = (imgs: string[]) =>
+    `<html><head><meta property="og:title" content="Apartamento para alugar em Igara, Canoas."><meta property="og:image" content="${imgs[0]}"><script type="application/ld+json">${JSON.stringify({ offers: [{ price: 1800, itemOffered: { name: "Apartamento - Igara - Canoas", image: imgs } }] })}</script></head></html>`;
+  const site = (routes: Record<string, () => Response>) =>
+    (async (url: string | URL | Request) => {
+      const r = routes[String(url)];
+      return r ? r() : new Response("", { status: 404 });
+    }) as typeof fetch;
+
+  it("ao assinar, guarda todas as fotos (só do site), baixa uma ou todas em .zip e mantém depois que o anúncio sai", async () => {
+    await db.appSettings.update({ where: { id: 1 }, data: { propertyUrlTemplate: "https://www.imoveis.test.br/imovel/{codigo}" } });
+    expect(siteDomain("https://www.auxiliadorapredial.com.br/imovel/aluguel/{codigo}?tag=8086")).toBe("auxiliadorapredial.com.br");
+    const v = await visit("2026-10-10T13:00:00Z", "777777");
+    await concludeVisit(u.a, v.id, { requestId: `bateria-fotos-${++seq}`, expectedVersion: 1, status: "DONE", evaluation: "POSITIVE", note: "gostou" }, NOW);
+    const o = await db.opportunity.findFirstOrThrow();
+    await updateOpportunity(u.a, o.id, { expectedVersion: o.version, toStatus: "CLOSED_WON", closedAt: "2026-10-12", ...(await leaseInfo()) });
+    const post = await db.leasePost.findFirstOrThrow();
+
+    const imgs = Array.from({ length: 12 }, (_, i) => `https://fotos.imoveis.test.br/777777/${i + 1}.jpg`);
+    const all = [...imgs, "https://outro-site.test/espiao.jpg"];
+    let online = true;
+    let failSecond = true;
+    const routes: Record<string, () => Response> = {
+      "https://www.imoveis.test.br/imovel/777777": () => (online ? new Response(page(all), { status: 200, headers: { "content-type": "text/html" } }) : new Response("", { status: 404 })),
+      "https://outro-site.test/espiao.jpg": () => new Response(jpg(99), { status: 200, headers: { "content-type": "image/jpeg" } }),
+    };
+    imgs.forEach((u, i) => {
+      routes[u] = () => {
+        if (i === 1 && failSecond) return new Response("", { status: 503 });
+        return new Response(jpg(i), { status: 200, headers: { "content-type": "image/jpeg" } });
+      };
+    });
+    const f = site(routes);
+
+    // worker: 11 de 12 (uma falhou) — outro domínio nunca é baixado
+    expect(await captureMissingLeasePhotos({ fetchImpl: f, now: NOW })).toEqual({ checked: 1 });
+    expect(await db.leasePhoto.count()).toBe(11);
+    expect(await db.leasePost.findUniqueOrThrow({ where: { id: post.id } })).toMatchObject({ photosStatus: "ERROR", photoAttempts: 1 });
+    // antes de 1 h o worker não tenta de novo; a pessoa pode pedir na hora
+    expect((await captureMissingLeasePhotos({ fetchImpl: f, now: new Date(NOW.getTime() + 60_000) })).checked).toBe(0);
+    failSecond = false;
+    await expect(captureLeasePhotosNow(u.a, post.id, { fetchImpl: f })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await captureLeasePhotosNow(mkt, post.id, { fetchImpl: f })).toMatchObject({ saved: 1, total: 12, status: "OK" });
+
+    // baixar uma: nome com o código e a ordem do anúncio
+    const second = await db.leasePhoto.findFirstOrThrow({ where: { position: 1 } });
+    expect(await readLeasePhoto(mkt, second.id)).toMatchObject({ name: "imovel-777777-02.jpg", mime: "image/jpeg" });
+    await expect(readLeasePhoto(u.a, second.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // baixar todas: .zip com as 12, na ordem
+    const z = await leasePhotosZip(u.manager, post.id);
+    expect(z.name).toBe("fotos-imovel-777777.zip");
+    expect(z.data.readUInt32LE(0)).toBe(0x04034b50);
+    const eocd = z.data.subarray(z.data.length - 22);
+    expect(eocd.readUInt32LE(0)).toBe(0x06054b50);
+    expect(eocd.readUInt16LE(10)).toBe(12);
+    expect(z.data.includes(Buffer.from("imovel-777777-01.jpg"))).toBe(true);
+    expect(z.data.includes(Buffer.from("imovel-777777-12.jpg"))).toBe(true);
+
+    // alugado: o anúncio sai do site → as fotos e os links continuam
+    online = false;
+    await db.property.update({ where: { code: "777777" }, data: { pageCheckedAt: new Date(Date.now() - 30 * 86400_000) } });
+    await refreshPropertyPreviews({ fetchImpl: f, pauseMs: 0 });
+    const prop = await db.property.findUniqueOrThrow({ where: { code: "777777" } });
+    expect(prop.pageStatus).toBe("NOT_FOUND");
+    expect(prop.gallery).toHaveLength(13);
+    expect(prop.photos).toHaveLength(8);
+    expect(prop.photoUrl).toBe(imgs[0]);
+    expect(await db.leasePhoto.count({ where: { leasePostId: post.id } })).toBe(12);
   });
 });
