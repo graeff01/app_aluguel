@@ -217,6 +217,11 @@ test("jornada gestora: painel do pré-atendimento, cadastra agenciador e fecha a
   monitor(page, J);
   await login(page, "gestora@e2e.test", /\/painel/);
   for (const p of ["/painel", "/ao-vivo", "/revisao", "/oportunidades", "/relatorios", "/pre-analises", "/agenda-do-dia?vista=semana"]) await go(page, J, p);
+  // painel: visão do pré-atendimento ao lado das consultoras
+  await go(page, J, "/painel");
+  await page.getByRole("link", { name: /Jasmin\s*pré/ }).click();
+  await expect(page.getByRole("heading", { name: "Visitas que ela agendou" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pré-análises enviadas" })).toBeVisible();
   await go(page, J, "/pre-analises/painel");
   await expect(page.getByRole("link", { name: "Rafaela Jornada da Silva" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "Seguro fiança" }).first()).toBeVisible();

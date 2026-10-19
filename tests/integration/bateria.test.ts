@@ -9,6 +9,7 @@ import { addPreAnalysisFiles, readFiles, readPreAnalysisFile, MAX_FILE_BYTES } f
 import { cancelVisitByStaff, concludeVisit, createManualVisit, setCancelReason } from "@/server/visits";
 import { markLeasePosted, updateOpportunity } from "@/server/opportunities";
 import { rangeAgenda } from "@/server/day-agenda";
+import { preServiceDashboard } from "@/server/pre-service-dashboard";
 import { runSync } from "@/server/sync/engine";
 import { toLocalInput } from "@/lib/time";
 import { MockCalendar, visitEvent } from "../helpers/mock-calendar";
@@ -592,5 +593,32 @@ describe("motivo depois do cancelamento (caso Antonio, 16/10)", () => {
     await expect(setCancelReason(jasmin, open.id, { reasonId: r.id })).rejects.toMatchObject({ code: "INVALID_STATE" });
     const hist = await db.visitOutcomeHistory.findMany({ where: { visitId: main.id }, orderBy: { createdAt: "asc" } });
     expect(hist.at(-1)).toMatchObject({ authorId: jasmin.id, note: "Motivo informado: Cliente desistiu — Cliente cancelou a visita." });
+  });
+});
+
+describe("painel: visão do pré-atendimento", () => {
+  it("conta as visitas dos eventos que ela organizou (e-mail de login ou apelido) e as pré-análises dela", async () => {
+    await makeConnection("central@exemplo.test");
+    const api = new MockCalendar();
+    // agenda dela com outro e-mail (como jasmim/jasmin): cadastrado como apelido
+    await db.userEmailAlias.create({ data: { userId: jasmin.id, email: "agenda.jasmin@exemplo.test" } });
+    api.put(visitEvent("p1", { start: "2026-10-12T15:00:00Z", title: "Visita clt - Cliente Um 1111111 - cod 111111;222222 - 51 99876-0001", organizer: "agenda.jasmin@exemplo.test" }));
+    api.put(visitEvent("p2", { start: "2026-10-12T18:00:00Z", title: "Visita clt - Cliente Dois 2222222 - cod 333333 - 51 99876-0002", organizer: "agenda.jasmin@exemplo.test" }));
+    api.put(visitEvent("c1", { start: "2026-10-12T19:00:00Z", title: "Visita clt - Cliente Tres 3333333 - cod 444444 - 51 99876-0003", organizer: "consultora.a@exemplo.test" }));
+    await runSync({ api, now: new Date("2026-10-12T10:00:00Z"), sleep: async () => {} });
+    const one = await db.visit.findFirstOrThrow({ where: { propertyCode: "111111" } });
+    await concludeVisit(u.a, one.id, { requestId: "pre-painel-1", expectedVersion: one.version, status: "DONE", evaluation: "POSITIVE", note: "gostou" }, NOW);
+    const two = await db.visit.findFirstOrThrow({ where: { propertyCode: "333333" } });
+    await concludeVisit(u.a, two.id, { requestId: "pre-painel-2", expectedVersion: two.version, status: "NO_SHOW", note: "não veio" }, NOW);
+
+    await expect(preServiceDashboard(u.a, jasmin.id, "2026-10-01", "2026-10-31", NOW)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await preServiceDashboard(u.admin, u.a.id, "2026-10-01", "2026-10-31", NOW)).toBeNull(); // só pré-atendimento
+    const d = (await preServiceDashboard(u.admin, jasmin.id, "2026-10-01", "2026-10-31", NOW))!;
+    // 3 imóveis (2 atendimentos); o evento da consultora não entra
+    expect(d.visits).toMatchObject({ total: 3, clients: 2, done: 1, positive: 1, noShow: 1, awaiting: 1, attendance: 0.5 });
+    expect(d.emails).toContain("agenda.jasmin@exemplo.test");
+    expect(d.pre.total).toBe(0);
+    // fora do período: nada
+    expect((await preServiceDashboard(u.admin, jasmin.id, "2026-09-01", "2026-09-30", NOW))!.visits.total).toBe(0);
   });
 });

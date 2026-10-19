@@ -12,6 +12,8 @@ import { Funnel } from "@/components/funnel";
 import { opportunityFunnel, staleOpportunities } from "@/server/insights";
 import { InlineAction } from "@/components/inline-action";
 import { nudgeAction } from "@/app/actions/manager";
+import { db } from "@/lib/db";
+import { preServiceDashboard } from "@/server/pre-service-dashboard";
 
 export const metadata = { title: "Painel" };
 
@@ -39,6 +41,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     opportunityFunnel(actor, { from: f.from, to: f.to, consultantId: f.consultantId, propertyCode: f.propertyCode }),
     staleOpportunities(actor, now),
   ]);
+  // pré-atendimento: visão própria (visitas que ela agendou e pré-análises), no mesmo período
+  const preUsers = await db.user.findMany({ where: { role: "PRE_SERVICE", active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  const pre = sp.pre && preUsers.some((u) => u.id === sp.pre) ? await preServiceDashboard(actor, sp.pre, d.from, d.to, now) : null;
   const m = d.metrics;
   const team = d.team;
   const firstNames = d.perConsultant.map((c) => c.user.name.split(" ")[0]);
@@ -56,7 +61,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const q = (over: Record<string, string | null>) => {
     const p = new URLSearchParams({ de: d.from, ate: d.to });
-    if (d.consultantId) p.set("consultora", d.consultantId);
+    if (d.consultantId && !pre) p.set("consultora", d.consultantId);
+    if (pre) p.set("pre", pre.user.id);
     if (d.propertyCode) p.set("imovel", d.propertyCode);
     for (const [k, v] of Object.entries(over)) v === null ? p.delete(k) : p.set(k, v);
     return `?${p}`;
@@ -70,8 +76,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <>
       <PageHeader
         eyebrow={`${fmt.dayKey(d.from)} — ${fmt.dayKey(d.to)}`}
-        title={individual ? individual.name : "Painel da equipe"}
-        subtitle={individual ? "Visão individual, comparada com a equipe no mesmo período" : "Visitas pela data da visita · fechamentos pela data do fechamento"}
+        title={pre ? pre.user.name : individual ? individual.name : "Painel da equipe"}
+        subtitle={pre ? "Pré-atendimento · visitas que ela agendou (pela data da visita) e pré-análises enviadas no período" : individual ? "Visão individual, comparada com a equipe no mesmo período" : "Visitas pela data da visita · fechamentos pela data do fechamento"}
         action={<SyncButton />}
       />
 
@@ -80,16 +86,26 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <Segmented
           label="Visão"
           items={[
-            { href: q({ consultora: null }), label: "Equipe", active: !d.consultantId },
+            { href: q({ consultora: null, pre: null }), label: "Equipe", active: !d.consultantId && !pre },
             ...d.perConsultant.map((c) => ({
-              href: q({ consultora: c.user.id }),
+              href: q({ consultora: c.user.id, pre: null }),
               label: (
                 <>
                   <Avatar name={c.user.name} size="sm" tone={d.consultantId === c.user.id ? "accent" : "light"} />
                   {shortName(c.user.name)}
                 </>
               ),
-              active: d.consultantId === c.user.id,
+              active: !pre && d.consultantId === c.user.id,
+            })),
+            ...preUsers.map((u) => ({
+              href: q({ consultora: null, pre: u.id }),
+              label: (
+                <>
+                  <Avatar name={u.name} size="sm" tone={pre?.user.id === u.id ? "accent" : "light"} />
+                  {u.name.split(" ")[0]} <span className="text-[11px] font-normal opacity-70">pré</span>
+                </>
+              ),
+              active: pre?.user.id === u.id,
             })),
           ]}
         />
@@ -103,7 +119,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <Icon name="settings" className="size-4" /> Personalizar
           </summary>
           <form className="mt-3 grid gap-x-3 rounded-3xl border border-line bg-surface p-5 shadow-card sm:grid-cols-4">
-            {d.consultantId && <input type="hidden" name="consultora" value={d.consultantId} />}
+            {d.consultantId && !pre && <input type="hidden" name="consultora" value={d.consultantId} />}
+            {pre && <input type="hidden" name="pre" value={pre.user.id} />}
             <Field label="De" htmlFor="de">
               <Input id="de" name="de" type="date" defaultValue={d.from} />
             </Field>
@@ -125,6 +142,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         )}
       </div>
 
+      {pre ? (
+        <PreServiceView data={pre} />
+      ) : (
+      <>
       {!individual && attention.length > 0 && (
         <div className="mb-8 rounded-3xl border border-bad/20 bg-bad-soft p-5">
           <p className="mb-3 flex items-center gap-2 font-bold text-bad">
@@ -353,6 +374,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <li>“Sem base” indica que não há registros para calcular a taxa (não é 0%).</li>
         </ul>
       </details>
+      </>
+      )}
     </>
   );
 }
@@ -414,6 +437,79 @@ function PropertyTable({ rows, link }: { rows: Row[]; link: (k: string) => strin
           </tbody>
         </table>
       </div>
+    </>
+  );
+}
+
+const pctOf = (n: number, total: number) => (total ? `${Math.round((n / total) * 100)}%` : "—");
+
+/** Pré-atendimento: o que ela agendou e o que aconteceu com as visitas; pré-análises enviadas. */
+function PreServiceView({ data }: { data: NonNullable<Awaited<ReturnType<typeof preServiceDashboard>>> }) {
+  const v = data.visits;
+  const p = data.pre;
+  const decided = p.approved + p.rejected;
+  return (
+    <>
+      {v.total === 0 && (
+        <p className="mb-6 rounded-2xl bg-accent-soft px-4 py-3 text-[14px] text-accent-strong">
+          Nenhuma visita organizada por {data.emails.join(" ou ")} no período. Se ela usa outro e-mail na agenda Google, cadastre-o no usuário dela em{" "}
+          <Link href={`/config/usuarios/${data.user.id}`} className="font-semibold underline">
+            Usuários
+          </Link>
+          .
+        </p>
+      )}
+      <Section title="Visitas que ela agendou" hint="Eventos que ela criou na agenda Google ou pelo app, pela data da visita. Cada imóvel conta uma visita.">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatTile label="Agendadas" value={v.total} detail={`${v.clients} atendimento${v.clients === 1 ? "" : "s"} · ${v.upcoming} ainda por vir`} />
+          <StatTile label="Realizadas" value={v.done} detail={`${v.positive} positiva${v.positive === 1 ? "" : "s"}${v.awaiting ? ` · ${v.awaiting} aguardando registro` : ""}`} tone="accent" />
+          <StatTile label="Comparecimento" value={v.attendance === null ? "—" : `${Math.round(v.attendance * 100)}%`} detail={`${v.noShow} não compareceu`} />
+          <StatTile label="Canceladas" value={v.canceled} detail={`${pctOf(v.canceled, v.total)} das agendadas${v.rescheduled ? ` · ${v.rescheduled} remarcada${v.rescheduled === 1 ? "" : "s"}` : ""}`} />
+        </div>
+      </Section>
+      <div className="grid gap-x-6 lg:grid-cols-2">
+        <Section title="Por consultora">
+          {data.byConsultant.length === 0 ? (
+            <p className="rounded-3xl border border-dashed border-line-strong bg-surface-2 p-5 text-sm text-ink-3">Sem visitas no período.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-3xl border border-line bg-surface shadow-card">
+              <table className="w-full text-left text-[14px]">
+                <thead className="border-b border-line text-[12px] tracking-wide text-ink-3 uppercase">
+                  <tr>
+                    <th className="px-4 py-2.5 font-semibold" />
+                    <th className="px-3 py-2.5 text-right font-semibold">Agend.</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Realiz.</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Não veio</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">Cancel.</th>
+                  </tr>
+                </thead>
+                <tbody className="num divide-y divide-line">
+                  {data.byConsultant.map(([name, c]) => (
+                    <tr key={name}>
+                      <td className="px-4 py-2.5 font-medium">{name}</td>
+                      <td className="px-3 py-2.5 text-right">{c.total}</td>
+                      <td className="px-3 py-2.5 text-right text-good">{c.done}</td>
+                      <td className="px-3 py-2.5 text-right">{c.noShow}</td>
+                      <td className="px-4 py-2.5 text-right text-bad">{c.canceled}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Section>
+        <Section title="Motivos de cancelamento">
+          <BarList rows={data.cancelReasons.map(([label, value]) => ({ label, value }))} total={v.canceled} empty="Nenhuma cancelada no período." />
+        </Section>
+      </div>
+      <Section title="Pré-análises enviadas" action={<Link href={`/pre-analises/painel?de=${data.user.id}`} className="text-sm text-primary">Ver o painel do pré-atendimento →</Link>}>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatTile label="Enviadas" value={p.total} detail={`${p.awaiting} aguardando resposta`} />
+          <StatTile label="Aprovadas" value={p.approved} detail={`taxa ${pctOf(p.approved, decided)} das decididas`} />
+          <StatTile label="Reprovadas" value={p.rejected} detail={`${p.pending} pendente${p.pending === 1 ? "" : "s"}`} />
+          <StatTile label="Viraram locação" value={p.leased} detail={`${p.withVisit} com visita · ${p.visited} visitaram`} tone="accent" />
+        </div>
+      </Section>
     </>
   );
 }
