@@ -763,7 +763,8 @@ test("cliente em busca: visita negativa 'segue procurando' → lista → perfil 
   await page.locator("#note").fill("Não gostou da planta, quer casa térrea.");
   if (shots) await page.screenshot({ path: `${shots}/busca-registro.png`, fullPage: true });
   await page.getByRole("button", { name: "Salvar resultado" }).click();
-  await page.waitForURL(/\/(minhas|visitas)/);
+  // espera a confirmação do servidor antes de sair da tela (a URL já era de visita)
+  await expect(page.getByText(/Resultado (anterior )?salvo/).first()).toBeVisible();
   await page.goto("/minhas");
   await page.getByRole("link", { name: /Clientes em busca/ }).first().click();
   await expect(page.getByRole("heading", { name: "Clientes em busca" })).toBeVisible();
