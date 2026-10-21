@@ -16,6 +16,8 @@ export type VoiceResult = {
   followUpDays: number | null;
   /** rótulo do retorno para mostrar ("sexta-feira", "amanhã") */
   followUpLabel: string | null;
+  /** recusou, mas segue procurando outro imóvel */
+  stillSearching: boolean;
   /** observação pronta (frase com maiúscula e ponto final) */
   note: string;
 };
@@ -33,6 +35,8 @@ const STRONG_POSITIVE =
 const POSITIVE = /\b(gostou|adorou|amou|curtiu|aprovou|encantou|ficou encantad\w|achou (lindo|otimo|perfeito|bom|bonito))\b/;
 const UNDECIDED =
   /\b(vai pensar|pensar|decidir|conversar com|falar com|ver com|consultar|comparar|outros imoveis|da(r)? (um )?retorno|me liga|vai ligar|ficou de|em duvida|indecis\w|talvez|nao sabe)\b/;
+
+const STILL_SEARCHING = /\b((continua|segue|ainda esta|esta) (procurando|buscando|em busca)|quer (ver|conhecer) outr\w*|outr\w* (opcoes|imoveis)|mandar outr\w*|procurar outr\w*)\b/;
 
 /** palavras faladas → palavras que costumam aparecer no rótulo do motivo cadastrado */
 const REASON_HINTS: { spoken: RegExp; label: string[] }[] = [
@@ -107,7 +111,7 @@ export function tidySentence(raw: string): string {
 
 export function interpretSpeech(raw: string, reasons: { id: string; label: string }[], weekday: number): VoiceResult {
   const t = normalizeText(raw);
-  const out: VoiceResult = { status: null, evaluation: null, reasonId: null, followUpDays: null, followUpLabel: null, note: tidySentence(raw) };
+  const out: VoiceResult = { status: null, evaluation: null, reasonId: null, followUpDays: null, followUpLabel: null, stillSearching: false, note: tidySentence(raw) };
   if (!t) return out;
 
   if (has(t, NO_SHOW)) out.status = "NO_SHOW";
@@ -122,7 +126,10 @@ export function interpretSpeech(raw: string, reasons: { id: string; label: strin
     else if (has(t, UNDECIDED)) out.evaluation = "UNDECIDED";
     else if (has(t, POSITIVE)) out.evaluation = "POSITIVE";
   }
-  if (out.evaluation === "NEGATIVE") out.reasonId = pickReason(t, reasons);
+  if (out.evaluation === "NEGATIVE") {
+    out.reasonId = pickReason(t, reasons);
+    out.stillSearching = STILL_SEARCHING.test(t);
+  }
   if (out.evaluation === "UNDECIDED") {
     const f = followUpFrom(t, weekday);
     if (f) {

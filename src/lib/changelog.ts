@@ -12,6 +12,16 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-22",
+    title: "Clientes em busca",
+    changes: [
+      { text: "Cliente não gostou do imóvel, mas segue procurando? Ao registrar a visita negativa, marque “Cliente segue procurando outro imóvel”. Ele entra em “Clientes em busca” com lembrete para você oferecer outras opções — sem reabrir o negócio.", who: ["CONSULTANT"], href: "/em-busca" },
+      { text: "Em cada cliente em busca: o que ele procura (valor, bairros, tipo, quartos, o que não quer), os imóveis que já viu, registrar contato e marcar visita em outro imóvel.", who: ["CONSULTANT", "MANAGER"], href: "/em-busca" },
+      { text: "No negócio que caiu, botão “Cliente segue em busca”. Quando ele assina contrato com a gente, a busca termina sozinha.", who: ["CONSULTANT", "MANAGER"] },
+      { text: "Gestão: quantos clientes estão em busca, quantos esfriaram, quantos alugaram conosco e quantos perdemos para outra imobiliária.", who: ["MANAGER"], href: "/em-busca" },
+    ],
+  },
+  {
     id: "2026-10-21",
     title: "Registro por voz e documentos pelo link do cliente",
     changes: [

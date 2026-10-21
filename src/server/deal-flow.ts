@@ -3,6 +3,7 @@
  * (tempo entre etapas) e os dados da etapa. "Caiu" em qualquer etapa exige a etapa e o motivo (lista fechada).
  * O status antigo (acompanhamento/documentação/fechada/perdida) acompanha a situação para os indicadores de sempre.
  */
+import { closeSearchOnWin } from "./client-search";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { AppError, notFound } from "@/lib/errors";
@@ -168,6 +169,8 @@ export async function moveDealStage(actor: AuthzActor, oppId: string, input: Sta
       },
     });
     await audit(tx, { actorId: actor.id, action: "deal.stage_changed", entityType: "Opportunity", entityId: oppId, changes: { de: fromStage ?? (lost ? "CAIU" : null), para: to } });
+    // cliente que estava "em busca" alugou conosco
+    if (to === "SIGNED") await closeSearchOnWin(tx, opp.clientId, actor.id, now);
     // marketing: contrato assinado gera o aviso; sair de "assinado" antes de postar retira
     if (to === "SIGNED" && lease) {
       await tx.leasePost.upsert({ where: { opportunityId: oppId }, update: { ...lease, createdById: actor.id, createdAt: now, postedAt: null, postedById: null }, create: { opportunityId: oppId, ...lease, createdById: actor.id } });

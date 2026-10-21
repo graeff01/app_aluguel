@@ -63,6 +63,8 @@ export function OutcomeForm(p: Props) {
   // "ainda decidindo": quando ligar de volta (padrão: em 3 dias)
   const [followUpDays, setFollowUpDays] = useState<number | null>(3);
   const [applyGroup, setApplyGroup] = useState(true);
+  // recusou este imóvel, mas segue procurando outro: vira "Cliente em busca"
+  const [stillSearching, setStillSearching] = useState(false);
   const others = p.otherCodes ?? [];
   const groupable = others.length > 0 && !p.isEdit && (status === "NO_SHOW" || status === "CANCELED" || status === "RESCHEDULED");
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
@@ -80,17 +82,18 @@ export function OutcomeForm(p: Props) {
   }, [dirty, save.kind]);
 
   // registro por voz / pelo texto ditado: preenche e guarda o estado anterior para desfazer
-  type Snapshot = { status: Status | null; evaluation: Evaluation | null; reasonId: string; note: string; followUpDays: number | null };
+  type Snapshot = { status: Status | null; evaluation: Evaluation | null; reasonId: string; note: string; followUpDays: number | null; stillSearching: boolean };
   const [voice, setVoice] = useState<{ before: Snapshot; result: VoiceResult } | null>(null);
   function applyVoice(text: string, appendText: boolean) {
     const r = interpretSpeech(text, p.reasons, new Date().getDay());
-    const before: Snapshot = { status, evaluation, reasonId, note, followUpDays };
+    const before: Snapshot = { status, evaluation, reasonId, note, followUpDays, stillSearching };
     const lockedStatus = p.future && (r.status === "DONE" || r.status === "NO_SHOW");
     if (r.status && !lockedStatus) setStatus(r.status);
     if (r.status === "DONE" && !lockedStatus) {
       if (r.evaluation) setEvaluation(r.evaluation);
       if (r.reasonId) setReasonId(r.reasonId);
       if (r.followUpDays != null) setFollowUpDays(r.followUpDays);
+      if (r.stillSearching) setStillSearching(true);
     }
     if (appendText && r.note) setNote((n) => appendNote(n, r.note));
     setVoice({ before, result: lockedStatus ? { ...r, status: null, evaluation: null, reasonId: null, followUpDays: null, followUpLabel: null } : r });
@@ -102,6 +105,7 @@ export function OutcomeForm(p: Props) {
     setReasonId(voice.before.reasonId);
     setNote(voice.before.note);
     setFollowUpDays(voice.before.followUpDays);
+    setStillSearching(voice.before.stillSearching);
     setVoice(null);
   }
   const voiceSummary = voice
@@ -110,6 +114,7 @@ export function OutcomeForm(p: Props) {
         voice.result.evaluation && EVALUATION_LABEL[voice.result.evaluation],
         voice.result.reasonId && p.reasons.find((r) => r.id === voice.result.reasonId)?.label,
         voice.result.followUpLabel && `retorno ${voice.result.followUpLabel}`,
+        voice.result.stillSearching && "segue procurando",
       ].filter(Boolean)
     : [];
 
@@ -144,6 +149,7 @@ export function OutcomeForm(p: Props) {
           note,
           followUpDays: status === "DONE" && evaluation === "UNDECIDED" ? followUpDays : null,
           applyToSameVisit: groupable && applyGroup,
+          stillSearching: status === "DONE" && evaluation === "NEGATIVE" && stillSearching,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -255,6 +261,16 @@ export function OutcomeForm(p: Props) {
             ))}
           </div>
         </fieldset>
+      )}
+
+      {status === "DONE" && evaluation === "NEGATIVE" && (
+        <label className={cx("mb-6 flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3.5 text-[14px] transition-colors", stillSearching ? "border-accent bg-accent-soft" : "border-line bg-surface")}>
+          <input type="checkbox" checked={stillSearching} onChange={(e) => setStillSearching(e.target.checked)} className="mt-0.5 size-5 accent-[var(--accent)]" />
+          <span>
+            <strong className="text-[15px]">Cliente segue procurando outro imóvel</strong>
+            <span className="block text-[12px] text-ink-3">Entra em “Clientes em busca”, com lembrete para você ligar e oferecer outras opções. O negócio deste imóvel fica como caiu.</span>
+          </span>
+        </label>
       )}
 
       <div className="mb-4">

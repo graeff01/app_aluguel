@@ -38,6 +38,7 @@ await createManualVisit(admin, { requestId: "e2e-seed-rota", scheduledStart: inH
 await db.property.update({ where: { code: "00322" }, data: { address: "Rua Teste, 322", addressSource: "MANUAL", neighborhood: "Centro", city: "Canoas", category: "Apartamento", rent: 1800, condoFee: 420, iptu: 90, totalPrice: 2310, area: 64, bedrooms: 2, lat: -29.9177, lng: -51.1837, geoQuery: "Rua Teste, 322, Canoas - RS", geoPrecision: "ADDRESS", geocodedAt: new Date() } });
 await createManualVisit(admin, { requestId: "e2e-seed-atalho", scheduledStart: ago(4), clientName: "Cliente Atalho", phoneRaw: "", propertyCode: "00556", consultantId: c.id });
 await db.property.update({ where: { code: "00556" }, data: { neighborhood: "Igara", city: "Canoas", lat: -29.903, lng: -51.164, geoQuery: "Igara, Canoas - RS", geoPrecision: "AREA", geocodedAt: new Date() } });
+await createManualVisit(admin, { requestId: "e2e-seed-busca", scheduledStart: ago(5), clientName: "Cliente Busca", phoneRaw: "(51) 99876-0777", propertyCode: "00777", consultantId: a.id });
 const kb = await createManualVisit(admin, { requestId: "e2e-seed-kanban", scheduledStart: ago(120), clientName: "Cliente Kanban", phoneRaw: "(51) 99876-0444", propertyCode: "00444", consultantId: b.id });
 await concludeVisit(admin, kb.id, { requestId: "e2e-seed-kanban-done", expectedVersion: 1, status: "DONE", evaluation: "POSITIVE", note: "Gostou e vai trazer a família." });
 await db.$disconnect();

@@ -28,6 +28,22 @@ export const HELP: HelpTopic[] = [
     tips: ["A busca encontra visitas por nome, telefone ou código do imóvel."],
   },
   {
+    id: "em-busca",
+    title: "Clientes em busca",
+    who: ["CONSULTANT", "MANAGER"],
+    href: "/em-busca",
+    paths: [/^\/em-busca/],
+    summary: "Cliente que recusou um imóvel, mas continua procurando. Fica separado do negócio, para você não perder o cliente.",
+    steps: [
+      "Na visita negativa, marque “Cliente segue procurando outro imóvel” (ou fale isso no registro por voz).",
+      "No negócio que caiu, use “Cliente segue em busca”.",
+      "Abra o cliente em “Clientes em busca” e complete o que ele procura: valor, bairros, tipo, quartos e o que não quer.",
+      "Falou com ele? “Registrar contato” e escolha quando falar de novo: no dia, ele aparece como “Ligar hoje”.",
+      "Achou um imóvel? “Marcar visita em outro imóvel” já puxa o cliente.",
+    ],
+    tips: ["Sem contato há 7 dias ou mais, o cliente aparece como esfriando.", "Assinou contrato com a gente: a busca termina sozinha como “Alugou conosco”. Senão, encerre como “Alugou em outro lugar” ou “Desistiu”."],
+  },
+  {
     id: "documentos",
     title: "Pedir documentos ao cliente",
     who: ["CONSULTANT", "PRE_SERVICE", "MANAGER"],

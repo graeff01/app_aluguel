@@ -66,6 +66,8 @@ model User {
   googleConnection GoogleConnection[]
   preAnalysesCreated  PreAnalysis[] @relation("PreAnalysisCreatedBy")
   docRequestsCreated  DocRequest[]  @relation("DocRequestCreatedBy")
+  clientSearches      ClientSearch[] @relation("ClientSearchConsultant")
+  clientSearchesClosed ClientSearch[] @relation("ClientSearchClosedBy")
   docRequestsAssigned DocRequest[]  @relation("DocRequestConsultant")
   preAnalysesAssigned PreAnalysis[] @relation("PreAnalysisConsultant")
   preAnalysesResolved PreAnalysis[] @relation("PreAnalysisResolvedBy")
@@ -390,6 +392,7 @@ model Client {
   phones        ClientPhone[]
   visits        Visit[]
   opportunities Opportunity[]
+  searches      ClientSearch[]
 
   @@index([identityStatus])
 }
@@ -1038,3 +1041,51 @@ model ClientDocument {
 
   @@index([requestId, itemKey])
 }
+
+// ───────────────────────────── Cliente em busca ─────────────────────────────
+
+enum ClientSearchStatus {
+  /// segue procurando imóvel com a gente
+  ACTIVE
+  /// alugou conosco (encerrada sozinha quando o contrato é assinado)
+  WON
+  /// alugou com outra imobiliária / por conta própria
+  LOST_ELSEWHERE
+  /// desistiu de alugar / parou de responder
+  GAVE_UP
+}
+
+/// Cliente que recusou um imóvel mas continua procurando (outro perfil). Separado do negócio cliente+imóvel,
+/// para não inflar o funil. No máximo uma busca ativa por cliente (índice parcial na migração).
+model ClientSearch {
+  id             String             @id @default(cuid())
+  clientId       String
+  client         Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  consultantId   String
+  consultant     User               @relation("ClientSearchConsultant", fields: [consultantId], references: [id])
+  status         ClientSearchStatus @default(ACTIVE)
+  /// perfil (tudo opcional): valor total máximo em centavos, regiões, tipo, quartos, o que não quer, observação
+  maxBudgetCents Int?
+  areas          String[]           @default([])
+  propertyType   String?
+  bedrooms       Int?
+  mustNot        String?
+  note           String?
+  /// visita/negócio de onde a busca nasceu
+  sourceVisitId  String?
+  startedAt      DateTime           @default(now())
+  lastContactAt  DateTime?
+  /// dia combinado para falar de novo (aparece em "ligar hoje")
+  followUpOn     DateTime?          @db.Date
+  closedAt       DateTime?
+  closedById     String?
+  closedBy       User?              @relation("ClientSearchClosedBy", fields: [closedById], references: [id])
+  closeNote      String?
+  createdById    String
+  updatedAt      DateTime           @updatedAt
+
+  @@index([consultantId, status])
+  @@index([clientId, status])
+  @@index([status, followUpOn])
+}
+

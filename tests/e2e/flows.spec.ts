@@ -750,3 +750,38 @@ test("registro por voz: 'Preencher pelo que escrevi' marca resultado, motivo e r
   await page.getByRole("button", { name: "Desfazer" }).click();
   await expect(page.getByRole("radio", { name: /Sim, aconteceu/ })).not.toBeChecked();
 });
+
+test("cliente em busca: visita negativa 'segue procurando' → lista → perfil e contato", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  const shots = process.env.E2E_SHOTS;
+  await login(page, "a@e2e.test");
+  await page.getByRole("link", { name: /^Registrar resultado: Cliente Busca/ }).first().click();
+  await page.getByText("Sim, aconteceu").click();
+  await page.getByText("Negativa", { exact: true }).click();
+  await page.getByText("Características do imóvel").click();
+  await page.getByText("Cliente segue procurando outro imóvel").click();
+  await page.locator("#note").fill("Não gostou da planta, quer casa térrea.");
+  if (shots) await page.screenshot({ path: `${shots}/busca-registro.png`, fullPage: true });
+  await page.getByRole("button", { name: "Salvar resultado" }).click();
+  await page.waitForURL(/\/(minhas|visitas)/);
+  await page.goto("/minhas");
+  await page.getByRole("link", { name: /Clientes em busca/ }).first().click();
+  await expect(page.getByRole("heading", { name: "Clientes em busca" })).toBeVisible();
+  await expect(page.getByText("Cliente Busca")).toBeVisible();
+  if (shots) await page.screenshot({ path: `${shots}/busca-lista.png`, fullPage: true });
+  await page.getByText("Cliente Busca").click();
+  await expect(page.getByRole("heading", { name: "O que procura" })).toBeVisible();
+  await page.getByLabel(/Até quanto pode pagar/).fill("2.500");
+  await page.getByLabel(/Regiões ou bairros/).fill("Centro, Igara");
+  await page.getByLabel("Tipo").selectOption("Casa");
+  await page.getByRole("button", { name: "Salvar perfil" }).click();
+  await expect(page.getByText("Perfil da busca salvo.")).toBeVisible();
+  await page.getByLabel("O que conversaram").fill("Mandei 2 casas no WhatsApp.");
+  await page.getByRole("button", { name: "Em 1 semana" }).click();
+  await page.getByRole("button", { name: "Registrar contato" }).click();
+  await expect(page.getByText("Contato registrado.")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Marcar visita em outro imóvel/ })).toBeVisible();
+  // a anotação do contato aparece no perfil (não é apagada ao salvar o perfil depois)
+  await expect(page.getByLabel("Anotações")).toHaveValue(/Mandei 2 casas no WhatsApp/);
+  if (shots) await page.screenshot({ path: `${shots}/busca-detalhe.png`, fullPage: true });
+});

@@ -88,6 +88,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             { href: "/revisao", label: "Revisão", icon: "review", badge: reviewCount },
             { href: "/historico", label: "Histórico", icon: "history" },
             { href: "/oportunidades", label: "Andamento", icon: "pipeline" },
+            { href: "/em-busca", label: "Clientes em busca", icon: "clients" },
             { href: "/imoveis", label: "Imóveis", icon: "home" },
             { href: "/clientes", label: "Clientes", icon: "clients" },
           ] as NavItem[],
@@ -122,6 +123,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           items: [
             { href: "/minhas", label: "Minhas visitas", icon: "today", badge: pending },
             { href: "/rota", label: "Rota do dia", icon: "route" },
+            { href: "/em-busca", label: "Clientes em busca", icon: "clients" },
           ] as NavItem[],
         },
         {

@@ -23,6 +23,7 @@ import { ConfirmPresence } from "@/components/confirm-presence";
 import { AfterVisitMessage } from "@/components/after-visit-message";
 import { FollowUpButtons } from "@/components/follow-up-buttons";
 import { dueFollowUps } from "@/server/followups";
+import { searchSummaryFor } from "@/server/client-search";
 import { buildConfirmMessage, whatsappUrl } from "@/lib/confirm";
 import { getSettings } from "@/lib/settings";
 
@@ -149,6 +150,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
   const staleDeals = openDeals.filter((o) => Date.now() - Math.max(o.stageChangedAt.getTime(), lastActivityOf(o).getTime()) >= staleDays * 86400_000).length;
   const confirmTemplate = (await getSettings()).confirmMessage;
   const followUps = team ? [] : await dueFollowUps(actor.id, now);
+  const searching = team ? null : await searchSummaryFor(actor, now);
   // gostaram do imóvel (últimos 7 dias) e ainda sem pedido de documentos: atalho no topo
   const positives = team ? [] : done.filter((v) => v.status === "DONE" && v.evaluation === "POSITIVE");
   const links = positives.length ? await db.visit.findMany({ where: { id: { in: positives.map((v) => v.id) } }, select: { id: true, preAnalysisId: true } }) : [];
@@ -306,6 +308,27 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         <>
       <InstallHint />
       <PushPrompt publicKey={pushConfig()?.publicKey ?? null} />
+
+      {searching && searching.active > 0 && !busca && (
+        <Link
+          href="/em-busca"
+          className={cx(
+            "press animate-rise mb-9 flex items-center justify-between gap-3 rounded-[24px] border px-5 py-4 shadow-card",
+            searching.due || searching.stale ? "border-accent/40 bg-accent-soft" : "border-line bg-surface",
+          )}
+        >
+          <span>
+            <span className="block text-[12px] font-bold tracking-[0.12em] text-accent-strong uppercase">Clientes em busca</span>
+            <span className="mt-0.5 block text-[17px] font-bold">
+              {searching.active} {searching.active === 1 ? "cliente procurando imóvel" : "clientes procurando imóvel"}
+            </span>
+            <span className="text-[13px] text-ink-2">
+              {[searching.due ? `${searching.due} para ligar hoje` : null, searching.stale ? `${searching.stale} sem contato há 7+ dias` : null].filter(Boolean).join(" · ") || "Ofereça outras opções antes que aluguem em outro lugar."}
+            </span>
+          </span>
+          <Icon name="arrow" className="size-5 shrink-0 text-ink-3" />
+        </Link>
+      )}
 
       {needDocs.length > 0 && !busca && (
         <section aria-labelledby="t-docs" className="mb-9">

@@ -5,6 +5,7 @@
  * - Fechamento exige data e responsável; perda posterior exige motivo e observação; reabertura exige observação.
  * - Um fechamento conta uma vez por oportunidade (não por visita).
  */
+import { closeSearchOnWin } from "./client-search";
 import { z } from "zod";
 import type { Tx } from "@/lib/db";
 import { db } from "@/lib/db";
@@ -170,6 +171,7 @@ export async function updateOpportunity(actor: AuthzActor, oppId: string, input:
     }
     try {
       await tx.opportunity.update({ where: { id: oppId }, data: update });
+      if (data.toStatus === "CLOSED_WON") await closeSearchOnWin(tx, opp.clientId, actor.id);
     } catch (e) {
       if ((e as { code?: string }).code === "P2002") {
         throw new AppError("INVALID_STATE", "Já existe outra oportunidade ativa para este cliente e imóvel.");

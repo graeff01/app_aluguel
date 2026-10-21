@@ -17,6 +17,7 @@ export default async function MorePage() {
           ["/pre-analises", "Pré-análises", "Dados do cliente antes de agendar"],
           ["/hoje", "Visitas de hoje", "Lista completa do dia"],
           ["/rota", "Rotas do dia", "Paradas de cada consultora no mapa"],
+          ["/em-busca", "Clientes em busca", "Recusaram um imóvel e seguem procurando"],
           ["/relatorios", "Relatórios", "Relatório mensal em PDF para a direção"],
           ["/imoveis", "Imóveis", "Desempenho e motivos por imóvel"],
           ["/clientes", "Clientes", "Cadastros e identificação"],

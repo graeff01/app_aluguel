@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { InlineAction } from "@/components/inline-action";
+import { startSearchFromOpportunityAction } from "@/app/actions/client-search";
 import { requireActor, orNotFound } from "@/lib/require";
 import { getOpportunity } from "@/server/queries";
 import { canUpdateOpportunity, hasGlobalView } from "@/lib/authz";
@@ -44,6 +46,7 @@ export default async function OppPage({ params, searchParams }: { params: Promis
 
   const stage = opp.stage as Stage | null;
   const lost = opp.status === "LOST";
+  const activeSearch = lost ? await db.clientSearch.findFirst({ where: { clientId: opp.clientId, status: "ACTIVE" }, select: { id: true } }) : null;
   // quando entrou em cada etapa (último registro de entrada)
   const entered = new Map<Stage, { at: Date; by: string | null }>();
   for (const e of [...opp.events].reverse()) if (e.toStage) entered.set(e.toStage as Stage, { at: e.createdAt, by: e.author?.name ?? null });
@@ -108,6 +111,21 @@ export default async function OppPage({ params, searchParams }: { params: Promis
           ]}
         />
       </Panel>
+      {lost && (canUpdate || global) && (
+        <section className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-accent/30 bg-accent-soft px-5 py-4">
+          <span>
+            <span className="block text-[15px] font-bold">{activeSearch ? "Cliente em busca de outro imóvel" : "O cliente segue procurando outro imóvel?"}</span>
+            <span className="text-[13px] text-ink-2">{activeSearch ? "Acompanhe em Clientes em busca." : "Marque sem reabrir este negócio: ele entra em “Clientes em busca”, com lembrete para oferecer opções."}</span>
+          </span>
+          {activeSearch ? (
+            <Link href={`/em-busca/${activeSearch.id}`} className="press inline-flex min-h-11 items-center rounded-full bg-accent px-5 text-[14px] font-semibold text-white">
+              Abrir busca →
+            </Link>
+          ) : (
+            <InlineAction action={startSearchFromOpportunityAction} fields={{ opportunityId: opp.id }} label="Cliente segue em busca" variant="primary" />
+          )}
+        </section>
+      )}
       {canUpdate && (
         <Section title="Atualizar situação">
           <DealForm

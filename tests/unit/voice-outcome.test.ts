@@ -22,6 +22,11 @@ describe("interpretSpeech", () => {
     expect(interpretSpeech("não quer porque não tem fiador", reasons, TUESDAY)).toMatchObject({ evaluation: "NEGATIVE", reasonId: id("Condições/garantia") });
   });
 
+  it("não gostou, mas continua procurando → marca a busca", () => {
+    expect(interpretSpeech("não gostou da planta, mas continua procurando, quer ver outras opções", reasons, TUESDAY)).toMatchObject({ evaluation: "NEGATIVE", stillSearching: true });
+    expect(interpretSpeech("não gostou, achou caro", reasons, TUESDAY)).toMatchObject({ evaluation: "NEGATIVE", stillSearching: false });
+  });
+
   it("quer fechar / vai mandar documentação → positiva", () => {
     expect(interpretSpeech("adorou, quer fechar e vai mandar a documentação hoje", reasons, TUESDAY)).toMatchObject({ status: "DONE", evaluation: "POSITIVE" });
     expect(interpretSpeech("gostou muito do apartamento", reasons, TUESDAY)).toMatchObject({ status: "DONE", evaluation: "POSITIVE" });
