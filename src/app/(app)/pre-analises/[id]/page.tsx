@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClientFileLink } from "@/components/client-file-link";
 import { db } from "@/lib/db";
 import { requireActor, orNotFound } from "@/lib/require";
 import { formatCpf, preAnalysisDetail } from "@/server/pre-analysis";
@@ -59,6 +60,7 @@ export default async function PreAnalysisPage({ params, searchParams }: { params
         action={<span className={cx("inline-flex rounded-full px-3 py-1 text-[13px] font-bold", STATUS_CLS[p.status])}>{PRE_STATUS_LABEL[p.status]}</span>}
       />
 
+      <ClientFileLink clientId={p.clientId} className="-mt-2 mb-5" />
       {p.previous.length > 0 && (
         <Alert tone="warn" title="Este CPF já teve pré-análise">
           {p.previous.map((x) => (

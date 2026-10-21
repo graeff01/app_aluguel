@@ -64,6 +64,7 @@ export async function scheduleFromPreAnalysis(
         ...link,
       },
     });
+    if (v.clientId && !p.clientId) await tx.preAnalysis.update({ where: { id: p.id }, data: { clientId: v.clientId } });
     await audit(tx, { actorId: actor.id, action: "visit.from_preanalysis", entityType: "Visit", entityId: v.id, changes: { preAnalise: p.id } });
     return v;
   });

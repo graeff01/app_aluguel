@@ -384,16 +384,3 @@ export async function listClients(f: { q?: string; identity?: string }) {
     take: 100,
   });
 }
-
-export async function getClient(id: string) {
-  const client = await db.client.findUnique({
-    where: { id },
-    include: {
-      phones: true,
-      visits: { select: visitListSelect, orderBy: { scheduledStart: "desc" } },
-      opportunities: { include: { property: true, responsible: { select: { name: true } } }, orderBy: { createdAt: "desc" } },
-    },
-  });
-  if (!client) throw notFound();
-  return { ...client, visits: await withRevisits(client.visits, {}) }; // tela só da gestão
-}

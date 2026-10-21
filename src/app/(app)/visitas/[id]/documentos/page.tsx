@@ -5,6 +5,7 @@ import { getVisitDetail } from "@/server/queries";
 import { canConcludeVisit } from "@/lib/authz";
 import { fmt } from "@/lib/time";
 import { DocRequestsPanel } from "@/components/doc-requests/panel";
+import { ClientFileLink } from "@/components/client-file-link";
 
 export const metadata = { title: "Documentos do cliente" };
 
@@ -21,7 +22,8 @@ export default async function VisitDocumentsPage({ params }: { params: Promise<{
       </Link>
       <p className="mb-1 text-xs font-semibold tracking-[0.14em] text-accent-strong uppercase">Documentos</p>
       <h1 className="text-[28px] leading-tight font-bold tracking-[-0.03em]">{visit.clientName ?? "Cliente"}</h1>
-      <p className="mt-1 mb-6 text-[15px] text-ink-2">
+      <ClientFileLink clientId={visit.clientId} className="mt-2" />
+      <p className="mt-3 mb-6 text-[15px] text-ink-2">
         Imóvel {visit.propertyCode ?? "—"} · visita de {fmt.shortDate(visit.scheduledStart)}
       </p>
       <DocRequestsPanel

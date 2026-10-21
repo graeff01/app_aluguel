@@ -5,6 +5,7 @@
  * - Bloqueio global por advisory lock: várias réplicas não sincronizam ao mesmo tempo.
  * - Backoff após falhas (SyncState.nextAttemptAt). Encerramento gracioso em SIGTERM.
  */
+import { backfillPreAnalysisLinks } from "@/server/client-links";
 import "dotenv/config";
 import { db } from "@/lib/db";
 import { log, errorCode } from "@/lib/log";
@@ -92,6 +93,7 @@ async function main() {
         await runRetention().catch((e) => log.error("retention.failed", { code: errorCode(e) }));
         await runPreAnalysisRetention().catch((e) => log.error("preanalysis_retention.failed", { code: errorCode(e) }));
         await runDocRequestRetention().catch((e) => log.error("docrequest_retention.failed", { code: errorCode(e) }));
+        await backfillPreAnalysisLinks().catch((e) => log.error("preanalysis_links.failed", { code: errorCode(e) }));
         await sendMonthlyReportNotice().catch((e) => log.error("monthly_report_notice.failed", { code: errorCode(e) }));
         await maybeDailyBackup().catch((e) => log.error("backup.check_failed", { code: errorCode(e) }));
 

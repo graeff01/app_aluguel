@@ -5,6 +5,7 @@
  * - Sem telefone válido → cadastro PENDENTE (não conta como pessoa única confirmada).
  * - Nunca une clientes apenas pelo nome.
  */
+import { linkPreAnalysesToClient } from "./client-links";
 import type { Tx } from "@/lib/db";
 import { db } from "@/lib/db";
 import { namesCompatible } from "@/lib/text";
@@ -48,10 +49,12 @@ export async function resolveClient(
         ? await tx.client.update({ where: { id: reuse }, data: { name, identityStatus: "CONFIRMED" } })
         : await tx.client.create({ data: { name, identityStatus: "CONFIRMED" } });
       await addPhone(tx, client.id, phone.raw, phone.normalized);
+      await linkPreAnalysesToClient(tx, client.id, phone.normalized);
       return { clientId: client.id, clientMatch: "NEW_CONFIRMED", clientCandidates: [] };
     }
     if (clients.length === 1 && namesCompatible(clients[0].name, name)) {
       await addPhone(tx, clients[0].id, phone.raw, phone.normalized);
+      await linkPreAnalysesToClient(tx, clients[0].id, phone.normalized);
       return { clientId: clients[0].id, clientMatch: "PHONE_MATCH", clientCandidates: [] };
     }
     // ambíguo: cadastro pendente separado, candidatos para a gestora decidir
@@ -182,6 +185,18 @@ export async function mergeClients(actor: AuthzActor, sourceId: string, targetId
         data: { clientCandidates: [...new Set(v.clientCandidates.map((c) => (c === sourceId ? targetId : c)))] },
       });
     }
+    await tx.preAnalysis.updateMany({ where: { clientId: sourceId }, data: { clientId: targetId } });
+    // busca: uma ativa por cliente; se as duas estão ativas, a anotação da origem vai para a principal e a duplicada sai
+    const [srcSearch, tgtSearch] = await Promise.all([
+      tx.clientSearch.findFirst({ where: { clientId: sourceId, status: "ACTIVE" } }),
+      tx.clientSearch.findFirst({ where: { clientId: targetId, status: "ACTIVE" } }),
+    ]);
+    if (srcSearch && tgtSearch) {
+      const note = [tgtSearch.note, srcSearch.note].filter(Boolean).join("\n").slice(-1500) || null;
+      await tx.clientSearch.update({ where: { id: tgtSearch.id }, data: { note } });
+      await tx.clientSearch.delete({ where: { id: srcSearch.id } });
+    }
+    await tx.clientSearch.updateMany({ where: { clientId: sourceId }, data: { clientId: targetId } });
     await tx.client.update({ where: { id: sourceId }, data: { mergedIntoId: targetId } });
     const hasValidPhone = await tx.clientPhone.count({ where: { clientId: targetId, valid: true } });
     if (hasValidPhone) await tx.client.update({ where: { id: targetId }, data: { identityStatus: "CONFIRMED" } });

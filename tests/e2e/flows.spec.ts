@@ -785,3 +785,27 @@ test("cliente em busca: visita negativa 'segue procurando' → lista → perfil 
   await expect(page.getByLabel("Anotações")).toHaveValue(/Mandei 2 casas no WhatsApp/);
   if (shots) await page.screenshot({ path: `${shots}/busca-detalhe.png`, fullPage: true });
 });
+
+test("ficha do cliente: consultora abre a linha do tempo a partir da visita", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await login(page, "b@e2e.test");
+  await page.goto("/minhas");
+  // pelas visitas registradas (sempre presentes; o cartão "peça os documentos" some depois que o pedido é feito)
+  await page.getByText(/Registradas nos últimos 7 dias/).click();
+  await page.getByRole("link", { name: /Alterar resultado: Cliente Kanban/ }).first().click();
+  await page.getByRole("link", { name: "Ficha do cliente" }).click();
+  await expect(page.getByRole("heading", { name: "Cliente Kanban" })).toBeVisible();
+  await expect(page.getByText("Ficha do cliente", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Agora" })).toBeVisible();
+  await expect(page.getByText("Negócio em andamento")).toBeVisible();
+  await expect(page.getByText("Visitou · positiva")).toBeVisible();
+  await expect(page.getByText("Negócio aberto", { exact: true })).toBeVisible();
+  await expect(page.getByText("“Aberta por visita realizada”")).toHaveCount(0);
+  if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/ficha-cliente.png`, fullPage: true });
+  // outra consultora não abre a ficha
+  const url = page.url();
+  await page.context().clearCookies();
+  await login(page, "a@e2e.test");
+  await page.goto(url);
+  await expect(page.getByRole("heading", { name: "Cliente Kanban" })).toHaveCount(0);
+});

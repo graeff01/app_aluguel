@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClientFileLink } from "@/components/client-file-link";
 import { requireActor, orNotFound } from "@/lib/require";
 import { getVisitDetail } from "@/server/queries";
 import { canConcludeVisit, canCorrectVisitData, hasGlobalView } from "@/lib/authz";
@@ -87,6 +88,7 @@ export default async function RegisterPage({ params, searchParams }: { params: P
           {visit.phoneRaw ? <> · {formatPhone(visit.phoneNormalized, visit.phoneRaw)}</> : <> · <span className="text-warn">sem telefone</span></>}
         </p>
         <p className="text-ink-2">Responsável: {visit.consultant?.name ?? "—"}</p>
+        <ClientFileLink clientId={visit.clientId} className="mt-2" />
         {visit.revisit && (
           <p className="text-ink-2">
             ↺ <strong className="text-ink">Revisita</strong> · {revisitLabel(visit.revisit).toLowerCase()}

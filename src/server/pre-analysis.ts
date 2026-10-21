@@ -8,6 +8,7 @@
  * - Retenção: apagados N dias após o resultado (padrão 90); ficam nome, faixa de renda, resultado e datas.
  * - Notificações nunca levam dados do cliente.
  */
+import { clientByPhone, phoneHash } from "./client-links";
 import { createHmac } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -143,6 +144,8 @@ export async function createPreAnalysis(actor: AuthzActor, input: z.input<typeof
         birthDateEnc: p.birthDate ? encryptSecret(p.birthDate) : null,
         emailEnc: email ? encryptSecret(email) : null,
         phoneEnc: phone?.normalized ? encryptSecret(phone.normalized) : null,
+        phoneHash: phone?.normalized ? phoneHash(phone.normalized) : null,
+        clientId: phone?.normalized ? await clientByPhone(tx, phone.normalized) : null,
         salaryEnc: salary ? encryptSecret(String(salary)) : null,
         incomeBand: salary ? incomeBand(salary) : "nao_informada",
         propertyCode: p.propertyCode || null,
@@ -289,7 +292,7 @@ export async function runPreAnalysisRetention(now = new Date()) {
   const r = await db.$transaction(async (tx) => {
     // documentos do cliente saem junto com os demais dados pessoais
     await tx.preAnalysisFile.deleteMany({ where: { preAnalysisId: { in: ids } } });
-    return tx.preAnalysis.updateMany({ where: { id: { in: ids } }, data: { cpfEnc: null, birthDateEnc: null, emailEnc: null, phoneEnc: null, salaryEnc: null, cpfHash: null, purgedAt: now } });
+    return tx.preAnalysis.updateMany({ where: { id: { in: ids } }, data: { cpfEnc: null, birthDateEnc: null, emailEnc: null, phoneEnc: null, salaryEnc: null, cpfHash: null, phoneHash: null, purgedAt: now } });
   });
   if (r.count) {
     log.info("preanalysis.purged", { count: r.count });

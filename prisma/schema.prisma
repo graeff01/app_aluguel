@@ -393,6 +393,7 @@ model Client {
   visits        Visit[]
   opportunities Opportunity[]
   searches      ClientSearch[]
+  preAnalyses   PreAnalysis[]
 
   @@index([identityStatus])
 }
@@ -851,6 +852,11 @@ model PreAnalysis {
   fullName     String
   /// HMAC do CPF (detecta repetição sem guardar o número em claro)
   cpfHash      String?
+  /// HMAC do telefone normalizado: liga a pré-análise ao cadastro do cliente sem guardar o número em claro
+  phoneHash    String?
+  /// cadastro do cliente (ficha única): pelo telefone ou pela visita gerada a partir da pré-análise
+  clientId     String?
+  client       Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
   cpfEnc       String?
   birthDateEnc String?
   emailEnc     String?
@@ -882,6 +888,8 @@ model PreAnalysis {
   @@index([consultantId, status])
   @@index([createdAt])
   @@index([cpfHash])
+  @@index([phoneHash])
+  @@index([clientId])
 }
 
 /// Locação fechada → aviso ao marketing para postar (diferencial e agenciador obrigatórios no fechamento).

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClientFileLink } from "@/components/client-file-link";
 import { requireActor, orNotFound } from "@/lib/require";
 import { getVisitDetail } from "@/server/queries";
 import { canCorrectVisitData, canCreateManualVisit, hasGlobalView } from "@/lib/authz";
@@ -52,6 +53,7 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
             <span>{fmt.longDate(visit.scheduledStart)}</span> · {fmt.time(visit.scheduledStart)}–{fmt.time(visit.scheduledEnd)}
           </p>
           <h1 className="text-2xl font-bold">{visit.clientName ?? <span className="text-warn">Cliente sem nome</span>}</h1>
+          <ClientFileLink clientId={visit.clientId} className="mt-2" />
           {(visit.revisit || scheduledByConsultant(visit)) && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {visit.revisit && (

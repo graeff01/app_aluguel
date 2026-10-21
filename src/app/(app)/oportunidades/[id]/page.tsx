@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClientFileLink } from "@/components/client-file-link";
 import { InlineAction } from "@/components/inline-action";
 import { startSearchFromOpportunityAction } from "@/app/actions/client-search";
 import { requireActor, orNotFound } from "@/lib/require";
@@ -76,6 +77,7 @@ export default async function OppPage({ params, searchParams }: { params: Promis
           </span>
         }
       />
+      <ClientFileLink clientId={opp.clientId} className="-mt-2 mb-5" />
       {salvo && <p role="status" className="mb-5 rounded-2xl bg-good-soft px-4 py-3 text-sm font-semibold text-good">{salvo === "SIGNED" ? "✓ Contrato assinado. O marketing foi avisado para postar." : salvo === "FELL" ? "✓ Registrado que o negócio caiu." : `✓ Situação atualizada: ${STAGE_LABEL[salvo as Stage] ?? ""}.`}</p>}
 
       {/* linha do tempo do fluxo */}

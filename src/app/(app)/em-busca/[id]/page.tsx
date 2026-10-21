@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClientFileLink } from "@/components/client-file-link";
 import { requireActor, orNotFound } from "@/lib/require";
 import { clientSearchDetail, PROPERTY_TYPES, SEARCH_CLOSE_LABEL } from "@/server/client-search";
 import { dateOnlyKey, fmt } from "@/lib/time";
@@ -29,6 +30,7 @@ export default async function SearchPage({ params, searchParams }: { params: Pro
         {active ? (s.due ? "Ligar hoje" : s.stale ? `Sem contato há ${s.silentDays} dias` : (s.days === 0 ? "Em busca desde hoje" : `Em busca há ${s.days} ${s.days === 1 ? "dia" : "dias"}`)) : SEARCH_CLOSE_LABEL[s.status as keyof typeof SEARCH_CLOSE_LABEL]}
       </p>
       <h1 className="text-[30px] leading-tight font-bold tracking-[-0.035em]">{name}</h1>
+      <ClientFileLink clientId={s.clientId} className="mt-2" />
       <p className="mt-1 text-[14px] text-ink-3">
         Consultora {s.consultant.name} · desde {fmt.shortDate(s.startedAt).replace(".", "")}
         {s.lastContactAt ? ` · último contato ${fmt.shortDate(s.lastContactAt).replace(".", "")}` : ""}

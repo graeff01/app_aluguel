@@ -12,6 +12,14 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-23",
+    title: "Ficha do cliente",
+    changes: [
+      { text: "Ficha do cliente: toque em “Ficha do cliente” na visita, no negócio, na busca ou na pré-análise e veja tudo o que já aconteceu com a pessoa numa linha do tempo — pré-análise, documentos, visitas, negócios e busca — e o que está em andamento agora.", who: ["CONSULTANT", "PRE_SERVICE", "MANAGER"] },
+      { text: "A pré-análise passa a ficar ligada ao cadastro do cliente pelo telefone, mesmo antes da visita.", who: ["PRE_SERVICE", "MANAGER"] },
+    ],
+  },
+  {
     id: "2026-10-22",
     title: "Clientes em busca",
     changes: [

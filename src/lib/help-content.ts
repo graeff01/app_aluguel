@@ -28,6 +28,20 @@ export const HELP: HelpTopic[] = [
     tips: ["A busca encontra visitas por nome, telefone ou código do imóvel."],
   },
   {
+    id: "ficha-cliente",
+    title: "Ficha do cliente",
+    who: ["CONSULTANT", "PRE_SERVICE", "MANAGER"],
+    paths: [/^\/clientes\/[^/]+/],
+    summary: "Tudo o que aconteceu com o cliente numa linha do tempo, e o que está em andamento agora.",
+    steps: [
+      "Abra pela visita, pelo negócio, pela busca ou pela pré-análise: botão “Ficha do cliente”.",
+      "Em “Agora”: negócio em andamento, próxima visita, visita sem resultado, busca e documentos pendentes. Toque para abrir.",
+      "No “Histórico”: pré-análise, documentos, visitas (com o motivo da recusa), etapas do negócio e busca, do mais recente ao mais antigo.",
+      "“Marcar visita” e “Pedir documentos” já partem do cliente.",
+    ],
+    tips: ["A consultora vê só o que é dela. Se outra consultora também atendeu o cliente, aparece um aviso.", "O pré-atendimento vê o histórico sem as observações internas."],
+  },
+  {
     id: "em-busca",
     title: "Clientes em busca",
     who: ["CONSULTANT", "MANAGER"],

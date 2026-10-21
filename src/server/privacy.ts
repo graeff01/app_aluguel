@@ -108,9 +108,13 @@ export async function exportClientData(actor: AuthzActor, clientId: string) {
       return null;
     }
   };
-  const pres = phones.size
-    ? (await db.preAnalysis.findMany({ where: { purgedAt: null, phoneEnc: { not: null } }, include: { consultant: { select: { name: true } } } })).filter((p) => phones.has(dec(p.phoneEnc) ?? ""))
+  // ligadas ao cadastro (ficha) + soltas com o mesmo telefone
+  const linked = await db.preAnalysis.findMany({ where: { clientId, purgedAt: null }, include: { consultant: { select: { name: true } } } });
+  const byPhone = phones.size
+    ? (await db.preAnalysis.findMany({ where: { purgedAt: null, clientId: null, phoneEnc: { not: null } }, include: { consultant: { select: { name: true } } } })).filter((p) => phones.has(dec(p.phoneEnc) ?? ""))
     : [];
+  const pres = [...linked, ...byPhone];
+  const searches = await db.clientSearch.findMany({ where: { clientId }, orderBy: { startedAt: "asc" } });
   const dt = (d: Date | null) => (d ? d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : null);
   const data = {
     geradoEm: dt(new Date()),
@@ -138,6 +142,17 @@ export async function exportClientData(actor: AuthzActor, clientId: string) {
       consultora: p.consultant.name,
       resultado: p.status,
       observacaoResultado: p.resultNote,
+    })),
+    buscasDeImovel: searches.map((b) => ({
+      inicio: dt(b.startedAt),
+      situacao: b.status,
+      valorMaximoEmCentavos: b.maxBudgetCents,
+      regioes: b.areas,
+      tipo: b.propertyType,
+      quartos: b.bedrooms,
+      naoQuer: b.mustNot,
+      anotacoes: b.note,
+      encerradaEm: dt(b.closedAt),
     })),
   };
   await db.$transaction((tx) => audit(tx, { actorId: actor.id, action: "client.data_exported", entityType: "Client", entityId: clientId, changes: { visitas: c.visits.length, preAnalises: pres.length } }));
