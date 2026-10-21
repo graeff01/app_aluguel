@@ -13,6 +13,7 @@ import { ActionForm, SubmitButton } from "@/components/action-form";
 import { FileAttach } from "@/components/file-attach";
 import { hasGlobalView } from "@/lib/authz";
 import { ResultForm } from "./result-form";
+import { DocRequestsPanel } from "@/components/doc-requests/panel";
 import { SchedulePreVisitForm } from "./schedule-form";
 import { STATUS_LABEL } from "@/lib/labels";
 import { addDays, dayKey } from "@/lib/time";
@@ -138,6 +139,8 @@ export default async function PreAnalysisPage({ params, searchParams }: { params
           </>
         )}
       </section>
+
+      {!p.purgedAt && <DocRequestsPanel actor={actor} target={{ preAnalysisId: p.id }} guaranteeLabel={p.guarantee?.label} hasPhone={!!p.phone} />}
 
       {p.missingItems.length > 0 && p.status !== "APPROVED" && p.status !== "REJECTED" && (
         <section className={cx("mb-6 rounded-[26px] border-2 p-5 shadow-card sm:p-6", p.status === "PENDING" ? "border-[#2f6fde]/40 bg-[#eef4ff] dark:bg-[#1a2436]" : "border-line bg-surface")} aria-labelledby="t-falta">

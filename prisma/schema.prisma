@@ -65,6 +65,8 @@ model User {
   syncRuns         SyncRun[]
   googleConnection GoogleConnection[]
   preAnalysesCreated  PreAnalysis[] @relation("PreAnalysisCreatedBy")
+  docRequestsCreated  DocRequest[]  @relation("DocRequestCreatedBy")
+  docRequestsAssigned DocRequest[]  @relation("DocRequestConsultant")
   preAnalysesAssigned PreAnalysis[] @relation("PreAnalysisConsultant")
   preAnalysesResolved PreAnalysis[] @relation("PreAnalysisResolvedBy")
   leasePostsCreated   LeasePost[]   @relation("LeasePostCreatedBy")
@@ -581,6 +583,7 @@ model Visit {
   updatedAt        DateTime         @updatedAt
 
   history VisitOutcomeHistory[]
+  docRequests DocRequest[]
 
   @@index([consultantId, scheduledStart])
   @@index([status, scheduledEnd])
@@ -700,6 +703,7 @@ model Opportunity {
 
   visits Visit[]
   events OpportunityEvent[]
+  docRequests DocRequest[]
   leasePost LeasePost?
 
   @@unique([clientId, propertyId, cycle])
@@ -870,6 +874,7 @@ model PreAnalysis {
   purgedAt     DateTime?
   visits       Visit[]
   files        PreAnalysisFile[]
+  docRequests  DocRequest[]
 
   @@index([consultantId, status])
   @@index([createdAt])
@@ -954,4 +959,82 @@ model VisitCancelUndo {
   undoneAt        DateTime?
 
   @@index([createdAt])
+}
+
+// ───────────────────────────── Documentos pelo link do cliente ─────────────────────────────
+
+enum DocRequestStatus {
+  /// aguardando o cliente enviar
+  OPEN
+  /// cliente concluiu o envio
+  SUBMITTED
+  /// link cancelado pela equipe
+  CANCELED
+}
+
+/// Pedido de documentos ao cliente: um link seguro (token) que ele abre no celular para fotografar/enviar.
+/// LGPD: telefone e token ficam cifrados; os arquivos (ClientDocument) também; tudo é apagado no prazo de retenção.
+model DocRequest {
+  id             String           @id @default(cuid())
+  /// SHA-256 do token do link (para localizar); o token cifrado permite reenviar o mesmo link
+  tokenHash      String           @unique
+  tokenEnc       String?
+  preAnalysisId  String?
+  preAnalysis    PreAnalysis?     @relation(fields: [preAnalysisId], references: [id], onDelete: SetNull)
+  opportunityId  String?
+  opportunity    Opportunity?     @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  visitId        String?
+  visit          Visit?           @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  /// consultora responsável (avisada quando o cliente envia)
+  consultantId   String?
+  consultant     User?            @relation("DocRequestConsultant", fields: [consultantId], references: [id])
+  createdById    String
+  createdBy      User             @relation("DocRequestCreatedBy", fields: [createdById], references: [id])
+  clientName     String
+  /// telefone E.164 cifrado (para o WhatsApp e para a verificação)
+  phoneEnc       String?
+  /// verificação no link: "CPF" (3 primeiros dígitos) ou "PHONE" (4 últimos dígitos do celular)
+  verifyKind     String
+  /// HMAC dos dígitos de verificação
+  verifyHash     String?
+  /// [{ key, label, hint, required }]
+  items          Json
+  message        String?
+  propertyCode   String?
+  status         DocRequestStatus @default(OPEN)
+  expiresAt      DateTime
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  openedAt       DateTime?
+  verifiedAt     DateTime?
+  lastActivityAt DateTime?
+  submittedAt    DateTime?
+  canceledAt     DateTime?
+  failedAttempts Int              @default(0)
+  lockedUntil    DateTime?
+  /// dados pessoais e arquivos apagados (retenção LGPD)
+  purgedAt       DateTime?
+  files          ClientDocument[]
+
+  @@index([preAnalysisId])
+  @@index([opportunityId])
+  @@index([visitId])
+  @@index([status, expiresAt])
+  @@index([createdAt])
+}
+
+/// Arquivo enviado pelo cliente no link. Conteúdo CIFRADO (AES-256-GCM): iv (12) + tag (16) + dados.
+model ClientDocument {
+  id        String     @id @default(cuid())
+  requestId String
+  request   DocRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  /// item da lista pedida (ex.: "doc_foto", "renda")
+  itemKey   String
+  name      String
+  mime      String
+  size      Int
+  data      Bytes
+  createdAt DateTime   @default(now())
+
+  @@index([requestId, itemKey])
 }

@@ -7,6 +7,8 @@ import { cx } from "@/components/ui";
 import { EVALUATION_LABEL, STATUS_LABEL } from "@/lib/labels";
 import { appendNote, quickNotesFor } from "@/lib/quick-notes";
 import { looksLikeDocument } from "@/lib/sensitive";
+import { interpretSpeech, type VoiceResult } from "@/lib/voice-outcome";
+import { VoiceCapture } from "@/components/voice-capture";
 
 type Status = "DONE" | "NO_SHOW" | "CANCELED" | "RESCHEDULED";
 type Evaluation = "POSITIVE" | "NEGATIVE" | "UNDECIDED";
@@ -76,6 +78,40 @@ export function OutcomeForm(p: Props) {
     window.addEventListener("beforeunload", h);
     return () => window.removeEventListener("beforeunload", h);
   }, [dirty, save.kind]);
+
+  // registro por voz / pelo texto ditado: preenche e guarda o estado anterior para desfazer
+  type Snapshot = { status: Status | null; evaluation: Evaluation | null; reasonId: string; note: string; followUpDays: number | null };
+  const [voice, setVoice] = useState<{ before: Snapshot; result: VoiceResult } | null>(null);
+  function applyVoice(text: string, appendText: boolean) {
+    const r = interpretSpeech(text, p.reasons, new Date().getDay());
+    const before: Snapshot = { status, evaluation, reasonId, note, followUpDays };
+    const lockedStatus = p.future && (r.status === "DONE" || r.status === "NO_SHOW");
+    if (r.status && !lockedStatus) setStatus(r.status);
+    if (r.status === "DONE" && !lockedStatus) {
+      if (r.evaluation) setEvaluation(r.evaluation);
+      if (r.reasonId) setReasonId(r.reasonId);
+      if (r.followUpDays != null) setFollowUpDays(r.followUpDays);
+    }
+    if (appendText && r.note) setNote((n) => appendNote(n, r.note));
+    setVoice({ before, result: lockedStatus ? { ...r, status: null, evaluation: null, reasonId: null, followUpDays: null, followUpLabel: null } : r });
+  }
+  function undoVoice() {
+    if (!voice) return;
+    setStatus(voice.before.status);
+    setEvaluation(voice.before.evaluation);
+    setReasonId(voice.before.reasonId);
+    setNote(voice.before.note);
+    setFollowUpDays(voice.before.followUpDays);
+    setVoice(null);
+  }
+  const voiceSummary = voice
+    ? [
+        voice.result.status && STATUS_OPTIONS.find((o) => o.value === voice.result.status)?.label,
+        voice.result.evaluation && EVALUATION_LABEL[voice.result.evaluation],
+        voice.result.reasonId && p.reasons.find((r) => r.id === voice.result.reasonId)?.label,
+        voice.result.followUpLabel && `retorno ${voice.result.followUpLabel}`,
+      ].filter(Boolean)
+    : [];
 
   const blockedByData = status === "DONE" && p.missingData.length > 0;
   const quick = quickNotesFor(status, status === "DONE" ? evaluation : null);
@@ -153,6 +189,18 @@ export function OutcomeForm(p: Props) {
 
   return (
     <form onSubmit={submit} noValidate className="pb-24 md:pb-0">
+      <VoiceCapture onText={(t) => applyVoice(t, true)} disabled={saving} />
+      {voice && (
+        <div role="status" className="animate-rise mb-6 flex items-start justify-between gap-3 rounded-2xl border border-good/25 bg-good-soft px-4 py-3">
+          <p className="text-[14px] text-good">
+            <strong>{voiceSummary.length ? "Preenchido automaticamente:" : "Texto incluído na observação."}</strong> {voiceSummary.join(" · ")}
+            {voiceSummary.length > 0 && <span className="block text-[12px] text-good/80">Confira abaixo antes de salvar.{!voice.result.evaluation && voice.result.status === "DONE" ? " Escolha o resultado." : ""}</span>}
+          </p>
+          <button type="button" onClick={undoVoice} className="press min-h-10 shrink-0 rounded-full border border-good/30 px-3.5 text-[13px] font-semibold text-good">
+            Desfazer
+          </button>
+        </div>
+      )}
       <fieldset className="mb-6">
         <legend className="mb-3 text-[17px] font-bold tracking-[-0.02em]">A visita aconteceu?</legend>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -218,7 +266,7 @@ export function OutcomeForm(p: Props) {
             <rect x="9" y="3" width="6" height="11" rx="3" />
             <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
           </svg>
-          Prefere falar? Toque no microfone do teclado para ditar.
+          Ditou pelo microfone do teclado? Depois toque em “Preencher pelo que escrevi”.
         </p>
         {quick.length > 0 && (
           <div className="-mx-4 mb-3 overflow-x-auto px-4 pb-1">
@@ -253,9 +301,18 @@ export function OutcomeForm(p: Props) {
             Parece um documento (CPF/RG). Por privacidade, não registre documentos na observação.
           </p>
         )}
-        <p id="note-help" className={cx("num mt-1.5 text-right text-[13px]", note.length > p.noteMax ? "font-semibold text-bad" : "text-ink-3")}>
-          {note.length}/{p.noteMax}
-        </p>
+        <div className="mt-1.5 flex items-center justify-between gap-3">
+          {trimmed.length >= 12 && !voice ? (
+            <button type="button" onClick={() => applyVoice(note, false)} className="press inline-flex min-h-10 items-center gap-1.5 rounded-full bg-tint px-3.5 text-[13px] font-semibold">
+              <span aria-hidden>✨</span> Preencher pelo que escrevi
+            </button>
+          ) : (
+            <span />
+          )}
+          <p id="note-help" className={cx("num text-right text-[13px]", note.length > p.noteMax ? "font-semibold text-bad" : "text-ink-3")}>
+            {note.length}/{p.noteMax}
+          </p>
+        </div>
       </div>
 
       {status === "DONE" && evaluation === "UNDECIDED" && (
@@ -265,7 +322,7 @@ export function OutcomeForm(p: Props) {
             {(
               [
                 [1, "Amanhã"],
-                [3, "Em 3 dias"],
+                [voice?.result.followUpDays != null && ![1, 7].includes(voice.result.followUpDays) ? voice.result.followUpDays : 3, voice?.result.followUpDays != null && ![1, 7].includes(voice.result.followUpDays) ? cap(voice.result.followUpLabel ?? "") : "Em 3 dias"],
                 [7, "Em 1 semana"],
                 [null, "Sem data"],
               ] as const
@@ -368,6 +425,8 @@ export function OutcomeForm(p: Props) {
     </form>
   );
 }
+
+const cap = (x: string) => (x ? x[0].toLocaleUpperCase("pt-BR") + x.slice(1) : x);
 
 function Choice({ name, value, checked, onChange, label, hint, compact, disabled }: { name: string; value: string; checked: boolean; onChange: () => void; label: string; hint?: string; compact?: boolean; disabled?: boolean }) {
   return (

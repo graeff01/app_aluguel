@@ -685,3 +685,68 @@ test("novidades aparecem uma vez no próximo acesso e o “?” mostra a ajuda d
   await page.goto("/ajuda/novidades");
   await expect(page.getByRole("heading", { name: "O que mudou" })).toBeVisible();
 });
+
+test("documentos pelo link: consultora pede, cliente confirma, fotografa e conclui", async ({ page, browser }, info) => {
+  test.skip(info.project.name !== "mobile");
+  const shots = process.env.E2E_SHOTS;
+  await login(page, "b@e2e.test");
+  await expect(page.getByRole("heading", { name: "Gostaram do imóvel · peça os documentos" })).toBeVisible();
+  await page.getByRole("link", { name: /Cliente Kanban/ }).first().click();
+  await expect(page.getByRole("heading", { name: "Cliente Kanban" })).toBeVisible();
+  await page.getByRole("button", { name: "Pedir documentos ao cliente" }).click();
+  await page.getByRole("button", { name: "Gerar link seguro" }).click();
+  await expect(page.getByText("Link criado.")).toBeVisible();
+  const wa = await page.getByRole("link", { name: "Enviar no WhatsApp" }).first().getAttribute("href");
+  const text = new URL(wa!).searchParams.get("text")!;
+  const url = text.match(/https?:\/\/\S+\/d\/\S+/)![0];
+  expect(wa).toContain("wa.me/5551998760444");
+  if (shots) await page.screenshot({ path: `${shots}/doc-staff-created.png`, fullPage: true });
+
+  // cliente, em outro aparelho (sem login)
+  const ctx = await browser.newContext({ ...info.project.use });
+  const client = await ctx.newPage();
+  await client.goto(url);
+  await expect(client.getByRole("heading", { name: "Olá, Cliente" })).toBeVisible();
+  await expect(client.getByText("4 últimos números do seu celular")).toBeVisible();
+  if (shots) await client.screenshot({ path: `${shots}/doc-client-verify.png`, fullPage: true });
+  await client.getByLabel("Número 1 de 4").fill("1");
+  await client.getByLabel("Número 2 de 4").fill("2");
+  await client.getByLabel("Número 3 de 4").fill("3");
+  await client.getByLabel("Número 4 de 4").fill("4");
+  await expect(client.getByText(/Os números não conferem/)).toBeVisible();
+  await client.getByLabel("Número 1 de 4").fill("0444");
+  await expect(client.getByText(/de 3 documentos enviados/)).toBeVisible();
+  const jpg = { name: "foto.jpg", mimeType: "image/jpeg", buffer: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(3000, 9)]) };
+  const pdfFile = { name: "holerite.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n% e2e\n") };
+  await client.locator("li", { hasText: "Documento com foto (RG ou CNH)" }).locator('input[type="file"]').nth(1).setInputFiles(jpg);
+  await expect(client.getByText("1 de 3 documentos enviados")).toBeVisible();
+  if (shots) await client.screenshot({ path: `${shots}/doc-client-list.png`, fullPage: true });
+  await client.locator("li", { hasText: "Comprovante de renda" }).locator('input[type="file"]').nth(1).setInputFiles(pdfFile);
+  await client.locator("li", { hasText: "Comprovante de residência" }).locator('input[type="file"]').nth(1).setInputFiles(jpg);
+  await expect(client.getByText("3 de 3 documentos enviados")).toBeVisible();
+  await client.getByRole("button", { name: "Concluir envio" }).click();
+  await expect(client.getByRole("heading", { name: "Documentos recebidos" })).toBeVisible();
+  if (shots) await client.screenshot({ path: `${shots}/doc-client-done.png`, fullPage: true });
+  await ctx.close();
+
+  await page.reload();
+  await expect(page.getByText("Enviado pelo cliente")).toBeVisible();
+  await expect(page.getByText("3 de 3 documentos")).toBeVisible();
+  if (shots) await page.screenshot({ path: `${shots}/doc-staff-received.png`, fullPage: true });
+});
+
+test("registro por voz: 'Preencher pelo que escrevi' marca resultado, motivo e retorno", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile");
+  await login(page, "a@e2e.test");
+  // qualquer visita pendente (o teste não salva: termina em "Desfazer")
+  await page.getByRole("link", { name: /^Registrar resultado: / }).first().click();
+  await page.locator("#note").fill("Cliente gostou, mas vai conversar com o marido e me dá retorno amanhã");
+  await page.getByRole("button", { name: /Preencher pelo que escrevi/ }).click();
+  await expect(page.getByText("Preenchido automaticamente:")).toBeVisible();
+  await expect(page.getByRole("radio", { name: /Sim, aconteceu/ })).toBeChecked();
+  await expect(page.getByRole("radio", { name: /Ainda decidindo/ })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Amanhã" })).toHaveAttribute("aria-pressed", "true");
+  if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/voice-filled.png`, fullPage: true });
+  await page.getByRole("button", { name: "Desfazer" }).click();
+  await expect(page.getByRole("radio", { name: /Sim, aconteceu/ })).not.toBeChecked();
+});

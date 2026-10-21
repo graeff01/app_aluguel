@@ -73,6 +73,11 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
             {concluded ? "Alterar resultado" : "Registrar resultado"}
           </LinkButton>
         )}
+        {visit.status === "DONE" && (
+          <LinkButton href={`/visitas/${visit.id}/documentos`} variant="secondary" className="flex-1 sm:flex-none">
+            Documentos do cliente
+          </LinkButton>
+        )}
         {canCorrect && (
           <LinkButton href={`/visitas/${visit.id}/corrigir`} variant="secondary" className="flex-1 sm:flex-none">
             Corrigir dados

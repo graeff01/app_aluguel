@@ -98,6 +98,10 @@ function MineCard({ v, today, now, mode, index, team, confirmTemplate }: { v: Vi
       <Link href={href} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-[15px] font-semibold text-on-primary shadow-[0_6px_16px_-8px_rgb(29_32_35/0.6)] dark:shadow-none">
         Registrar resultado <Icon name="arrow" className="size-4" />
       </Link>
+    ) : mode === "done" && v.status === "DONE" && v.evaluation === "POSITIVE" && !team ? (
+      <Link href={`/visitas/${v.id}/documentos`} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-white">
+        Pedir documentos <Icon name="arrow" className="size-4" />
+      </Link>
     ) : mode === "upcoming" ? (
       // antes do horário: visível, travado, libera sozinho 15 min antes
       <LockedRegisterButton href={href} unlockAt={new Date(v.scheduledStart.getTime() - 15 * 60_000).toISOString()} unlockLabel={fmt.time(new Date(v.scheduledStart.getTime() - 15 * 60_000))} />
@@ -145,6 +149,17 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
   const staleDeals = openDeals.filter((o) => Date.now() - Math.max(o.stageChangedAt.getTime(), lastActivityOf(o).getTime()) >= staleDays * 86400_000).length;
   const confirmTemplate = (await getSettings()).confirmMessage;
   const followUps = team ? [] : await dueFollowUps(actor.id, now);
+  // gostaram do imóvel (últimos 7 dias) e ainda sem pedido de documentos: atalho no topo
+  const positives = team ? [] : done.filter((v) => v.status === "DONE" && v.evaluation === "POSITIVE");
+  const links = positives.length ? await db.visit.findMany({ where: { id: { in: positives.map((v) => v.id) } }, select: { id: true, preAnalysisId: true } }) : [];
+  const asked = links.length
+    ? await db.docRequest.findMany({
+        where: { OR: [{ visitId: { in: links.map((l) => l.id) } }, { preAnalysisId: { in: links.map((l) => l.preAnalysisId).filter((x): x is string => !!x) } }] },
+        select: { visitId: true, preAnalysisId: true },
+      })
+    : [];
+  const askedIds = new Set(links.filter((l) => asked.some((a) => a.visitId === l.id || (l.preAnalysisId && a.preAnalysisId === l.preAnalysisId))).map((l) => l.id));
+  const needDocs = positives.filter((v) => !askedIds.has(v.id));
   const results = busca
     ? await withRevisits(await db.visit.findMany({ where: historyWhere(actor, { q: busca }), select: { ...visitListSelect, note: true }, orderBy: { scheduledStart: "desc" }, take: 40 }), visitScope(actor))
     : [];
@@ -291,6 +306,30 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         <>
       <InstallHint />
       <PushPrompt publicKey={pushConfig()?.publicKey ?? null} />
+
+      {needDocs.length > 0 && !busca && (
+        <section aria-labelledby="t-docs" className="mb-9">
+          <h2 id="t-docs" className="mb-3 text-[12px] font-bold tracking-[0.12em] text-good uppercase">
+            Gostaram do imóvel · peça os documentos
+          </h2>
+          <ul className="grid gap-3 2xl:grid-cols-2">
+            {needDocs.map((v, i) => (
+              <li key={v.id} className="animate-rise" style={{ animationDelay: `${i * 55}ms` }}>
+                <Link href={`/visitas/${v.id}/documentos`} className="press flex items-center gap-4 rounded-[24px] border border-good/30 bg-surface p-4 shadow-card">
+                  <PropertyThumb photoUrl={v.property?.photoUrl} className="size-14" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[17px] font-bold">{v.clientName ?? "Cliente"}</span>
+                    <span className="text-[13px] text-ink-2">
+                      Imóvel <span className="num font-semibold text-ink">{v.propertyCode}</span> · visitou {fmt.shortDate(v.scheduledStart).replace(".", "")}
+                    </span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-accent px-3.5 py-2 text-[13px] font-semibold text-white">Pedir documentos</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {followUps.length > 0 && !busca && (
         <section aria-labelledby="t-fu" className="mb-9">

@@ -16,7 +16,7 @@ describe("O que mudou", () => {
     const old = CHANGELOG[CHANGELOG.length - 1].id;
     expect(unseenChanges("PRE_SERVICE", old).every((e) => e.id > old)).toBe(true);
     // filtro por perfil: marketing não vê a Agenda Google; admin vê o que é da gestão também
-    const latest = CHANGELOG[0];
+    const latest = CHANGELOG.find((e) => e.id === "2026-10-19")!;
     expect(entryFor("MARKETING", latest)!.changes.some((c) => c.href === "/agenda-google")).toBe(false);
     expect(entryFor("ADMIN", latest)!.changes.some((c) => c.href === "/painel")).toBe(true);
     expect(entryFor("ADMIN", latest)!.changes.some((c) => c.href === "/admin/google")).toBe(true);

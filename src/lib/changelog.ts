@@ -12,6 +12,17 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-21",
+    title: "Registro por voz e documentos pelo link do cliente",
+    changes: [
+      { text: "Registrar falando: toque em “Falar como foi a visita” e conte do seu jeito (“gostou, mas vai falar com o marido e me liga na sexta”). O app marca o resultado, o motivo e o dia do retorno; você só confere e salva.", who: ["CONSULTANT"] },
+      { text: "Documentos pelo link: o cliente recebe no WhatsApp um link seguro, confirma alguns números do CPF ou do celular e fotografa cada documento. Você é avisada quando ele conclui.", who: ["CONSULTANT", "PRE_SERVICE", "MANAGER"] },
+      { text: "Cliente que gostou do imóvel aparece no topo de Minhas visitas com o botão “Pedir documentos”.", who: ["CONSULTANT"], href: "/minhas" },
+      { text: "Na pré-análise, “Pedir documentos ao cliente” já sugere a lista pela garantia (fiador inclui os documentos do fiador).", who: ["PRE_SERVICE"], href: "/pre-analises" },
+      { text: "Título de visita com uma letra errada (“Vista clt”) agora entra normalmente.", who: STAFF },
+    ],
+  },
+  {
     id: "2026-10-19",
     title: "Agenda Google no app, fotos para o marketing e central de ajuda",
     changes: [

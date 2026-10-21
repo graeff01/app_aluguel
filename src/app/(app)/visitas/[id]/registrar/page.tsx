@@ -110,6 +110,15 @@ export default async function RegisterPage({ params, searchParams }: { params: P
           </Link>
         )}
       </Panel>
+      {visit.status === "DONE" && visit.evaluation === "POSITIVE" && (
+        <Link href={`/visitas/${visit.id}/documentos`} className="press animate-rise mb-5 flex items-center justify-between gap-3 rounded-[22px] border border-accent/30 bg-accent-soft px-5 py-4">
+          <span>
+            <span className="block text-[16px] font-bold">Pedir documentos ao cliente</span>
+            <span className="text-[13px] text-ink-2">Link seguro: ele fotografa pelo celular e você é avisada.</span>
+          </span>
+          <span aria-hidden className="text-xl text-accent-strong">→</span>
+        </Link>
+      )}
       <VisitBrief data={brief} siteUrl={siteUrl} open={briefOpen} />
       </aside>
       <div className="min-w-0 lg:rounded-[26px] lg:border lg:border-line lg:bg-surface lg:p-7 lg:shadow-card">

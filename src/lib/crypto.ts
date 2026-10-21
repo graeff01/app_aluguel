@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { env } from "./env";
 
 function key(): Buffer {
@@ -49,4 +49,9 @@ export function safeEqual(a: string, b: string): boolean {
   const ba = Buffer.from(a);
   const bb = Buffer.from(b);
   return ba.length === bb.length && timingSafeEqual(ba, bb);
+}
+
+/** HMAC-SHA256 com a chave do servidor (para conferir dados sem guardá-los em claro). */
+export function hmacHex(input: string): string {
+  return createHmac("sha256", key()).update(input).digest("hex");
 }

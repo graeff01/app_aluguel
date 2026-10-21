@@ -7,7 +7,8 @@ export function reportClientError(message: string, stack?: string) {
     fetch("/api/errors", {
       method: "POST",
       headers: { "content-type": "application/json", "x-requested-with": "visitas" },
-      body: JSON.stringify({ message: message.slice(0, 500), path: location.pathname, stack: stack?.slice(0, 500) }),
+      // o caminho do link do cliente contém o token: nunca é registrado
+      body: JSON.stringify({ message: message.slice(0, 500), path: location.pathname.replace(/^\/d\/[^/]+/, "/d/:token"), stack: stack?.slice(0, 500) }),
       keepalive: true,
     }).catch(() => undefined);
   } catch {}
