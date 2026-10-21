@@ -30,18 +30,53 @@ export function classifyTitle(title: string | null | undefined, cfg: PatternConf
   for (const p of prefixes) {
     if (t === p || t.startsWith(p + " ") || t.startsWith(p + "-") || t.startsWith(p + ":")) return { cls: "VISIT", prefix: p };
   }
+  // erro de digitação de uma letra na 1ª palavra do prefixo: "Vista clt - …", "Vsita clt", "Visiat clt"
+  const typed = typoPrefix(t, prefixes);
+  if (typed) return { cls: "VISIT", prefix: typed };
   for (const ex of cfg.excludeTerms.map(normalizeText).filter(Boolean)) {
     if (containsTerm(t, ex)) return { cls: "IRRELEVANT" };
   }
   // "Visita - Imóvel 836505 - Sergio 21 97906-8408", "isita clt - …" (letra faltando): começa com visita e tem código + telefone
-  if (/^v?isita\b/.test(t) && title) {
+  const looksLikeVisit = /^v?isita\b/.test(t) || nearWord(t.split(/[\s\-:]+/)[0], "visita");
+  if (looksLikeVisit && title) {
     const p = parseVisitEvent(title, null, "");
     if (p.propertyCode && p.phoneNormalized) return { cls: "VISIT", prefix: "" };
   }
   for (const am of cfg.ambiguousTerms.map(normalizeText).filter(Boolean)) {
     if (containsTerm(t, am)) return { cls: "AMBIGUOUS", term: am };
   }
+  // "Vista - Mariana …": parece visita com erro de digitação → revisão humana (nunca descartado em silêncio)
+  if (looksLikeVisit) return { cls: "AMBIGUOUS", term: "visita" };
   return { cls: "IRRELEVANT" };
+}
+
+/** Prefixo configurado com a 1ª palavra digitada errada (1 letra a mais, a menos, trocada ou invertida). Devolve o prefixo como foi digitado. */
+function typoPrefix(t: string, prefixes: string[]): string | null {
+  const words = t.split(/\s+/);
+  for (const p of prefixes) {
+    const pw = p.split(" ");
+    if (pw[0].length < 5 || words.length < pw.length) continue;
+    // a última palavra do prefixo pode vir colada ao separador: "clt-Fulano", "clt:"
+    const last = words[pw.length - 1].split(/[-:]/)[0];
+    const typedWords = [...words.slice(0, pw.length - 1), last];
+    if (typedWords[0] === pw[0] || !nearWord(typedWords[0], pw[0])) continue;
+    if (pw.slice(1).every((w, i) => typedWords[i + 1] === w)) return typedWords.join(" ");
+  }
+  return null;
+}
+
+/** Distância de edição ≤ 1 (inclui duas letras invertidas), para palavras de 5+ letras. */
+export function nearWord(a: string | undefined, b: string): boolean {
+  if (!a || a.length < 4 || Math.abs(a.length - b.length) > 1) return false;
+  if (a === b) return true;
+  if (a.length === b.length) {
+    const diff = [...a].map((c, i) => (c !== b[i] ? i : -1)).filter((i) => i >= 0);
+    if (diff.length === 1) return true;
+    return diff.length === 2 && diff[1] === diff[0] + 1 && a[diff[0]] === b[diff[1]] && a[diff[1]] === b[diff[0]];
+  }
+  const [s, l] = a.length < b.length ? [a, b] : [b, a];
+  for (let i = 0; i < l.length; i++) if (l.slice(0, i) + l.slice(i + 1) === s) return true;
+  return false;
 }
 
 function containsTerm(haystack: string, term: string): boolean {

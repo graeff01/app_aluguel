@@ -21,6 +21,23 @@ describe("classificação (critério 4)", () => {
       expect(classifyTitle(t, DEFAULT_PATTERNS).cls).toBe("VISIT");
     }
   });
+  it("tolera erro de digitação de uma letra em 'Visita' (ex.: 'Vista clt')", () => {
+    for (const t of ["Vista clt - Mariana do Carmo", "Vsita clt - Fulano", "Visiat clt - Fulano", "Viista clt - Fulano", "Vizita clt - Fulano", "VISTA CLT-Fulano"]) {
+      const c = classifyTitle(t, DEFAULT_PATTERNS);
+      expect(c.cls, t).toBe("VISIT");
+    }
+    const c = classifyTitle("Vista clt - Mariana do Carmo - cod 761739 - (51) 99876-5432", DEFAULT_PATTERNS);
+    expect(c).toEqual({ cls: "VISIT", prefix: "vista clt" });
+    const p = parseVisitEvent("Vista clt - Mariana do Carmo - cod 761739 - (51) 99876-5432", null, (c as { prefix: string }).prefix);
+    expect(p).toMatchObject({ clientName: "Mariana do Carmo", propertyCode: "761739", phoneNormalized: "+5551998765432" });
+    // sem o "clt": não descarta — vai para revisão
+    expect(classifyTitle("Vista - Mariana do Carmo", DEFAULT_PATTERNS).cls).toBe("AMBIGUOUS");
+    // palavras parecidas mas diferentes continuam fora
+    expect(classifyTitle("Revista clt - pauta", DEFAULT_PATTERNS).cls).toBe("IRRELEVANT");
+    expect(classifyTitle("Vista técnica - apto 302", DEFAULT_PATTERNS).cls).not.toBe("VISIT");
+    expect(classifyTitle("Almoço", DEFAULT_PATTERNS).cls).toBe("IRRELEVANT");
+  });
+
   it("almoço, reunião e visita técnica não são visitas comerciais", () => {
     expect(classifyTitle("Almoço", DEFAULT_PATTERNS).cls).toBe("IRRELEVANT");
     expect(classifyTitle("Reunião de equipe", DEFAULT_PATTERNS).cls).toBe("IRRELEVANT");

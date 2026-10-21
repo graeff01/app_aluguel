@@ -25,6 +25,13 @@ beforeEach(async () => {
 });
 
 describe("importação e classificação", () => {
+  it("título com erro de digitação ('Vista clt') entra como visita da consultora convidada", async () => {
+    api.put(visitEvent("vista", { start: "2026-10-06T19:30:00Z", title: "Vista clt - Mariana do Carmo - cod 761739 - (51) 99876-5432", attendees: ["consultora.a@exemplo.test"] }));
+    await sync({ full: true });
+    const v = await db.visit.findFirstOrThrow({ where: { sourceEvent: { googleEventId: "vista" } } });
+    expect(v).toMatchObject({ consultantId: users.a.id, clientName: "Mariana do Carmo", propertyCode: "761739", status: "SCHEDULED" });
+  });
+
   it("evento criado pela consultora fica marcado como agendado por ela; da agenda central fica sem", async () => {
     api.put(visitEvent("central", { start: "2026-10-06T13:00:00Z" }));
     api.put(visitEvent("byA", { start: "2026-10-07T13:00:00Z", extra: { creator: { email: "Consultora.A@exemplo.test" } } }));
