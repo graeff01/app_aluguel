@@ -284,19 +284,58 @@ test("jornada marketing (celular): recebe a locação, copia o resumo e marca co
   expect(clean(J), JSON.stringify(clean(J), null, 1)).toEqual([]);
 });
 
+// ─────────────── 4b. Proposta: Jasmin envia, consultora leva ao proprietário ───────────────
+test("jornada proposta: Jasmin envia, a consultora (celular) registra o envio ao proprietário e a Jasmin vê o andamento", async ({ page, browser }, info) => {
+  test.skip(info.project.name !== "desktop");
+  test.setTimeout(120_000);
+  const J = "proposta";
+  monitor(page, J);
+  await login(page, "jasmin@e2e.test", /\/pre-analises/);
+  await go(page, J, "/propostas/nova");
+  await page.getByLabel("Nome do cliente").fill("Carlos Proposta");
+  await page.getByLabel("Telefone").fill("(51) 99876-4321");
+  await page.getByLabel("Código do imóvel").fill("761739");
+  await page.getByLabel("Valor proposto para o aluguel (R$)").fill("2.300,00");
+  await page.locator("label", { hasText: "Consultora A" }).first().click();
+  await page.getByRole("button", { name: "Enviar para a consultora" }).click();
+  await page.waitForURL(/\/propostas\/[^/]+\?enviada=1/);
+  await expect(page.getByText("Enviada para Consultora A")).toBeVisible();
+  await expect(page.getByText("R$ 2.300,00")).toBeVisible();
+
+  const { ctx, page: cel } = await phone(browser);
+  let failed = true;
+  try {
+    monitor(cel, J);
+    await login(cel, "a@e2e.test", /\/minhas/);
+    const card = cel.getByRole("link", { name: /Propostas/ });
+    await expect(card).toContainText("1 nova para levar ao proprietário");
+    await card.click();
+    await cel.getByRole("link", { name: /Carlos Proposta/ }).click();
+    await expect(cel.getByText("R$ 2.300,00")).toBeVisible();
+    await cel.getByRole("button", { name: "Registrar andamento" }).click();
+    await expect(cel.getByText("Marcada como enviada ao proprietário")).toBeVisible();
+    failed = false;
+  } finally {
+    await closePhone(ctx, cel, failed, "proposta");
+  }
+  await go(page, J, "/propostas");
+  await expect(page.getByRole("link", { name: /Carlos Proposta/ })).toContainText("Enviada ao proprietário");
+  expect(clean(J), JSON.stringify(clean(J), null, 1)).toEqual([]);
+});
+
 // ─────────────── 5. Matriz de acesso ───────────────
 type Expect = "ok" | "404" | RegExp;
-const ROUTES = ["/ajuda", "/ajuda/novidades", "/agenda-google", "/agenda-do-dia/nova", "/minhas", "/rota", "/pendencias", "/historico", "/visitas/nova", "/pre-analises", "/pre-analises/nova", "/pre-analises/painel", "/agenda-do-dia", "/marketing", "/painel", "/ao-vivo", "/revisao", "/oportunidades", "/imoveis", "/clientes", "/relatorios", "/config/usuarios", "/config/motivos", "/admin/google", "/admin/configuracoes", "/admin/sincronizacao", "/config/auditoria", "/conta/senha"];
+const ROUTES = ["/ajuda", "/ajuda/novidades", "/agenda-google", "/agenda-do-dia/nova", "/minhas", "/rota", "/pendencias", "/historico", "/visitas/nova", "/pre-analises", "/pre-analises/nova", "/pre-analises/painel", "/propostas", "/propostas/nova", "/agenda-do-dia", "/marketing", "/painel", "/ao-vivo", "/revisao", "/oportunidades", "/imoveis", "/clientes", "/relatorios", "/config/usuarios", "/config/motivos", "/admin/google", "/admin/configuracoes", "/admin/sincronizacao", "/config/auditoria", "/conta/senha"];
 const MATRIX: Record<string, { email: string; home: RegExp; rules: Record<string, Expect> }> = {
   consultora: {
     email: "b@e2e.test",
     home: /\/minhas/,
-    rules: { "/agenda-google": "404", "/agenda-do-dia/nova": "404", "/pre-analises/nova": "404", "/pre-analises/painel": "404", "/agenda-do-dia": /\/minhas/, "/marketing": "404", "/painel": "404", "/ao-vivo": "404", "/revisao": "404", "/imoveis": "404", "/clientes": "404", "/relatorios": "404", "/config/usuarios": "404", "/config/motivos": "404", "/admin/google": "404", "/admin/configuracoes": "404", "/admin/sincronizacao": "404", "/config/auditoria": "404" },
+    rules: { "/agenda-google": "404", "/agenda-do-dia/nova": "404", "/pre-analises/nova": "404", "/pre-analises/painel": "404", "/propostas/nova": "404", "/agenda-do-dia": /\/minhas/, "/marketing": "404", "/painel": "404", "/ao-vivo": "404", "/revisao": "404", "/imoveis": "404", "/clientes": "404", "/relatorios": "404", "/config/usuarios": "404", "/config/motivos": "404", "/admin/google": "404", "/admin/configuracoes": "404", "/admin/sincronizacao": "404", "/config/auditoria": "404" },
   },
   "pré-atendimento": {
     email: "jasmin@e2e.test",
     home: /\/pre-analises/,
-    rules: Object.fromEntries(ROUTES.filter((r) => !["/ajuda", "/ajuda/novidades", "/pre-analises", "/pre-analises/nova", "/agenda-google", "/agenda-do-dia", "/agenda-do-dia/nova", "/conta/senha", "/pre-analises/painel"].includes(r)).map((r) => [r, /\/pre-analises$/])),
+    rules: Object.fromEntries(ROUTES.filter((r) => !["/ajuda", "/ajuda/novidades", "/pre-analises", "/pre-analises/nova", "/propostas", "/propostas/nova", "/agenda-google", "/agenda-do-dia", "/agenda-do-dia/nova", "/conta/senha", "/pre-analises/painel"].includes(r)).map((r) => [r, /\/pre-analises$/])),
   },
   marketing: {
     email: "mkt@e2e.test",

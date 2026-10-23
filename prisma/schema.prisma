@@ -42,6 +42,8 @@ model User {
   googleSub          String?   @unique
   /// consultora ausente (folga/férias) até esta data, inclusive: o rodízio da pré-análise pula
   awayUntil          DateTime? @db.Date
+  /// pós-contrato ligado (contato de boas-vindas e pedido de indicação) desde esta data; null = desligado
+  aftercareSince     DateTime?
   role          Role
   active        Boolean   @default(true)
   deactivatedAt DateTime?
@@ -74,6 +76,9 @@ model User {
   leasePostsCreated   LeasePost[]   @relation("LeasePostCreatedBy")
   leasePostsPosted    LeasePost[]   @relation("LeasePostPostedBy")
   preAnalysisFiles    PreAnalysisFile[]
+  proposalsCreated    Proposal[]    @relation("ProposalCreatedBy")
+  proposalsAssigned   Proposal[]    @relation("ProposalConsultant")
+  proposalsUpdated    Proposal[]    @relation("ProposalStatusBy")
 }
 
 /// E-mails usados para reconhecer a consultora entre os convidados do evento.
@@ -394,6 +399,7 @@ model Client {
   opportunities Opportunity[]
   searches      ClientSearch[]
   preAnalyses   PreAnalysis[]
+  proposals     Proposal[]
 
   @@index([identityStatus])
 }
@@ -683,6 +689,9 @@ model Opportunity {
   // 8. Posse
   possessionAt         DateTime?         @db.Date
   keysHolderChecked    Boolean           @default(false)
+  // pós-contrato (consultora com a opção ligada): contato de boas-vindas e pedido de indicação, 5 dias cada
+  aftercareWelcomeAt   DateTime?
+  aftercareReferralAt  DateTime?
   clientId             String
   client               Client            @relation(fields: [clientId], references: [id])
   propertyId           String
@@ -888,6 +897,59 @@ model PreAnalysis {
   @@index([consultantId, status])
   @@index([createdAt])
   @@index([cpfHash])
+  @@index([phoneHash])
+  @@index([clientId])
+}
+
+// ───────────────────────────── Propostas ─────────────────────────────
+
+enum ProposalStatus {
+  /// aguardando a consultora
+  NEW
+  /// enviada ao proprietário
+  SENT
+  /// proprietário fez contraproposta
+  COUNTER
+  ACCEPTED
+  REJECTED
+}
+
+/// Proposta de valor de aluguel: o pré-atendimento registra e encaminha à consultora da vez (mesmo rodízio da pré-análise).
+model Proposal {
+  id           String         @id @default(cuid())
+  /// idempotência do envio (toque duplo / reenvio não duplica)
+  requestId    String?        @unique
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  createdById  String
+  createdBy    User           @relation("ProposalCreatedBy", fields: [createdById], references: [id])
+  consultantId String
+  consultant   User           @relation("ProposalConsultant", fields: [consultantId], references: [id])
+  clientName   String
+  /// telefone cifrado; a impressão (HMAC) liga ao cadastro do cliente sem guardar o número em claro
+  phoneEnc     String?
+  phoneHash    String?
+  clientId     String?
+  client       Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  /// valor proposto para o aluguel, em centavos
+  rentCents    Int
+  propertyCode String
+  /// cliente já era da consultora: vai para ela sem contar a vez no rodízio
+  ownClient    Boolean        @default(false)
+  note         String?
+  status       ProposalStatus @default(NEW)
+  /// valor da contraproposta do proprietário, em centavos
+  counterCents Int?
+  resultNote   String?
+  statusAt     DateTime?
+  statusById   String?
+  statusBy     User?          @relation("ProposalStatusBy", fields: [statusById], references: [id])
+  /// telefone apagado (retenção LGPD)
+  purgedAt     DateTime?
+
+  @@index([consultantId, status])
+  @@index([status])
+  @@index([createdAt])
   @@index([phoneHash])
   @@index([clientId])
 }

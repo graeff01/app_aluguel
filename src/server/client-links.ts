@@ -26,6 +26,7 @@ export async function clientByPhone(tx: Tx | typeof db, normalizedE164: string):
 /** Cliente com telefone validado: pré-análises ainda sem cadastro e com o mesmo telefone passam a apontar para ele. */
 export async function linkPreAnalysesToClient(tx: Tx, clientId: string, normalizedE164: string) {
   await tx.preAnalysis.updateMany({ where: { phoneHash: phoneHash(normalizedE164), clientId: null, purgedAt: null }, data: { clientId } });
+  await tx.proposal.updateMany({ where: { phoneHash: phoneHash(normalizedE164), clientId: null, purgedAt: null }, data: { clientId } });
 }
 
 /** Pré-análises antigas (antes da ficha): calcula a impressão do telefone e liga ao cadastro. Idempotente, em lotes. */

@@ -17,7 +17,9 @@ import { InstallHint } from "@/components/install-hint";
 import { historyWhere, listOpportunities } from "@/server/queries";
 import { db } from "@/lib/db";
 import { countOpenFor } from "@/server/pre-analysis";
-import { DealsCard, PreAnalysisCard, RouteCard } from "@/components/feature-cards";
+import { DealsCard, PreAnalysisCard, ProposalsCard, RouteCard } from "@/components/feature-cards";
+import { AftercareList } from "@/components/aftercare";
+import { dueAftercare } from "@/server/aftercare";
 import { lastActivityOf } from "@/server/insights";
 import { ConfirmPresence } from "@/components/confirm-presence";
 import { AfterVisitMessage } from "@/components/after-visit-message";
@@ -150,6 +152,10 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
   const staleDeals = openDeals.filter((o) => Date.now() - Math.max(o.stageChangedAt.getTime(), lastActivityOf(o).getTime()) >= staleDays * 86400_000).length;
   const confirmTemplate = (await getSettings()).confirmMessage;
   const followUps = team ? [] : await dueFollowUps(actor.id, now);
+  const aftercare = team ? [] : await dueAftercare(actor.id, now);
+  const proposals = team ? null : await db.proposal.groupBy({ by: ["status"], where: { consultantId: actor.id, status: { in: ["NEW", "SENT", "COUNTER"] } }, _count: { _all: true } });
+  const propFresh = proposals?.find((p) => p.status === "NEW")?._count._all ?? 0;
+  const propOpen = proposals?.reduce((a, p) => a + p._count._all, 0) ?? 0;
   const searching = team ? null : await searchSummaryFor(actor, now);
   // gostaram do imóvel (últimos 7 dias) e ainda sem pedido de documentos: atalho no topo
   const positives = team ? [] : done.filter((v) => v.status === "DONE" && v.evaluation === "POSITIVE");
@@ -210,6 +216,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
         <>
           <RouteCard stops={todayTotal} next={nextToday ? fmt.time(nextToday.scheduledStart) : null} delay={60} />
           <PreAnalysisCard open={preOpen} delay={140} />
+          {propOpen > 0 && <ProposalsCard fresh={propFresh} open={propOpen} delay={180} />}
           <DealsCard open={openDeals.length} stale={staleDeals} delay={220} />
         </>
       )}
@@ -353,6 +360,8 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
           </ul>
         </section>
       )}
+
+      {!busca && <AftercareList items={aftercare} />}
 
       {followUps.length > 0 && !busca && (
         <section aria-labelledby="t-fu" className="mb-9">

@@ -5,6 +5,7 @@
  * Uma vez por pessoa por dia (ReminderLog único), a partir da hora configurada, exceto domingo.
  * Conteúdo: apenas contagens e nomes da equipe — nunca dados de clientes.
  */
+import { dueAftercare } from "./aftercare";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { dateOnlyKey, dayKey, startOfDayInTz, TZ } from "@/lib/time";
@@ -280,10 +281,11 @@ function bySameVisit<T extends { id: string; companionOfId: string | null; prope
     const key = v.companionOfId ?? v.id;
     const g = groups.get(key);
     if (!g) groups.set(key, { v, codes: v.propertyCode ? [v.propertyCode] : [] });
-    else {
-      if (v.propertyCode) g.codes.push(v.propertyCode);
-      if (!v.companionOfId) g.v = v; // a principal abre a notificação
-    }
+    else if (!v.companionOfId) {
+      // a principal abre a notificação e o código dela vem primeiro (o banco não garante a ordem)
+      g.v = v;
+      if (v.propertyCode) g.codes.unshift(v.propertyCode);
+    } else if (v.propertyCode) g.codes.push(v.propertyCode);
   }
   return [...groups.values()];
 }
@@ -501,6 +503,8 @@ export async function sendGoogleExpiryAlerts(now = new Date(), opts: { send?: Se
 /**
  * - Pré-análise sem resposta: lembra a consultora após 2 h; após 24 h avisa gestão e pré-atendimento.
  * - Pré-análise aprovada há 3 dias sem visita marcada para aquele telefone: avisa o pré-atendimento.
+ * - Proposta sem andamento: lembra a consultora após 2 h; após 24 h avisa gestão e pré-atendimento.
+ * - Pós-contrato (consultora com a opção ligada): um aviso por dia enquanto houver contato vencido.
  * - Visita de hoje/amanhã sem consultora (convite sem o e-mail dela): avisa gestão e pré-atendimento na hora.
  * - Reagendamento sem o evento salvo no Google 45 min depois: lembra a consultora.
  * Uma vez por item (ReminderLog). Sem dados de clientes nas notificações. Silêncio das 21h às 8h (exceto visita sem consultora de hoje).
@@ -561,6 +565,15 @@ export async function sendOperationalAlerts(now = new Date(), opts: { send?: Sen
     }
   }
 
+  // pós-contrato (consultoras com a opção ligada): boas-vindas e pedido de indicação, até marcar como feito
+  if (localHour(now) >= settings.reminderHour && localWeekday(now) !== 0) {
+    const withAftercare = await db.user.findMany({ where: { role: "CONSULTANT", active: true, aftercareSince: { not: null } }, select: { id: true } });
+    for (const u of withAftercare) {
+      const n = (await dueAftercare(u.id, now)).length;
+      if (n) await once(u.id, "aftercare", { title: n === 1 ? "1 cliente para o pós-contrato" : `${n} clientes para o pós-contrato`, body: "Contrato assinado há alguns dias: hora de falar com o cliente. Toque para ver a mensagem pronta.", url: "/minhas", tag: `pos-contrato-${day}` });
+    }
+  }
+
   // negócios parados na mesma situação há X dias (fluxo pós-visita): consultora responsável e gestão
   if (localHour(now) >= settings.reminderHour && localWeekday(now) !== 0) {
     const limit = new Date(now.getTime() - settings.staleOpportunityDays * 24 * H);
@@ -593,6 +606,17 @@ export async function sendOperationalAlerts(now = new Date(), opts: { send?: Sen
     if (now.getTime() - p.createdAt.getTime() > 24 * H) {
       for (const uid of new Set([p.createdById, ...staff.filter((s) => s.role === "MANAGER").map((s) => s.id)])) {
         await once(uid, `pre_late:${p.id}`, { title: "Pré-análise sem resposta há mais de 24 h", body: "A consultora ainda não respondeu. Toque para ver.", url: `/pre-analises/${p.id}`, tag: `pre-${p.id}` });
+      }
+    }
+  }
+
+  // proposta sem andamento da consultora
+  const newProposals = await db.proposal.findMany({ where: { status: "NEW", createdAt: { lte: new Date(now.getTime() - 2 * H) } }, select: { id: true, createdAt: true, consultantId: true, createdById: true } });
+  for (const p of newProposals) {
+    await once(p.consultantId, `prop_remind:${p.id}`, { title: "Proposta esperando você", body: "Enviada há mais de 2 h pelo pré-atendimento. Leve ao proprietário e registre o andamento.", url: `/propostas/${p.id}`, tag: `prop-${p.id}` });
+    if (now.getTime() - p.createdAt.getTime() > 24 * H) {
+      for (const uid of new Set([p.createdById, ...staff.filter((x) => x.role === "MANAGER").map((x) => x.id)])) {
+        await once(uid, `prop_late:${p.id}`, { title: "Proposta sem andamento há mais de 24 h", body: "A consultora ainda não registrou o envio ao proprietário. Toque para ver.", url: `/propostas/${p.id}`, tag: `prop-${p.id}` });
       }
     }
   }

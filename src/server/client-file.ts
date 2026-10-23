@@ -12,12 +12,12 @@ import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { AppError, notFound } from "@/lib/errors";
 import { hasGlobalView, isPreService, type AuthzActor } from "@/lib/authz";
-import { EVALUATION_LABEL, PRE_STATUS_LABEL } from "@/lib/labels";
+import { EVALUATION_LABEL, PRE_STATUS_LABEL, PROPOSAL_STATUS_LABEL } from "@/lib/labels";
 import { FELL_LABEL, FOLLOW_UP_LABEL, STAGE_LABEL, situationLabel, type Stage } from "@/lib/deal-stages";
 import { canManageDocRequest, type DocItem } from "./doc-requests";
 import { SEARCH_CLOSE_LABEL } from "./client-search";
 
-export type TimelineKind = "pre" | "docs" | "visit" | "deal" | "search";
+export type TimelineKind = "pre" | "proposal" | "docs" | "visit" | "deal" | "search";
 export type Tone = "good" | "bad" | "accent" | "info" | "neutral";
 export type TimelineItem = { id: string; at: Date; kind: TimelineKind; title: string; detail?: string; note?: string | null; href?: string; tone: Tone; photoUrl?: string | null };
 
@@ -43,7 +43,7 @@ export async function clientFile(actor: AuthzActor, clientId: string, now = new 
 
   const own = mode === "own";
   const visitWhere: Prisma.VisitWhereInput = { clientId, ...(own ? { consultantId: me } : {}) };
-  const [visits, opps, searches, presDirect] = await Promise.all([
+  const [visits, opps, searches, presDirect, proposals] = await Promise.all([
     db.visit.findMany({
       where: visitWhere,
       orderBy: { scheduledStart: "desc" },
@@ -77,6 +77,11 @@ export async function clientFile(actor: AuthzActor, clientId: string, now = new 
     }),
     db.clientSearch.findMany({ where: { clientId, ...(own ? { consultantId: me } : {}) }, orderBy: { startedAt: "desc" } }),
     db.preAnalysis.findMany({ where: { clientId, ...(own ? { consultantId: me } : {}) }, select: { id: true } }),
+    db.proposal.findMany({
+      where: { clientId, ...(own ? { consultantId: me } : {}) },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, status: true, createdAt: true, statusAt: true, rentCents: true, counterCents: true, propertyCode: true, resultNote: true, consultant: { select: { name: true } }, createdBy: { select: { name: true } } },
+    }),
   ]);
   // pré-análises: ligadas ao cadastro ou que geraram alguma visita deste cliente
   const preIds = [...new Set([...presDirect.map((p) => p.id), ...visits.map((v) => v.preAnalysisId).filter((x): x is string => !!x)])];
@@ -101,7 +106,7 @@ export async function clientFile(actor: AuthzActor, clientId: string, now = new 
       ).filter((r) => mode !== "own" || canManageDocRequest(actor, r))
     : [];
 
-  if (own && !visits.length && !opps.length && !searches.length && !pres.length && !docs.length) {
+  if (own && !visits.length && !opps.length && !searches.length && !pres.length && !docs.length && !proposals.length) {
     throw new AppError("FORBIDDEN", "Este cliente não tem atendimento seu.");
   }
   // consultora: avisa (sem detalhes) se outra pessoa também atende o cliente
@@ -123,6 +128,24 @@ export async function clientFile(actor: AuthzActor, clientId: string, now = new 
         title: `Pré-análise: ${PRE_STATUS_LABEL[p.status].toLowerCase()}`,
         detail: p.status === "PENDING" && p.missingItems.length ? `Falta: ${p.missingItems.join(", ")}` : undefined,
         note: p.resultNote,
+        href,
+      });
+    }
+  }
+
+  const brl = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  for (const p of proposals) {
+    const href = `/propostas/${p.id}`;
+    timeline.push({ id: `prop-${p.id}`, at: p.createdAt, kind: "proposal", tone: "neutral", title: `Proposta de ${brl(p.rentCents)}`, detail: `${p.createdBy.name.split(" ")[0]} enviou para ${p.consultant.name.split(" ")[0]} · imóvel ${p.propertyCode}`, href });
+    if (p.statusAt && p.status !== "NEW") {
+      timeline.push({
+        id: `prop-s-${p.id}`,
+        at: p.statusAt,
+        kind: "proposal",
+        tone: p.status === "ACCEPTED" ? "good" : p.status === "REJECTED" ? "bad" : "info",
+        title: `Proposta: ${PROPOSAL_STATUS_LABEL[p.status].toLowerCase()}`,
+        detail: p.status === "COUNTER" && p.counterCents ? `Contraproposta de ${brl(p.counterCents)}` : undefined,
+        note: showNotes ? p.resultNote : null,
         href,
       });
     }

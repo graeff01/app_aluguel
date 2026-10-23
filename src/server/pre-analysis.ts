@@ -118,11 +118,7 @@ export async function createPreAnalysis(actor: AuthzActor, input: z.input<typeof
   const guarantee = p.guaranteeId ? await db.reason.findUnique({ where: { id: p.guaranteeId } }) : null;
   if (p.guaranteeId && (!guarantee || guarantee.kind !== "GUARANTEE" || !guarantee.active)) throw new AppError("VALIDATION", "Garantia inválida.", { guaranteeId: "Garantia inválida." });
   const docs = await readFiles(files);
-  const consultant = await db.user.findUnique({ where: { id: p.consultantId } });
-  if (!consultant || consultant.role !== "CONSULTANT" || !consultant.active) throw new AppError("VALIDATION", "Escolha uma consultora ativa.", { consultantId: "Consultora inválida." });
-  if (isAway(consultant.awayUntil, now) && !p.confirmAway) {
-    throw new AppError("VALIDATION", `${consultant.name.split(" ")[0]} está ausente até ${fmtDay(consultant.awayUntil!)}. Escolha outra consultora ou confirme o envio.`, { confirmAway: "Consultora ausente." });
-  }
+  const consultant = await assignableConsultant(p.consultantId, !!p.confirmAway, now);
   // mesmo CPF: em aberto bloqueia; analisado nos últimos 30 dias pede confirmação
   const hash = cpf ? cpfHash(cpf) : null;
   const open = hash ? await db.preAnalysis.findFirst({ where: { cpfHash: hash, status: { in: ["AWAITING", "PENDING"] } }, include: { consultant: { select: { name: true } } } }) : null;
@@ -382,24 +378,47 @@ const fmtDay = (d: Date) => d.toISOString().slice(0, 10).split("-").reverse().sl
 
 // ─────────────── rodízio entre consultoras ───────────────
 
+/** Consultora escolhida no envio (pré-análise ou proposta): ativa; ausente só com confirmação explícita. */
+export async function assignableConsultant(consultantId: string, confirmAway: boolean, now = new Date()) {
+  const consultant = await db.user.findUnique({ where: { id: consultantId } });
+  if (!consultant || consultant.role !== "CONSULTANT" || !consultant.active) throw new AppError("VALIDATION", "Escolha uma consultora ativa.", { consultantId: "Consultora inválida." });
+  if (isAway(consultant.awayUntil, now) && !confirmAway) {
+    throw new AppError("VALIDATION", `${consultant.name.split(" ")[0]} está ausente até ${fmtDay(consultant.awayUntil!)}. Escolha outra consultora ou confirme o envio.`, { confirmAway: "Consultora ausente." });
+  }
+  return consultant;
+}
+
 /**
  * Fila de encaminhamento: a próxima da vez é quem está há mais tempo sem receber (quem nunca recebeu vem primeiro);
  * a última a receber fica marcada. Com duas consultoras, isso alterna entre elas.
+ * Pré-análises e propostas dividem a mesma vez: quem recebeu a última de qualquer uma das duas não é a próxima.
  */
 export async function assignmentQueue(now = new Date()) {
   const consultants = await db.user.findMany({ where: { role: "CONSULTANT", active: true }, select: { id: true, name: true, awayUntil: true }, orderBy: { name: "asc" } });
   if (!consultants.length) return [];
   const ids = consultants.map((c) => c.id);
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 3));
-  const [last, month, open] = await Promise.all([
-    // a vez só conta pré-análises do rodízio (cliente que já era da consultora não conta)
+  const [last, month, open, lastProp, monthProp, openProp] = await Promise.all([
+    // a vez só conta envios do rodízio (cliente que já era da consultora não conta)
     db.preAnalysis.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids }, ownClient: false }, _max: { createdAt: true } }),
     db.preAnalysis.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids }, createdAt: { gte: monthStart } }, _count: { _all: true } }),
     db.preAnalysis.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids }, status: { in: ["AWAITING", "PENDING"] } }, _count: { _all: true } }),
+    db.proposal.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids }, ownClient: false }, _max: { createdAt: true } }),
+    db.proposal.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids }, createdAt: { gte: monthStart } }, _count: { _all: true } }),
+    db.proposal.groupBy({ by: ["consultantId"], where: { consultantId: { in: ids }, status: { in: ["NEW", "SENT", "COUNTER"] } }, _count: { _all: true } }),
   ]);
-  const openCount = new Map(open.map((o) => [o.consultantId, o._count._all]));
-  const lastAt = new Map(last.map((l) => [l.consultantId, l._max.createdAt]));
-  const monthCount = new Map(month.map((m) => [m.consultantId, m._count._all]));
+  const sum = (a: { consultantId: string; _count: { _all: number } }[], b: { consultantId: string; _count: { _all: number } }[]) => {
+    const m = new Map<string, number>();
+    for (const r of [...a, ...b]) m.set(r.consultantId, (m.get(r.consultantId) ?? 0) + r._count._all);
+    return m;
+  };
+  const openCount = sum(open, openProp);
+  const monthCount = sum(month, monthProp);
+  const lastAt = new Map<string, Date | null>();
+  for (const l of [...last, ...lastProp]) {
+    const prev = lastAt.get(l.consultantId);
+    if (l._max.createdAt && (!prev || l._max.createdAt > prev)) lastAt.set(l.consultantId, l._max.createdAt);
+  }
   const rows = consultants.map((c) => ({ id: c.id, name: c.name, away: isAway(c.awayUntil, now), awayUntil: c.awayUntil ? fmtDay(c.awayUntil) : null, lastAt: lastAt.get(c.id) ?? null, monthCount: monthCount.get(c.id) ?? 0, openCount: openCount.get(c.id) ?? 0 }));
   // ausentes saem da vez (se todas estiverem ausentes, segue o rodízio normal)
   const available = rows.some((r) => !r.away) ? rows.filter((r) => !r.away) : rows;

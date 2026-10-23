@@ -40,6 +40,7 @@ async function anonymizeTx(tx: Tx, clientId: string, actorId: string | null, rea
   await tx.opportunity.updateMany({ where: { id: { in: oppIds }, lostNote: { not: null } }, data: { lostNote: ANON_NOTE } });
   await tx.opportunityEvent.updateMany({ where: { opportunityId: { in: oppIds }, note: { not: null } }, data: { note: ANON_NOTE } });
   await tx.clientSearch.updateMany({ where: { clientId }, data: { note: null, mustNot: null, closeNote: null, areas: [] } });
+  await tx.proposal.updateMany({ where: { clientId }, data: { clientName: ANON_NAME, phoneEnc: null, phoneHash: null, note: null, resultNote: null, purgedAt: new Date() } });
   await audit(tx, { actorId, action: "client.anonymized", entityType: "Client", entityId: clientId, changes: { motivo: reason, visitas: visitIds.length } });
   return true;
 }

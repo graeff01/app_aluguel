@@ -12,6 +12,16 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-23-b",
+    title: "Propostas e pós-contrato",
+    changes: [
+      { text: "Nova proposta: registre o valor que o cliente propõe para o aluguel (nome, telefone, valor e imóvel). Vai para a consultora da vez, no mesmo rodízio da pré-análise.", who: ["PRE_SERVICE", "MANAGER"], href: "/propostas/nova" },
+      { text: "Propostas: quando o pré-atendimento enviar uma proposta, leve ao proprietário e registre o andamento (enviada, contraproposta, aceita ou recusada). O pré-atendimento é avisado a cada passo.", who: ["CONSULTANT"], href: "/propostas" },
+      { text: "O rodízio agora conta pré-análises e propostas juntas: quem recebeu a última de qualquer uma não é a próxima da vez.", who: STAFF },
+      { text: "Pós-contrato (por consultora, em Usuários): 5 dias depois do contrato assinado, lembrete para saber como está a nova moradia; 5 dias depois desse contato, lembrete para pedir uma indicação, com a mensagem pronta.", who: ["MANAGER"], href: "/config/usuarios" },
+    ],
+  },
+  {
     id: "2026-10-23",
     title: "Ficha do cliente",
     changes: [

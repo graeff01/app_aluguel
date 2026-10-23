@@ -23,6 +23,7 @@ import { Suspense } from "react";
 import { cx } from "@/components/ui";
 import { AppBadge } from "@/components/app-badge";
 import { countOpenFor } from "@/server/pre-analysis";
+import { countNewProposalsFor } from "@/server/proposals";
 import { Onboarding } from "@/components/onboarding";
 import { UpdateBanner } from "@/components/update-banner";
 
@@ -41,9 +42,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const preService = actor.role === "PRE_SERVICE";
   const marketing = actor.role === "MARKETING";
   // leituras do menu em paralelo (aparecem em todas as telas)
-  const [settings, preOpen, toPost, agents] = await Promise.all([
+  const [settings, preOpen, propNew, toPost, agents] = await Promise.all([
     getSettings(),
     countOpenFor(actor),
+    marketing ? Promise.resolve(0) : countNewProposalsFor(actor),
     marketing || global ? db.leasePost.count({ where: { postedAt: null } }) : Promise.resolve(0),
     global ? db.reason.count({ where: { kind: "LEASE_AGENT", active: true } }) : Promise.resolve(1),
   ]);
@@ -83,6 +85,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             { href: "/rota", label: "Rotas", icon: "route" },
             { href: "/relatorios", label: "Relatórios", icon: "audit" },
             { href: "/pre-analises", label: "Pré-análises", icon: "clients", badge: preOpen },
+            { href: "/propostas", label: "Propostas", icon: "pipeline", badge: propNew },
             { href: "/hoje", label: "Hoje", icon: "today" },
             { href: "/pendencias", label: "Pendências", icon: "pending", badge: pending },
             { href: "/revisao", label: "Revisão", icon: "review", badge: reviewCount },
@@ -130,6 +133,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           title: "Registros",
           items: [
             { href: "/pre-analises", label: "Pré-análises", icon: "clients", badge: preOpen },
+            { href: "/propostas", label: "Propostas", icon: "pipeline", badge: propNew },
             { href: "/pendencias", label: "Pendências", icon: "pending" },
             { href: "/historico", label: "Histórico", icon: "history" },
             { href: "/visitas/nova", label: "Visita manual", icon: "plus" },
@@ -141,6 +145,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const preNav: NavItem[] = [
     { href: "/pre-analises", label: "Pré-análises", icon: "clients", badge: preOpen },
     { href: "/pre-analises/nova", label: "Nova", icon: "plus" },
+    { href: "/propostas", label: "Propostas", icon: "pipeline", badge: propNew },
     { href: "/agenda-google", label: "Agenda Google", icon: "today" },
     { href: "/agenda-do-dia", label: "Visitas", icon: "today" },
     { href: "/agenda-do-dia/nova", label: "Agendar", icon: "plus" },
@@ -211,7 +216,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <OfflineBanner />
         <RefreshOnFocus />
         <UpdateBanner />
-        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen : marketing ? toPost : pending} />
+        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew : marketing ? toPost : pending} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-2.5">
             <Link href="/minhas" className="flex items-center gap-2">
@@ -249,7 +254,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <OfflineBanner />
         <RefreshOnFocus />
         <UpdateBanner />
-        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen : marketing ? toPost : pending} />
+        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew : marketing ? toPost : pending} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 md:px-8">
             <Link href="/" className="flex items-center gap-2 md:hidden">

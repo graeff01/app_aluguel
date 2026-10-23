@@ -10,6 +10,7 @@ import { InlineAction } from "@/components/inline-action";
 import { Field, Input, PageHeader, Section, Select } from "@/components/ui";
 import { addAliasAction, endSessionsAction, removeAliasAction, resetLinkAction, resetOnboardingAction, setAwayAction, tempPasswordAction, updateUserAction } from "@/app/actions/admin";
 import { isAway } from "@/server/pre-analysis";
+import { setAftercareAction } from "@/app/actions/proposals";
 
 export const metadata = { title: "Usuário" };
 
@@ -127,6 +128,28 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
                   </div>
                   <p className="text-[12px] text-ink-3">Deixe em branco e salve para remover a ausência.</p>
                 </ActionForm>
+              </div>
+            </Section>
+          )}
+          {u.role === "CONSULTANT" && u.active && (
+            <Section title="Pós-contrato (boas-vindas e indicação)">
+              <div className="max-w-xl rounded-3xl border border-line bg-surface p-5 shadow-card">
+                <p className="mb-1 text-ink-2">
+                  {u.aftercareSince
+                    ? `Ligado desde ${fmt.date(u.aftercareSince)}.`
+                    : "Desligado."}{" "}
+                  Depois de cada contrato assinado, {u.name.split(" ")[0]} recebe dois lembretes que ficam pendentes até ela marcar como feito:
+                </p>
+                <ul className="mb-4 list-disc space-y-1 pl-5 text-[14px] text-ink-2">
+                  <li>5 dias depois da assinatura: contato para saber como está a nova moradia;</li>
+                  <li>5 dias depois desse contato: pedir uma indicação (com sugestão de abordagem).</li>
+                </ul>
+                <ActionForm action={setAftercareAction}>
+                  <input type="hidden" name="userId" value={u.id} />
+                  <input type="hidden" name="on" value={u.aftercareSince ? "0" : "1"} />
+                  <SubmitButton variant={u.aftercareSince ? "secondary" : "primary"}>{u.aftercareSince ? "Desligar pós-contrato" : "Ligar pós-contrato"}</SubmitButton>
+                </ActionForm>
+                {!u.aftercareSince && <p className="mt-2 text-[12px] text-ink-3">Vale para os contratos assinados a partir do dia em que for ligado.</p>}
               </div>
             </Section>
           )}

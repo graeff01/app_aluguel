@@ -103,3 +103,35 @@ export function DealsCard({ open, stale, delay = 0 }: { open: number; stale: num
     </Link>
   );
 }
+
+/** Propostas de valor encaminhadas pelo pré-atendimento (só aparece quando há alguma em aberto). */
+export function ProposalsCard({ fresh, open, delay = 0 }: { fresh: number; open: number; delay?: number }) {
+  return (
+    <Link
+      href="/propostas"
+      className="fc-card press animate-rise mb-4 flex items-center gap-4 rounded-[24px] border border-warn/25 bg-gradient-to-br from-[#fff6e9] to-[#fdeccf] px-4 py-4 shadow-card transition-shadow hover:shadow-float dark:from-[#2a2217] dark:to-[#33291a]"
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-2xl bg-warn text-bg">
+        <svg viewBox="0 0 40 40" className="size-8" fill="none">
+          <path d="M9 21l7 7 15-16" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M8 12h10M8 17h6" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" opacity=".7" />
+        </svg>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[16px] font-bold tracking-[-0.01em] text-warn">Propostas</span>
+        <span className="block text-[13px] text-warn/80">
+          {fresh ? `${fresh} ${fresh === 1 ? "nova para levar" : "novas para levar"} ao proprietário` : `${open} em negociação`}
+        </span>
+      </span>
+      {fresh > 0 ? (
+        <span className="relative grid size-8 shrink-0 place-items-center">
+          <span aria-hidden className="fc-pulse absolute inset-0 rounded-full bg-warn/35" />
+          <span className="num relative grid size-8 place-items-center rounded-full bg-warn text-[14px] font-bold text-bg">{fresh > 99 ? "99+" : fresh}</span>
+        </span>
+      ) : (
+        <Icon name="arrow" className="fc-arrow size-5 shrink-0 text-warn/70" />
+      )}
+    </Link>
+  );
+}

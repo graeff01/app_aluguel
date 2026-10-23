@@ -89,6 +89,13 @@ export function canResolvePreAnalysis(a: AuthzActor, p: { consultantId: string }
   return hasGlobalView(a) || (a.role === "CONSULTANT" && p.consultantId === a.id);
 }
 
+// ─────────── Proposta (mesmo acesso da pré-análise) ───────────
+export function proposalScope(a: AuthzActor): Prisma.ProposalWhereInput {
+  return isPreService(a) || hasGlobalView(a) ? {} : { consultantId: a.id };
+}
+/** Andamento da proposta: a consultora encaminhada ou a gestão. */
+export const canUpdateProposal = canResolvePreAnalysis;
+
 export function assert(cond: boolean, msg?: string): asserts cond {
   if (!cond) throw forbidden(msg);
 }

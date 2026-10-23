@@ -14,7 +14,7 @@ import { AnonymizeForm } from "./anonymize-form";
 
 export const metadata = { title: "Ficha do cliente" };
 
-const KIND_LABEL: Record<TimelineKind, string> = { pre: "Pré-análise", docs: "Documentos", visit: "Visita", deal: "Negócio", search: "Busca" };
+const KIND_LABEL: Record<TimelineKind, string> = { pre: "Pré-análise", proposal: "Proposta", docs: "Documentos", visit: "Visita", deal: "Negócio", search: "Busca" };
 const DOT: Record<Tone, string> = { good: "bg-good", bad: "bg-bad", accent: "bg-accent", info: "bg-[#2f6fde]", neutral: "bg-ink-3" };
 const CARD: Record<Tone, string> = {
   good: "border-good/30 bg-good-soft",
