@@ -1,13 +1,18 @@
 # Testes obrigatórios antes de publicar: o Railway só faz deploy quando esta verificação passa (checkSuites em .railway/railway.ts).
+# A cada alteração (push/PR): verificação rápida (tipos, unidade/integração e build).
+# Bateria completa com os fluxos E2E (celular e desktop): uma vez por dia, às 22h de Brasília, ou manualmente.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "0 1 * * *" # 22:00 em Brasília (UTC-3)
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -45,13 +50,16 @@ jobs:
       - name: Build de produção
         run: npm run build
       - name: Banco E2E
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: PGPASSWORD=postgres psql -h localhost -U postgres -c "create database visitas_e2e"
       - name: Navegador do Playwright
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: npx playwright install --with-deps chromium
       - name: Fluxos E2E (celular e desktop)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: npm run test:e2e
       - uses: actions/upload-artifact@v5
-        if: failure()
+        if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         with:
           name: playwright-report
           path: test-results
