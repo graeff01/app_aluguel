@@ -3,13 +3,16 @@ import { requireActor } from "@/lib/require";
 import { ROLE_LABEL } from "@/lib/labels";
 import { faqFor, topicsFor } from "@/lib/help-content";
 import { PageHeader, Section } from "@/components/ui";
+import { getSettings } from "@/lib/settings";
 
 export const metadata = { title: "Central de ajuda" };
 
 /** Passo a passo das telas do perfil e dúvidas frequentes. */
 export default async function HelpPage() {
   const actor = await requireActor({ preService: true, marketing: true });
-  const topics = topicsFor(actor.role);
+  // documentos pelo link desligado: o passo a passo some da ajuda
+  const docLinks = (await getSettings()).docLinksEnabled;
+  const topics = topicsFor(actor.role).filter((t) => docLinks || t.id !== "documentos");
   const faq = faqFor(actor.role);
   return (
     <div className="mx-auto max-w-3xl">

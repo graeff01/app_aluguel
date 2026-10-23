@@ -10,6 +10,7 @@
  */
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { getSettings } from "@/lib/settings";
 import { AppError, notFound } from "@/lib/errors";
 import { hasGlobalView, isPreService, type AuthzActor } from "@/lib/authz";
 import { EVALUATION_LABEL, PRE_STATUS_LABEL, PROPOSAL_STATUS_LABEL } from "@/lib/labels";
@@ -257,7 +258,7 @@ export async function clientFile(actor: AuthzActor, clientId: string, now = new 
     actions: {
       // marcar visita parte da visita mais recente (o reagendamento já puxa o cliente)
       scheduleFrom: mode !== "pre" && lastVisit ? lastVisit.id : null,
-      docsFrom: mode !== "pre" && lastDone ? lastDone.id : null,
+      docsFrom: mode !== "pre" && lastDone && (await getSettings()).docLinksEnabled ? lastDone.id : null,
     },
   };
 }

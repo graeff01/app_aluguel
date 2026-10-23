@@ -30,6 +30,7 @@ const negative = async (actor: AuthzActor, id: string) =>
 
 beforeEach(async () => {
   await resetDb();
+  await db.appSettings.update({ where: { id: 1 }, data: { docLinksEnabled: true } });
   u = await makeUsers();
   const j = await db.user.create({ data: { name: "Jasmin Pré", email: "jasmin@exemplo.test", role: "PRE_SERVICE" } });
   jasmin = { id: j.id, role: "PRE_SERVICE" };

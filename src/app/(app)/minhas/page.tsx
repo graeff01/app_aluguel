@@ -45,7 +45,7 @@ function when(v: VisitListItem, today: string) {
 const TONE_LABEL = { overdue: "Atrasada", awaiting: "Aguardando resultado", live: "Em andamento", upcoming: "Agendada" } as const;
 
 /** Card da tela única: barra de status colorida + texto; foto do imóvel; ações na base. */
-function MineCard({ v, today, now, mode, index, team, confirmTemplate }: { v: VisitListItem & { note?: string | null }; today: string; now: Date; mode: "awaiting" | "live" | "upcoming" | "done"; index: number; team?: boolean; confirmTemplate?: string }) {
+function MineCard({ v, today, now, mode, index, team, confirmTemplate, docLinks }: { v: VisitListItem & { note?: string | null }; today: string; now: Date; mode: "awaiting" | "live" | "upcoming" | "done"; index: number; team?: boolean; confirmTemplate?: string; docLinks?: boolean }) {
   const tone = visitTone(v, now);
   const startsSoon = v.scheduledStart.getTime() <= now.getTime() + 15 * 60_000;
   const tappable = true; // futuras também abrem (cancelar/remarcar já disponíveis)
@@ -101,7 +101,7 @@ function MineCard({ v, today, now, mode, index, team, confirmTemplate }: { v: Vi
       <Link href={href} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-[15px] font-semibold text-on-primary shadow-[0_6px_16px_-8px_rgb(29_32_35/0.6)] dark:shadow-none">
         Registrar resultado <Icon name="arrow" className="size-4" />
       </Link>
-    ) : mode === "done" && v.status === "DONE" && v.evaluation === "POSITIVE" && !team ? (
+    ) : mode === "done" && docLinks && v.status === "DONE" && v.evaluation === "POSITIVE" && !team ? (
       <Link href={`/visitas/${v.id}/documentos`} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-white">
         Pedir documentos <Icon name="arrow" className="size-4" />
       </Link>
@@ -158,7 +158,8 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
   const propOpen = proposals?.reduce((a, p) => a + p._count._all, 0) ?? 0;
   const searching = team ? null : await searchSummaryFor(actor, now);
   // gostaram do imóvel (últimos 7 dias) e ainda sem pedido de documentos: atalho no topo
-  const positives = team ? [] : done.filter((v) => v.status === "DONE" && v.evaluation === "POSITIVE");
+  const docLinks = (await getSettings()).docLinksEnabled;
+  const positives = team || !docLinks ? [] : done.filter((v) => v.status === "DONE" && v.evaluation === "POSITIVE");
   const links = positives.length ? await db.visit.findMany({ where: { id: { in: positives.map((v) => v.id) } }, select: { id: true, preAnalysisId: true } }) : [];
   const asked = links.length
     ? await db.docRequest.findMany({
@@ -305,6 +306,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
                   now={now}
                   index={i}
                   team={team}
+                  docLinks={docLinks}
                   mode={v.status !== "SCHEDULED" ? "done" : v.scheduledEnd <= now ? "awaiting" : v.scheduledStart <= now ? "live" : "upcoming"}
                 />
               ))}
@@ -437,7 +439,7 @@ export default async function MinePage({ searchParams }: { searchParams: Promise
           </summary>
           <ul className="grid gap-3 2xl:grid-cols-2">
             {done.map((v, i) => (
-              <MineCard key={v.id} v={v} today={today} now={now} mode="done" index={i} team={team} />
+              <MineCard key={v.id} v={v} today={today} now={now} mode="done" docLinks={docLinks} index={i} team={team} />
             ))}
           </ul>
         </details>

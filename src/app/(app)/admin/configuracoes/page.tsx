@@ -71,6 +71,7 @@ export default async function SettingsPage() {
           <Field label="E-mails em cópia nos agendamentos das consultoras" htmlFor="calendarCcEmails" hint="Vão como convidados no evento que a consultora cria pelo app (Reagendar / Nova visita), além da conta central. Separe por vírgula. Ex.: o e-mail do pré-atendimento.">
             <Input id="calendarCcEmails" name="calendarCcEmails" defaultValue={s.calendarCcEmails} maxLength={500} />
           </Field>
+          <YesNo name="docLinksEnabled" value={s.docLinksEnabled} label="Pedir documentos pelo link do cliente" hint="Desligado: some o botão “Pedir documentos ao cliente” e os links já enviados param de abrir. Os documentos já recebidos continuam visíveis." />
           <Field label="Apagar CPF, nascimento, e-mail, telefone e salário da pré-análise após (dias)" htmlFor="preAnalysisRetentionDays" hint="Contados a partir do resultado. Ficam nome, faixa de renda e resultado para os indicadores.">
             <Input id="preAnalysisRetentionDays" name="preAnalysisRetentionDays" type="number" min={7} max={365} defaultValue={s.preAnalysisRetentionDays} />
           </Field>

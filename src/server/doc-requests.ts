@@ -90,6 +90,12 @@ export function docLinkUrl(token: string) {
 }
 
 /** Quem cuida do pedido: gestão, pré-atendimento, quem criou e a consultora responsável. */
+/** Pedido de documentos pelo link ligado em Regras e app (a gestão pode desligar). */
+export async function docLinksEnabled() {
+  return (await getSettings()).docLinksEnabled;
+}
+const DISABLED_MSG = "O pedido de documentos pelo link está desligado (Regras e app).";
+
 export function canManageDocRequest(a: AuthzActor, r: { createdById: string; consultantId: string | null }) {
   return hasGlobalView(a) || isPreService(a) || r.createdById === a.id || r.consultantId === a.id;
 }
@@ -101,6 +107,7 @@ export async function createDocRequest(
   input: { preAnalysisId?: string; visitId?: string; itemKeys: string[]; custom?: string[]; message?: string; phone?: string },
   now = new Date(),
 ) {
+  if (!(await docLinksEnabled())) throw new AppError("INVALID_STATE", DISABLED_MSG);
   const items = itemsSchema.safeParse(buildItems(input.itemKeys, input.custom ?? []));
   if (!items.success) throw new AppError("VALIDATION", items.error.issues[0].message, { items: items.error.issues[0].message });
 
@@ -252,6 +259,7 @@ export async function renewDocRequest(actor: AuthzActor, id: string, now = new D
   if (!r || r.purgedAt) throw notFound();
   assert(canManageDocRequest(actor, r));
   if (r.status === "CANCELED") throw new AppError("INVALID_STATE", "Este link foi cancelado. Gere um novo pedido.");
+  if (!(await docLinksEnabled())) throw new AppError("INVALID_STATE", DISABLED_MSG);
   await db.$transaction(async (tx) => {
     await tx.docRequest.update({ where: { id }, data: { expiresAt: new Date(now.getTime() + DOC_LINK_DAYS * DAY), lockedUntil: null, failedAttempts: 0 } });
     await audit(tx, { actorId: actor.id, action: "docrequest.renewed", entityType: "DocRequest", entityId: id });
@@ -279,8 +287,10 @@ export async function readClientDocument(actor: AuthzActor, fileId: string) {
 
 // ─────────────── Cliente (link público) ───────────────
 
+/** Desligado em Regras e app: nenhum link abre (verificar, enviar e concluir param juntos). */
 async function byToken(token: string) {
   if (!/^[A-Za-z0-9_-]{30,60}$/.test(token)) return null;
+  if (!(await docLinksEnabled())) return null;
   return db.docRequest.findUnique({ where: { tokenHash: sha256(token) } });
 }
 
@@ -307,6 +317,7 @@ function sessionOk(cookie: string | undefined, requestId: string, now: Date) {
 
 /** O que a página do cliente mostra (sem dados pessoais além do primeiro nome antes de confirmar). */
 export async function clientDocView(token: string, cookie: string | undefined, now = new Date()) {
+  if (!(await docLinksEnabled())) return { state: "CANCELED" as const };
   const r = await byToken(token);
   const state = linkState(r, now);
   if (state !== "OK" || !r) return { state: (state === "OK" ? "INVALID" : state) as Exclude<ClientLinkState, "OK"> };

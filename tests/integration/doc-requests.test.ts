@@ -40,6 +40,7 @@ async function preAnalysis(o: { pending?: boolean } = {}) {
 
 beforeEach(async () => {
   await resetDb();
+  await db.appSettings.update({ where: { id: 1 }, data: { docLinksEnabled: true } });
   u = await makeUsers();
   const j = await db.user.create({ data: { name: "Jasmin Pré", email: "jasmin@exemplo.test", role: "PRE_SERVICE" } });
   jasmin = { id: j.id, role: "PRE_SERVICE", name: j.name };
@@ -123,6 +124,21 @@ describe("link de documentos", () => {
     expect((await clientDocView(token, undefined, later(6))).state).toBe("CANCELED");
     expect((await clientDocView("token-que-nao-existe-aaaaaaaaaaaaaaaaaaaaaaaaaaa", undefined, later(6))).state).toBe("INVALID");
     await expect(cancelDocRequest(u.b, r.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("desligado em Regras e app: não pede, não renova e os links enviados param de abrir; o recebido continua visível", async () => {
+    const p = await preAnalysis();
+    const r = await createDocRequest(jasmin, { preAnalysisId: p.id, itemKeys: ["doc_foto"] }, NOW);
+    const token = tokenOf(r.url);
+    await db.appSettings.update({ where: { id: 1 }, data: { docLinksEnabled: false } });
+    await expect(createDocRequest(jasmin, { preAnalysisId: p.id, itemKeys: ["renda"] }, NOW)).rejects.toMatchObject({ code: "INVALID_STATE" });
+    await expect(renewDocRequest(u.a, r.id, later(1))).rejects.toMatchObject({ code: "INVALID_STATE" });
+    expect((await clientDocView(token, undefined, later(1))).state).toBe("CANCELED");
+    await expect(verifyClient(token, "529", later(1))).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(await listDocRequests(jasmin, { preAnalysisId: p.id }, later(1))).toHaveLength(1);
+    // religar volta a funcionar
+    await db.appSettings.update({ where: { id: 1 }, data: { docLinksEnabled: true } });
+    expect(await verifyClient(token, "529", later(2))).toBeTruthy();
   });
 
   it("pasta única: pedir de novo depois da visita inclui os itens no mesmo link; retenção apaga tudo", async () => {

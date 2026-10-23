@@ -1,4 +1,4 @@
-import { DOC_ITEM_PRESETS, docRequestShare, listDocRequests, suggestedItemKeys } from "@/server/doc-requests";
+import { DOC_ITEM_PRESETS, docLinksEnabled, docRequestShare, listDocRequests, suggestedItemKeys } from "@/server/doc-requests";
 import type { AuthzActor } from "@/lib/authz";
 import { fmt } from "@/lib/time";
 import { cx } from "@/components/ui";
@@ -33,9 +33,12 @@ export async function DocRequestsPanel({
   intro?: string;
 }) {
   const now = new Date();
+  const enabled = await docLinksEnabled();
   const list = await listDocRequests(actor, { preAnalysisId: target.preAnalysisId, visitId: target.visitId, opportunityId: target.opportunityId ?? undefined }, now);
   const active = list.find((r) => r.status === "OPEN" || r.status === "SUBMITTED" || r.status === "EXPIRED");
-  const share = active && !active.purgedAt ? await docRequestShare(actor, active.id).catch(() => null) : null;
+  // desligado: só mostra o que já foi recebido (sem pedir de novo, compartilhar ou renovar)
+  if (!enabled && !list.length) return null;
+  const share = enabled && active && !active.purgedAt ? await docRequestShare(actor, active.id).catch(() => null) : null;
   const formTarget = target.preAnalysisId ? { preAnalysisId: target.preAnalysisId } : { visitId: target.visitId };
 
   return (
@@ -45,7 +48,7 @@ export async function DocRequestsPanel({
           <h2 id="t-doclink" className="text-[15px] font-bold">
             {title}
           </h2>
-          <p className="text-[13px] text-ink-3">{intro ?? "O cliente fotografa e envia pelo celular, num link seguro. Você é avisada quando ele concluir."}</p>
+          <p className="text-[13px] text-ink-3">{enabled ? (intro ?? "O cliente fotografa e envia pelo celular, num link seguro. Você é avisada quando ele concluir.") : "O pedido pelo link está desligado. Os documentos já recebidos continuam aqui."}</p>
         </div>
       </div>
 
@@ -109,13 +112,15 @@ export async function DocRequestsPanel({
         );
       })}
 
-      <DocRequestForm
-        target={formTarget}
-        presets={DOC_ITEM_PRESETS}
-        suggested={suggestedItemKeys(guaranteeLabel)}
-        hasPhone={hasPhone}
-      />
-      {active && active.status !== "CANCELED" && <p className="mt-2 text-[12px] text-ink-3">Pedir mais documentos inclui os novos no mesmo link que o cliente já tem.</p>}
+      {enabled && (
+        <DocRequestForm
+          target={formTarget}
+          presets={DOC_ITEM_PRESETS}
+          suggested={suggestedItemKeys(guaranteeLabel)}
+          hasPhone={hasPhone}
+        />
+      )}
+      {enabled && active && active.status !== "CANCELED" && <p className="mt-2 text-[12px] text-ink-3">Pedir mais documentos inclui os novos no mesmo link que o cliente já tem.</p>}
     </section>
   );
 }

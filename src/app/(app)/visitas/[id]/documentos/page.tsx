@@ -5,6 +5,8 @@ import { getVisitDetail } from "@/server/queries";
 import { canConcludeVisit } from "@/lib/authz";
 import { fmt } from "@/lib/time";
 import { DocRequestsPanel } from "@/components/doc-requests/panel";
+import { docLinksEnabled } from "@/server/doc-requests";
+import { db } from "@/lib/db";
 import { ClientFileLink } from "@/components/client-file-link";
 
 export const metadata = { title: "Documentos do cliente" };
@@ -15,6 +17,8 @@ export default async function VisitDocumentsPage({ params }: { params: Promise<{
   const { id } = await params;
   const { visit } = await orNotFound(getVisitDetail(actor, id));
   if (!canConcludeVisit(actor, visit) && actor.role !== "PRE_SERVICE") notFound();
+  // desligado e nada recebido antes: a tela não tem o que mostrar
+  if (!(await docLinksEnabled()) && !(await db.docRequest.count({ where: { OR: [{ visitId: visit.id }, ...(visit.opportunityId ? [{ opportunityId: visit.opportunityId }] : [])] } }))) notFound();
   return (
     <div className="mx-auto max-w-2xl">
       <Link href={`/visitas/${visit.id}/registrar`} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">

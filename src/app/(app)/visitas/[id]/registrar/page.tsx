@@ -112,7 +112,7 @@ export default async function RegisterPage({ params, searchParams }: { params: P
           </Link>
         )}
       </Panel>
-      {visit.status === "DONE" && visit.evaluation === "POSITIVE" && (
+      {settings.docLinksEnabled && visit.status === "DONE" && visit.evaluation === "POSITIVE" && (
         <Link href={`/visitas/${visit.id}/documentos`} className="press animate-rise mb-5 flex items-center justify-between gap-3 rounded-[22px] border border-accent/30 bg-accent-soft px-5 py-4">
           <span>
             <span className="block text-[16px] font-bold">Pedir documentos ao cliente</span>

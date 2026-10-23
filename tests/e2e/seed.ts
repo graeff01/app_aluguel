@@ -8,7 +8,7 @@ import { concludeVisit, createManualVisit } from "../../src/server/visits";
 export const PW = "senha-e2e-segura-1";
 
 await ensureReferenceData();
-await db.appSettings.update({ where: { id: 1 }, data: { resultsStartDate: new Date("2020-01-01T00:00:00Z") } });
+await db.appSettings.update({ where: { id: 1 }, data: { resultsStartDate: new Date("2020-01-01T00:00:00Z"), docLinksEnabled: true } });
 const hash = await hashPassword(PW);
 await db.user.create({ data: { name: "Gestora E2E", email: "gestora@e2e.test", role: "MANAGER", passwordHash: hash } });
 const a = await db.user.create({ data: { name: "Consultora A", email: "a@e2e.test", role: "CONSULTANT", passwordHash: hash } });

@@ -162,6 +162,8 @@ model AppSettings {
   cancelAfterHour          Int      @default(21)
   /// LGPD: dias após o resultado para apagar CPF, nascimento, e-mail, telefone e salário da pré-análise
   preAnalysisRetentionDays Int      @default(90)
+  /// "Documentos pelo link do cliente" ligado (desligado: some dos menus e os links enviados param de abrir)
+  docLinksEnabled          Boolean  @default(false)
   /// e-mails colocados em cópia nos eventos que as consultoras criam pelo app (reagendar/nova visita), separados por vírgula
   calendarCcEmails         String   @default("")
   /// mensagem de confirmação de presença (WhatsApp aberto pela consultora). {cliente} {consultora} {dia} {hora} {codigo} {bairro}
