@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { runAction, str, type ActionState } from "@/lib/action";
-import { assignVisit, cancelVisitByStaff, correctVisitData, setCancelReason, undoStaffCancel, reopenCanceledVisit, createManualVisit, resolveConflict, setVisitExcluded, type ConflictAction } from "@/server/visits";
+import { assignVisit, cancelVisitByStaff, correctVisitData, setCancelReason, undoStaffCancel, reopenCanceledVisit, swapVisitProperty, createManualVisit, resolveConflict, setVisitExcluded, type ConflictAction } from "@/server/visits";
 import { confirmVisitClientAsDistinct, linkVisitToClient, mergeClients } from "@/server/clients";
 import { updateOpportunity, transferOpportunity } from "@/server/opportunities";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
@@ -230,6 +230,26 @@ export async function reopenVisitAction(_: ActionState, fd: FormData): Promise<A
   const s = await runAction(async (a) => {
     const r = await reopenCanceledVisit(a, str(fd, "visitId"), { note: str(fd, "note") });
     return `Visita reaberta. A consultora foi avisada. ${GOOGLE_REOPEN_TEXT[r.google] ?? ""}`.trim();
+  });
+  if (s.ok) {
+    revalidatePath("/agenda-do-dia");
+    revalidatePath(`/visitas/${str(fd, "visitId")}`);
+  }
+  return s;
+}
+
+const GOOGLE_SWAP_TEXT: Record<string, string> = {
+  updated: "O título do evento na agenda Google já está com o novo imóvel.",
+  not_owner: "O evento é de outra pessoa: troque o código no título na agenda Google.",
+  gone: "O evento não existe mais na agenda Google.",
+  no_permission: "Sem permissão para alterar a agenda Google: troque o código no título à mão.",
+  error: "Não foi possível atualizar a agenda Google agora: troque o código no título à mão.",
+};
+
+export async function swapPropertyAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const s = await runAction(async (a) => {
+    const r = await swapVisitProperty(a, str(fd, "visitId"), { newCode: str(fd, "newCode"), reasonId: str(fd, "reasonId"), note: str(fd, "note"), seen: fd.has("seenCode") ? { code: str(fd, "seenCode") } : undefined });
+    return `Imóvel trocado: a visita continua no mesmo horário. A consultora foi avisada. ${GOOGLE_SWAP_TEXT[r.google] ?? ""}`.trim();
   });
   if (s.ok) {
     revalidatePath("/agenda-do-dia");

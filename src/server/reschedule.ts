@@ -159,7 +159,8 @@ export async function buildVisitEvent(visitId: string) {
   const prefix = patterns.visitPrefixes[0] ?? "visita clt";
   const label = prefix.charAt(0).toUpperCase() + prefix.slice(1);
   // a etiqueta vai no FINAL: no começo atrapalharia a leitura do nome do cliente pela sincronização
-  const codes = [v.propertyCode, ...v.companions.map((c) => c.propertyCode)].filter(Boolean).join(";");
+  // principal cancelada (imóvel trocado ou cancelado só ele) sai do título quando outros imóveis continuam
+  const codes = [v.status === "CANCELED" && v.companions.length ? null : v.propertyCode, ...v.companions.map((c) => c.propertyCode)].filter(Boolean).join(";");
   // nome + nº do atendimento (CRM), como a agenda já usa: "Visita clt - Ana Souza 2864969 - cod 123;456 - 51 9…"
   const who = [v.clientName, v.externalRef].filter(Boolean).join(" ");
   const title = [label, who || null, codes ? `cod ${codes}` : null, v.phoneRaw, v.assignmentNote === "REAGENDADA" ? "REAGENDADA" : null].filter(Boolean).join(" - ");

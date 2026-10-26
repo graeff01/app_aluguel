@@ -30,6 +30,8 @@ export type MetricVisit = {
   clientMatch: string | null;
   negativeReasonId: string | null;
   excluded: boolean;
+  /** imóvel trocado por outro no mesmo horário: não conta (nem como cancelamento) */
+  swappedTo?: string | null;
 };
 
 export type MetricOpportunity = {
@@ -90,7 +92,7 @@ export function visitAttribution(v: Pick<MetricVisit, "realizedById" | "consulta
 
 export function computeMetrics(visitsAll: MetricVisit[], oppsAll: MetricOpportunity[], p: MetricParams) {
   const visits = visitsAll.filter((v) => {
-    if (v.excluded) return false;
+    if (v.excluded || v.swappedTo) return false;
     if (!inRange(dayKey(v.scheduledStart), p.from, p.to)) return false;
     if (p.consultantId && visitAttribution(v) !== p.consultantId) return false;
     if (p.propertyCode && v.propertyCode !== p.propertyCode) return false;

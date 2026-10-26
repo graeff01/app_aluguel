@@ -83,7 +83,7 @@ export async function buildMonthlyReport(actor: AuthzActor, month: string, now =
     where: { ...notDemo, scheduledStart: { gte: startOfDayInTz(seriesFrom), lt: endOfDayInTz(cur.to) } },
     select: {
       id: true, status: true, evaluation: true, scheduledStart: true, scheduledEnd: true, consultantId: true, realizedById: true,
-      propertyCode: true, clientId: true, clientMatch: true, negativeReasonId: true, excluded: true, origin: true, phoneNormalized: true,
+      propertyCode: true, clientId: true, clientMatch: true, negativeReasonId: true, excluded: true, swappedTo: true, origin: true, phoneNormalized: true,
       client: { select: { identityStatus: true } },
     },
   });

@@ -551,6 +551,8 @@ model Visit {
   /// motivo do cancelamento (pré-atendimento)
   cancelReasonId   String?
   cancelReason     Reason?          @relation("VisitCancelReason", fields: [cancelReasonId], references: [id])
+  /// imóvel indisponível trocado por outro no mesmo horário (código do novo): não conta como cancelamento do cliente
+  swappedTo        String?
   note             String?
   concludedAt      DateTime?
   concludedById    String?

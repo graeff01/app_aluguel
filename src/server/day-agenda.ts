@@ -24,6 +24,7 @@ export async function dayAgenda(actor: AuthzActor, day: string) {
       cancelReason: { select: { label: true } },
       note: true,
       autoCanceled: true,
+      swappedTo: true,
       concludedBy: { select: { name: true } },
       consultant: { select: { name: true } },
       property: { select: { neighborhood: true } },
@@ -62,6 +63,7 @@ export async function rangeAgenda(actor: AuthzActor, fromDay: string, toDayExclu
       cancelReason: { select: { label: true } },
       note: true,
       autoCanceled: true,
+      swappedTo: true,
       concludedBy: { select: { name: true } },
       consultant: { select: { name: true } },
       property: { select: { neighborhood: true } },
@@ -76,7 +78,7 @@ export async function rangeAgenda(actor: AuthzActor, fromDay: string, toDayExclu
   for (const v of visits) if (v.status !== "CANCELED") byConsultant.set(v.consultant?.name ?? "Sem consultora", (byConsultant.get(v.consultant?.name ?? "Sem consultora") ?? 0) + 1);
   return {
     total: visits.length,
-    canceled: visits.filter((v) => v.status === "CANCELED").length,
+    canceled: visits.filter((v) => v.status === "CANCELED" && !v.swappedTo).length,
     unassigned: visits.filter((v) => !v.consultantId && v.status === "SCHEDULED").length,
     byConsultant: [...byConsultant.entries()].sort((a, b) => b[1] - a[1]),
     days: [...days.entries()].map(([day, items]) => ({ day, items })),

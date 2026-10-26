@@ -261,7 +261,7 @@ export function dashboardFilter(actor: AuthzActor, f: DashboardFilter, now = new
   return { from, to, consultantId, propertyCode };
 }
 
-const METRIC_VISIT_SELECT = { id: true, status: true, evaluation: true, scheduledStart: true, scheduledEnd: true, consultantId: true, realizedById: true, propertyCode: true, clientId: true, clientMatch: true, negativeReasonId: true, excluded: true } as const;
+const METRIC_VISIT_SELECT = { id: true, status: true, evaluation: true, scheduledStart: true, scheduledEnd: true, consultantId: true, realizedById: true, propertyCode: true, clientId: true, clientMatch: true, negativeReasonId: true, excluded: true, swappedTo: true } as const;
 
 export async function dashboard(actor: AuthzActor, f: DashboardFilter, now = new Date()) {
   const { from, to, consultantId, propertyCode } = dashboardFilter(actor, f, now);

@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { runSync } from "@/server/sync/engine";
 import { executeRun, withSyncLock } from "@/server/sync/runner";
-import { cancelVisitByStaff, concludeVisit, reopenCanceledVisit } from "@/server/visits";
+import { cancelVisitByStaff, concludeVisit, reopenCanceledVisit, swapVisitProperty } from "@/server/visits";
+import { computeMetrics } from "@/lib/metrics";
 import { assignVisit } from "@/server/visits";
 import { GoogleApiError } from "@/server/sync/types";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
@@ -369,6 +370,37 @@ describe("evento com vários imóveis", () => {
     expect(back).toMatchObject({ status: "SCHEDULED", cancelReasonId: null, concludedById: null, propertyCode: "664465" });
     expect(await db.visitOutcomeHistory.count({ where: { visitId: old.id, note: { contains: "Reaberta por Gestora: Cancelada por engano" } } })).toBe(1);
     await expect(reopenCanceledVisit(users.manager, old.id, { note: "de novo" })).rejects.toMatchObject({ code: "INVALID_STATE" });
+  });
+
+  it("trocar imóvel: o indisponível fica trocado (não conta como cancelamento) e o cliente segue no mesmo horário com o novo", async () => {
+    const title = (codes: string) => `Visita clt - Lindomar Portilho - cod ${codes} - (51) 99876-5432`;
+    api.put(visitEvent("swap", { start: "2026-10-07T17:00:00Z", title: title("664465"), organizer: "central@exemplo.test" }));
+    await sync();
+    const old = await db.visit.findFirstOrThrow();
+    const reason = await db.reason.findFirstOrThrow({ where: { kind: "VISIT_CANCEL" } });
+    await expect(swapVisitProperty(users.b, old.id, { newCode: "806139", reasonId: reason.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(swapVisitProperty(users.manager, old.id, { newCode: "664465", reasonId: reason.id })).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(swapVisitProperty(users.manager, old.id, { newCode: "806139", reasonId: reason.id, seen: { code: "111111" } })).rejects.toMatchObject({ code: "CONFLICT" });
+
+    const r = await swapVisitProperty(users.manager, old.id, { newCode: "806139", reasonId: reason.id, seen: { code: "664465" } }, NOW, { calendarApi: api });
+    expect(r.google).toBe("updated");
+    const rows = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
+    expect(rows.map((v) => [v.propertyCode, v.status, v.swappedTo, v.companionOfId === old.id])).toEqual([["664465", "CANCELED", "806139", false], ["806139", "SCHEDULED", null, true]]);
+    expect(rows[1]).toMatchObject({ clientName: "Lindomar Portilho", consultantId: users.a.id, scheduledStart: old.scheduledStart });
+    expect(rows[0].note).toContain("trocado pelo imóvel 806139");
+    // agenda Google: o título fica só com o novo código
+    expect((await api.getEvent("central@exemplo.test", "swap"))?.summary).toBe(title("806139"));
+    // a próxima leitura da agenda não desfaz nada (e sem o título editado o novo também fica)
+    await sync();
+    api.put(visitEvent("swap", { start: "2026-10-07T17:00:00Z", title: title("664465"), organizer: "central@exemplo.test" }));
+    await sync();
+    expect((await db.visit.findMany({ orderBy: { createdAt: "asc" } })).map((v) => [v.propertyCode, v.status])).toEqual([["664465", "CANCELED"], ["806139", "SCHEDULED"]]);
+    // números: o imóvel trocado não aparece como visita cancelada
+    const all = await db.visit.findMany();
+    const m = computeMetrics(all.map((v) => ({ ...v, clientIdentity: null })), [], { from: "2026-10-01", to: "2026-10-31", now: NOW, resultsStartDate: "2026-01-01" });
+    expect(m.totals).toMatchObject({ scheduled: 1, canceled: 0 });
+    // o imóvel que saiu não é trocado de novo
+    await expect(swapVisitProperty(users.manager, old.id, { newCode: "999999", reasonId: reason.id })).rejects.toMatchObject({ code: "INVALID_STATE" });
   });
 
   it("evento movido para depois das 21h cancela todas as visitas do evento e voltar restaura", async () => {

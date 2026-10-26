@@ -378,7 +378,7 @@ export async function reopenCanceledVisit(actor: AuthzActor, visitId: string, in
     const note = `Reaberta por ${(await tx.user.findUnique({ where: { id: actor.id }, select: { name: true } }))?.name.split(" ")[0] ?? "a equipe"}: ${why}`;
     await tx.visit.update({
       where: { id: visitId },
-      data: { status: "SCHEDULED", cancelReasonId: null, note: null, concludedAt: null, concludedById: null, version: { increment: 1 } },
+      data: { status: "SCHEDULED", cancelReasonId: null, swappedTo: null, note: null, concludedAt: null, concludedById: null, version: { increment: 1 } },
     });
     await tx.visitOutcomeHistory.create({ data: { visitId, status: "SCHEDULED", note, authorId: actor.id } });
     await audit(tx, { actorId: actor.id, action: "visit.reopened", entityType: "Visit", entityId: visitId, changes: { motivo: why, canceladaEm: visit.concludedAt?.toISOString() ?? null } });
@@ -391,6 +391,84 @@ export async function reopenCanceledVisit(actor: AuthzActor, visitId: string, in
     await notifyUser(v.consultantId, { title: `Visita de ${when} reaberta`, body: `${v.propertyCode ? `Imóvel ${v.propertyCode}. ` : ""}O cancelamento foi desfeito. Toque para ver.`, url: `/visitas/${v.id}`, tag: `reaberta-${v.id}` }).catch(() => undefined);
   }
   return { google };
+}
+
+/**
+ * Trocar imóvel: o imóvel ficou indisponível e o cliente vai ver outro no mesmo horário.
+ * O imóvel antigo fica cancelado (com o motivo e "trocado pelo imóvel X") — não conta como cancelamento do cliente —
+ * e o novo entra na mesma visita (mesmo cliente, horário e consultora). Na agenda Google o título passa a ter o novo código.
+ */
+export async function swapVisitProperty(
+  actor: AuthzActor,
+  visitId: string,
+  input: { newCode: string; reasonId: string; note?: string; seen?: { code: string } },
+  now = new Date(),
+  opts: { calendarApi?: CalendarApi } = {},
+) {
+  const code = input.newCode.replace(/\s+/g, "");
+  if (!/^[0-9A-Za-z-]{2,40}$/.test(code)) throw new AppError("VALIDATION", "Confira o código do novo imóvel.", { newCode: "Código inválido." });
+  const reason = await db.reason.findUnique({ where: { id: input.reasonId } });
+  if (!reason || reason.kind !== "VISIT_CANCEL" || !reason.active) throw new AppError("VALIDATION", "Escolha por que o imóvel saiu.", { reasonId: "Escolha o motivo." });
+  const extra = (input.note ?? "").trim().slice(0, 300);
+  if (normalizeText(reason.label) === "outro" && !extra) throw new AppError("VALIDATION", "Descreva o motivo.", { note: "Obrigatório quando o motivo é Outro." });
+  const r = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Visit" WHERE id = ${visitId} FOR UPDATE`;
+    const visit = await tx.visit.findUnique({ where: { id: visitId } });
+    if (!visit || visit.excluded) throw notFound();
+    assert(isPreService(actor) || hasGlobalView(actor) || canConcludeVisit(actor, visit));
+    if (visit.status !== "SCHEDULED") throw new AppError("INVALID_STATE", "Esta visita já tem resultado registrado.");
+    if (input.seen && (visit.propertyCode ?? "") !== input.seen.code) throw new AppError("CONFLICT", `Esta visita mudou na agenda enquanto a tela estava aberta (agora: imóvel ${visit.propertyCode ?? "sem código"}). Confira e troque de novo.`);
+    if (visit.propertyCode === code) throw new AppError("VALIDATION", "O novo imóvel é o mesmo da visita.", { newCode: "Informe outro código." });
+    const group = await sameVisitGroup(tx, visit);
+    if (group.some((s) => s.propertyCode === code && s.status !== "CANCELED")) throw new AppError("VALIDATION", `O imóvel ${code} já está nesta visita.`, { newCode: "Já está na visita." });
+    const note = `${reason.label}${extra ? ` — ${extra}` : ""} — trocado pelo imóvel ${code}`.slice(0, 1000);
+    await detachVisitFromOpportunity(tx, visit.id, actor.id);
+    await tx.visit.update({
+      where: { id: visit.id },
+      data: { status: "CANCELED", cancelReasonId: reason.id, swappedTo: code, note, evaluation: null, negativeReasonId: null, concludedAt: now, concludedById: actor.id, realizedById: null, autoCanceled: false, followUpOn: null, followUpDoneAt: null, version: { increment: 1 } },
+    });
+    await tx.visitOutcomeHistory.create({ data: { visitId: visit.id, status: "CANCELED", note, authorId: actor.id } });
+    await audit(tx, { actorId: actor.id, action: "visit.property_swapped", entityType: "Visit", entityId: visit.id, changes: { de: visit.propertyCode, para: code, motivo: reason.label } });
+    // o novo imóvel entra no mesmo grupo (o evento da agenda é o da principal); "propertyCode" manual:
+    // a sincronização não cancela o novo se o título da agenda ainda não tiver o código
+    const groupId = visit.companionOfId ?? visit.id;
+    const historyNote = `Imóvel ${code} no lugar do ${visit.propertyCode ?? "anterior"} (${reason.label})`;
+    const reuse = group.find((s) => s.propertyCode === code && s.status === "CANCELED" && s.id !== groupId);
+    const shared = {
+      status: "SCHEDULED" as const,
+      scheduledStart: visit.scheduledStart,
+      scheduledEnd: visit.scheduledEnd,
+      clientName: visit.clientName,
+      phoneRaw: visit.phoneRaw,
+      phoneNormalized: visit.phoneNormalized,
+      externalRef: visit.externalRef,
+      clientId: visit.clientId,
+      clientMatch: visit.clientMatch,
+      consultantId: visit.consultantId,
+      assignmentStatus: visit.assignmentStatus,
+      assignmentNote: visit.assignmentNote,
+      scheduledById: visit.scheduledById,
+      confirmStatus: visit.confirmStatus,
+    };
+    const created = reuse
+      ? await tx.visit.update({
+          where: { id: reuse.id },
+          data: { ...shared, cancelReasonId: null, swappedTo: null, note: null, concludedAt: null, concludedById: null, autoCanceled: false, manualFields: [...new Set([...reuse.manualFields, "propertyCode"])], version: { increment: 1 } },
+        })
+      : await tx.visit.create({
+          data: { ...shared, origin: visit.origin, companionOfId: groupId, propertyCode: code, propertyId: await ensureProperty(tx, code), manualFields: ["propertyCode"] },
+        });
+    await tx.visitOutcomeHistory.create({ data: { visitId: created.id, status: "SCHEDULED", note: historyNote, authorId: actor.id } });
+    await audit(tx, { actorId: actor.id, action: "visit.property_swapped_in", entityType: "Visit", entityId: created.id, changes: { anterior: visit.id, imovel: code } });
+    return { visit, created };
+  });
+  // agenda Google: o título passa a ter o novo código no lugar do antigo
+  const google = await pushVisitChange(r.created.id, { title: true }, opts.calendarApi);
+  if (r.visit.consultantId && r.visit.consultantId !== actor.id) {
+    const when = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(r.visit.scheduledStart);
+    await notifyUser(r.visit.consultantId, { title: `Visita de ${when}: imóvel trocado`, body: `Agora é o imóvel ${code} (o ${r.visit.propertyCode ?? "anterior"} saiu: ${reason.label}). Mesmo horário e cliente.`, url: `/visitas/${r.created.id}`, tag: `trocado-${r.visit.id}` }).catch(() => undefined);
+  }
+  return { newVisitId: r.created.id, google };
 }
 
 /** Outros imóveis continuam: tira só o(s) código(s) cancelado(s) do título do evento. */

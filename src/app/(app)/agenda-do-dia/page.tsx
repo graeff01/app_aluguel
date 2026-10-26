@@ -8,7 +8,7 @@ import { EVALUATION_LABEL, STATUS_LABEL } from "@/lib/labels";
 import { PageHeader, Segmented, cx } from "@/components/ui";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { db } from "@/lib/db";
-import { CancelReason, CancelVisit, ReopenVisit } from "./cancel";
+import { CancelReason, CancelVisit, ReopenVisit, SwapProperty } from "./cancel";
 import { UndoCancel } from "./undo-cancel";
 import { calendarLinkFor } from "@/server/reschedule";
 import { LinkButton } from "@/components/ui";
@@ -30,6 +30,7 @@ type Row = {
   cancelReason: { label: string } | null;
   note: string | null;
   autoCanceled: boolean;
+  swappedTo?: string | null;
   concludedBy: { name: string } | null;
   consultant?: { name: string } | null;
   property: { neighborhood: string | null } | null;
@@ -91,6 +92,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     }
   }
   const status = (v: Row) => {
+    if (v.swappedTo) return "Imóvel trocado";
     if (v.status !== "SCHEDULED") return v.evaluation ? EVALUATION_LABEL[v.evaluation] : STATUS_LABEL[v.status];
     if (v.scheduledStart <= now && v.scheduledEnd > now) return "Em andamento";
     if (v.scheduledEnd <= now) return "Aguardando resultado";
@@ -114,12 +116,18 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         </span>
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5 text-right text-[12px] font-semibold">
-        <span className={v.status === "CANCELED" ? "text-bad" : "text-ink-2"}>{status(v)}</span>
+        <span className={v.status === "CANCELED" && !v.swappedTo ? "text-bad" : "text-ink-2"}>{status(v)}</span>
         {v.status === "SCHEDULED" && v.confirmStatus === "CONFIRMED" && <span className="text-good">✓ confirmada</span>}
         {v.status === "SCHEDULED" && v.confirmStatus === "NO_REPLY" && <span className="text-warn">sem resposta</span>}
         {v.status === "CANCELED" && v.cancelReason && <span className="font-normal text-ink-3">{v.cancelReason.label}</span>}
       </span>
-      {v.status === "CANCELED" && (
+      {v.swappedTo && (
+        <span className="basis-full text-[12px] text-ink-3">
+          Trocado pelo imóvel <strong className="num text-ink-2">{v.swappedTo}</strong>
+          {v.concludedBy ? ` por ${v.concludedBy.name.split(" ")[0]}` : ""} — o cliente continua com a visita.
+        </span>
+      )}
+      {v.status === "CANCELED" && !v.swappedTo && (
         <span className="basis-full text-[12px] text-ink-3">
           {/* quem cancelou: pela agenda Google (sincronização) ou alguém no app */}
           Cancelada {v.concludedBy ? `por ${v.concludedBy.name.split(" ")[0]}` : v.autoCanceled ? "pela agenda Google" : ""}
@@ -131,7 +139,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           <CancelReason visitId={v.id} reasons={cancelReasons} />
         </span>
       )}
-      {v.status === "CANCELED" && !v.autoCanceled && (
+      {v.status === "CANCELED" && !v.autoCanceled && !v.swappedTo && (
         <span className="basis-full sm:basis-auto">
           <ReopenVisit visitId={v.id} code={v.propertyCode} />
         </span>
@@ -146,6 +154,11 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
             reasons={cancelReasons}
             back={back}
           />
+        </span>
+      )}
+      {v.status === "SCHEDULED" && v.scheduledEnd > now && v.propertyCode && (
+        <span className="basis-full sm:basis-auto">
+          <SwapProperty visitId={v.id} code={v.propertyCode} reasons={cancelReasons} />
         </span>
       )}
     </li>

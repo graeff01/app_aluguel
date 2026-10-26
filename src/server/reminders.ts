@@ -152,7 +152,7 @@ export async function sendWeeklySummary(now = new Date(), opts: { force?: boolea
 
   const visits = await db.visit.findMany({
     where: { ...notDemo, scheduledStart: { gte: startOfDayInTz(from), lt: startOfDayInTz(today) } },
-    select: { id: true, status: true, evaluation: true, scheduledStart: true, scheduledEnd: true, consultantId: true, realizedById: true, propertyCode: true, clientId: true, clientMatch: true, negativeReasonId: true, excluded: true },
+    select: { id: true, status: true, evaluation: true, scheduledStart: true, scheduledEnd: true, consultantId: true, realizedById: true, propertyCode: true, clientId: true, clientMatch: true, negativeReasonId: true, excluded: true, swappedTo: true },
   });
   const opps = await db.opportunity.findMany({
     where: { OR: [{ closedAt: { gte: new Date(from + "T00:00:00Z"), lte: new Date(to + "T00:00:00Z") } }, { firstDoneVisitAt: { gte: startOfDayInTz(from) } }] },
