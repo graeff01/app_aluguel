@@ -199,7 +199,13 @@ export async function concludeSameVisit(tx: Tx, actor: AuthzActor, v: { id: stri
  */
 export type GoogleCancel = "moved" | "move_not_owner" | "canceled" | "removed" | "code_removed" | "not_owner" | "already" | "no_permission" | "not_in_agenda" | "error";
 
-export async function cancelVisitByStaff(actor: AuthzActor, visitId: string, input: { reasonId: string; note?: string; onlyThis?: boolean }, now = new Date(), opts: { calendarApi?: CalendarApi } = {}) {
+export async function cancelVisitByStaff(
+  actor: AuthzActor,
+  visitId: string,
+  input: { reasonId: string; note?: string; onlyThis?: boolean; /** o que estava na tela ao confirmar: imóvel e os outros imóveis da visita */ seen?: { code: string; others: string[] } },
+  now = new Date(),
+  opts: { calendarApi?: CalendarApi } = {},
+) {
   assert(isPreService(actor) || hasGlobalView(actor));
   const reason = await db.reason.findUnique({ where: { id: input.reasonId } });
   if (!reason || reason.kind !== "VISIT_CANCEL" || !reason.active) throw new AppError("VALIDATION", "Escolha o motivo do cancelamento.", { reasonId: "Escolha o motivo." });
@@ -212,6 +218,14 @@ export async function cancelVisitByStaff(actor: AuthzActor, visitId: string, inp
     if (!visit || visit.excluded) throw notFound();
     if (visit.status !== "SCHEDULED") throw new AppError("INVALID_STATE", "Esta visita já tem resultado registrado.");
     const openSiblings = (await sameVisitGroup(tx, visit)).filter((s) => s.status === "SCHEDULED");
+    // a agenda pode ter mudado a visita enquanto a tela estava aberta (ex.: troca de imóvel no título):
+    // nunca cancela um imóvel diferente do que a pessoa viu
+    if (input.seen) {
+      const same = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
+      if ((visit.propertyCode ?? "") !== input.seen.code || !same(openSiblings.map((s) => s.propertyCode ?? ""), input.seen.others)) {
+        throw new AppError("CONFLICT", `Esta visita mudou na agenda enquanto a tela estava aberta (agora: imóvel ${[visit.propertyCode, ...openSiblings.map((s) => s.propertyCode)].filter(Boolean).join(", ") || "sem código"}). Confira e cancele de novo.`);
+      }
+    }
     // vários imóveis: cancelar só este (o cliente desistiu de um) ou todos
     const ids = input.onlyThis ? [visit.id] : [visit.id, ...openSiblings.map((s) => s.id)];
     const cancelledCodes = (input.onlyThis ? [visit] : [visit, ...openSiblings]).map((v) => v.propertyCode).filter((c): c is string => !!c);

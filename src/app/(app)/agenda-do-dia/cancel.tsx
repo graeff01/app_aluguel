@@ -8,9 +8,17 @@ import { cancelVisitAction, setCancelReasonAction } from "@/app/actions/visits";
 export function CancelVisit({ visitId, label, reasons, code, others = [], back }: { visitId: string; label: string; reasons: { id: string; label: string }[]; code?: string | null; others?: string[]; back: string }) {
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<"one" | "all">("one");
+  // o que estava na tela ao abrir: se a agenda mudar a visita (atualização automática), o servidor recusa e pede para conferir
+  const [seen, setSeen] = useState<{ code: string; others: string[] } | null>(null);
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="press min-h-9 rounded-full border border-bad/30 px-3 text-[12px] font-semibold text-bad hover:bg-bad-soft">
+      <button
+        type="button"
+        onClick={() => {
+          setSeen({ code: code ?? "", others: others.map((o) => (o === "sem código" ? "" : o)) });
+          setOpen(true);
+        }}
+        className="press min-h-9 rounded-full border border-bad/30 px-3 text-[12px] font-semibold text-bad hover:bg-bad-soft">
         Cancelar
       </button>
     );
@@ -21,6 +29,12 @@ export function CancelVisit({ visitId, label, reasons, code, others = [], back }
         <>
           <input type="hidden" name="visitId" value={visitId} />
           <input type="hidden" name="back" value={back} />
+          {seen && (
+            <>
+              <input type="hidden" name="seenCode" value={seen.code} />
+              <input type="hidden" name="seenOthers" value={seen.others.join(",")} />
+            </>
+          )}
           <p className="mb-2 text-[13px] font-semibold">Cancelar a visita de {label}?</p>
           {others.length > 0 && (
             <fieldset className="mb-2 grid gap-1.5 text-[13px]">

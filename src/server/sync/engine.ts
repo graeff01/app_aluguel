@@ -488,7 +488,10 @@ async function upsertVisit(
   if (visit.scheduledEnd.getTime() !== t.end.getTime()) cmp("scheduledEnd", t.end.toISOString(), visit.scheduledEnd.toISOString());
   if (!manual.has("clientName")) cmp("clientName", parsed.clientName, visit.clientName);
   if (!manual.has("phone")) cmp("phoneRaw", parsed.phoneRaw, visit.phoneRaw);
-  if (!manual.has("propertyCode")) cmp("propertyCode", parsed.propertyCode, visit.propertyCode);
+  // cada visita é de um imóvel: se o código dela continua no título (só mudou a ordem ou entrou outro na frente),
+  // ela não troca de imóvel; o código novo vira outra visita do mesmo evento (acompanhante)
+  const stillInTitle = !!visit.propertyCode && (parsed.extraPropertyCodes ?? []).includes(visit.propertyCode);
+  if (!manual.has("propertyCode") && !stillInTitle) cmp("propertyCode", parsed.propertyCode, visit.propertyCode);
 
   if (concluded) {
     // Google nunca sobrescreve visita já concluída: diferença vira conflito para revisão.

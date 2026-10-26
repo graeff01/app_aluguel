@@ -195,7 +195,8 @@ export async function followUpDoneAction(visitId: string, action: "done" | "snoo
 export async function cancelVisitAction(_: ActionState, fd: FormData): Promise<ActionState> {
   let target = "";
   const s = await runAction(async (a) => {
-    const r = await cancelVisitByStaff(a, str(fd, "visitId"), { reasonId: str(fd, "reasonId"), note: str(fd, "note"), onlyThis: str(fd, "scope") === "one" });
+    const seen = fd.has("seenCode") ? { code: str(fd, "seenCode"), others: str(fd, "seenOthers") ? str(fd, "seenOthers").split(",") : [] } : undefined;
+    const r = await cancelVisitByStaff(a, str(fd, "visitId"), { reasonId: str(fd, "reasonId"), note: str(fd, "note"), onlyThis: str(fd, "scope") === "one", seen });
     // volta para a mesma tela (dia/semana/mês) com o resultado e o "Desfazer"
     const back = /^\/agenda-(do-dia|google)(\?|$)/.test(str(fd, "back")) ? str(fd, "back") : "/agenda-do-dia";
     target = `${back}${back.includes("?") ? "&" : "?"}cancelado=${r.undoId}&n=${r.count}&g=${r.google}`;

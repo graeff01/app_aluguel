@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { runSync } from "@/server/sync/engine";
 import { executeRun, withSyncLock } from "@/server/sync/runner";
-import { concludeVisit } from "@/server/visits";
+import { cancelVisitByStaff, concludeVisit } from "@/server/visits";
 import { assignVisit } from "@/server/visits";
 import { GoogleApiError } from "@/server/sync/types";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
@@ -332,6 +332,34 @@ describe("evento com vários imóveis", () => {
     await sync();
     const final = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
     expect(final.map((v) => v.status)).toEqual(["CANCELED", "DONE", "CANCELED"]);
+  });
+
+  it("troca de imóvel no título: cada visita mantém o seu imóvel e o cancelamento nunca pega o imóvel errado", async () => {
+    // caso real: visita do 664465; a Jasmin põe o 806139 na frente no título e, com a tela aberta, cancela o antigo
+    const title = (codes: string) => `Visita clt - Lindomar Portilho - cod ${codes} - (51) 99876-5432`;
+    api.put(visitEvent("troca", { start: "2026-10-07T17:00:00Z", title: title("664465") }));
+    await sync();
+    const old = await db.visit.findFirstOrThrow();
+    api.put(visitEvent("troca", { start: "2026-10-07T17:00:00Z", title: title("806139;664465") }));
+    await sync();
+    const rows = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
+    // a visita que era do 664465 continua sendo do 664465; o 806139 entra como outra visita do mesmo evento
+    expect(rows.map((v) => [v.id === old.id, v.propertyCode, v.status])).toEqual([[true, "664465", "SCHEDULED"], [false, "806139", "SCHEDULED"]]);
+    // só mudou a ordem dos códigos: ninguém troca de imóvel nem gera conflito
+    api.put(visitEvent("troca", { start: "2026-10-07T17:00:00Z", title: title("664465;806139") }));
+    await sync();
+    expect((await db.visit.findMany({ orderBy: { createdAt: "asc" } })).map((v) => [v.propertyCode, v.syncConflict])).toEqual([["664465", "NONE"], ["806139", "NONE"]]);
+
+    // a tela foi aberta antes da mudança (só o 664465): o servidor recusa e pede para conferir
+    const reason = await db.reason.findFirstOrThrow({ where: { kind: "VISIT_CANCEL" } });
+    await expect(cancelVisitByStaff(users.manager, old.id, { reasonId: reason.id, note: "Imóvel já alugado", seen: { code: "664465", others: [] } })).rejects.toMatchObject({ code: "CONFLICT" });
+    // conferido: cancela só o antigo; o novo segue agendado
+    await cancelVisitByStaff(users.manager, old.id, { reasonId: reason.id, note: "Trocamos os imóveis", onlyThis: true, seen: { code: "664465", others: ["806139"] } });
+    const final = await db.visit.findMany({ orderBy: { createdAt: "asc" } });
+    expect(final.map((v) => [v.propertyCode, v.status])).toEqual([["664465", "CANCELED"], ["806139", "SCHEDULED"]]);
+    // a próxima leitura da agenda (o título ainda com os dois) não desfaz nem troca nada
+    await sync();
+    expect((await db.visit.findMany({ orderBy: { createdAt: "asc" } })).map((v) => [v.propertyCode, v.status])).toEqual([["664465", "CANCELED"], ["806139", "SCHEDULED"]]);
   });
 
   it("evento movido para depois das 21h cancela todas as visitas do evento e voltar restaura", async () => {
