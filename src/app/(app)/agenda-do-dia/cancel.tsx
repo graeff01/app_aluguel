@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { ActionForm, FieldError, SubmitButton } from "@/components/action-form";
 import { Select, Textarea } from "@/components/ui";
-import { cancelVisitAction, setCancelReasonAction } from "@/app/actions/visits";
+import { cancelVisitAction, reopenVisitAction, setCancelReasonAction } from "@/app/actions/visits";
 
 /** Pré-atendimento: cancelar a visita escolhendo o motivo (a consultora é avisada). */
 export function CancelVisit({ visitId, label, reasons, code, others = [], back }: { visitId: string; label: string; reasons: { id: string; label: string }[]; code?: string | null; others?: string[]; back: string }) {
@@ -116,6 +116,39 @@ export function CancelReason({ visitId, reasons }: { visitId: string; reasons: {
           <FieldError state={s} name="note" />
           <div className="mt-2 flex flex-wrap gap-2">
             <SubmitButton>Salvar motivo</SubmitButton>
+            <button type="button" onClick={() => setOpen(false)} className="press min-h-11 rounded-full px-4 text-[14px] font-semibold text-ink-2">
+              Voltar
+            </button>
+          </div>
+        </>
+      )}
+    </ActionForm>
+  );
+}
+
+/** Reabrir visita cancelada por engano (depois dos 2 minutos do "Desfazer"), com o motivo no histórico. */
+export function ReopenVisit({ visitId, code }: { visitId: string; code?: string | null }) {
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="press min-h-9 rounded-full border border-line-strong px-3 text-[12px] font-semibold text-ink-2 hover:bg-tint">
+        Reabrir
+      </button>
+    );
+  }
+  return (
+    <ActionForm action={reopenVisitAction} className="mt-2 w-full rounded-2xl border border-line-strong bg-surface-2 p-3">
+      {(s) => (
+        <>
+          <input type="hidden" name="visitId" value={visitId} />
+          <p className="mb-2 text-[13px] font-semibold">Reabrir a visita{code ? ` do imóvel ${code}` : ""}? Ela volta a agendada e a consultora é avisada.</p>
+          <label className="sr-only" htmlFor={`reopen-${visitId}`}>
+            Por que reabrir
+          </label>
+          <Textarea id={`reopen-${visitId}`} name="note" maxLength={300} required placeholder="Por que reabrir (ex.: cancelada por engano)" className="min-h-16" />
+          <FieldError state={s} name="note" />
+          <div className="mt-2 flex flex-wrap gap-2">
+            <SubmitButton>Reabrir visita</SubmitButton>
             <button type="button" onClick={() => setOpen(false)} className="press min-h-11 rounded-full px-4 text-[14px] font-semibold text-ink-2">
               Voltar
             </button>

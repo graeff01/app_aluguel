@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { runSync } from "@/server/sync/engine";
 import { executeRun, withSyncLock } from "@/server/sync/runner";
-import { cancelVisitByStaff, concludeVisit } from "@/server/visits";
+import { cancelVisitByStaff, concludeVisit, reopenCanceledVisit } from "@/server/visits";
 import { assignVisit } from "@/server/visits";
 import { GoogleApiError } from "@/server/sync/types";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
@@ -360,6 +360,15 @@ describe("evento com vários imóveis", () => {
     // a próxima leitura da agenda (o título ainda com os dois) não desfaz nem troca nada
     await sync();
     expect((await db.visit.findMany({ orderBy: { createdAt: "asc" } })).map((v) => [v.propertyCode, v.status])).toEqual([["664465", "CANCELED"], ["806139", "SCHEDULED"]]);
+
+    // cancelada por engano, depois do "Desfazer": reabrir pede o motivo, volta a agendada e fica no histórico
+    await expect(reopenCanceledVisit(users.a, old.id, { note: "engano" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(reopenCanceledVisit(users.manager, old.id, { note: "" })).rejects.toMatchObject({ code: "VALIDATION" });
+    await reopenCanceledVisit(users.manager, old.id, { note: "Cancelada por engano" });
+    const back = await db.visit.findUniqueOrThrow({ where: { id: old.id } });
+    expect(back).toMatchObject({ status: "SCHEDULED", cancelReasonId: null, concludedById: null, propertyCode: "664465" });
+    expect(await db.visitOutcomeHistory.count({ where: { visitId: old.id, note: { contains: "Reaberta por Gestora: Cancelada por engano" } } })).toBe(1);
+    await expect(reopenCanceledVisit(users.manager, old.id, { note: "de novo" })).rejects.toMatchObject({ code: "INVALID_STATE" });
   });
 
   it("evento movido para depois das 21h cancela todas as visitas do evento e voltar restaura", async () => {

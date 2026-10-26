@@ -8,7 +8,7 @@ import { EVALUATION_LABEL, STATUS_LABEL } from "@/lib/labels";
 import { PageHeader, Segmented, cx } from "@/components/ui";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { db } from "@/lib/db";
-import { CancelReason, CancelVisit } from "./cancel";
+import { CancelReason, CancelVisit, ReopenVisit } from "./cancel";
 import { UndoCancel } from "./undo-cancel";
 import { calendarLinkFor } from "@/server/reschedule";
 import { LinkButton } from "@/components/ui";
@@ -129,6 +129,11 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       {v.status === "CANCELED" && !v.cancelReason && (
         <span className="basis-full sm:basis-auto">
           <CancelReason visitId={v.id} reasons={cancelReasons} />
+        </span>
+      )}
+      {v.status === "CANCELED" && !v.autoCanceled && (
+        <span className="basis-full sm:basis-auto">
+          <ReopenVisit visitId={v.id} code={v.propertyCode} />
         </span>
       )}
       {v.status === "SCHEDULED" && v.scheduledEnd > now && (

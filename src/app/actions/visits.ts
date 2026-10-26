@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { runAction, str, type ActionState } from "@/lib/action";
-import { assignVisit, cancelVisitByStaff, correctVisitData, setCancelReason, undoStaffCancel, createManualVisit, resolveConflict, setVisitExcluded, type ConflictAction } from "@/server/visits";
+import { assignVisit, cancelVisitByStaff, correctVisitData, setCancelReason, undoStaffCancel, reopenCanceledVisit, createManualVisit, resolveConflict, setVisitExcluded, type ConflictAction } from "@/server/visits";
 import { confirmVisitClientAsDistinct, linkVisitToClient, mergeClients } from "@/server/clients";
 import { updateOpportunity, transferOpportunity } from "@/server/opportunities";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
@@ -215,6 +215,26 @@ export async function setCancelReasonAction(_: ActionState, fd: FormData): Promi
     return `Motivo registrado${r.count > 1 ? ` (${r.count} imóveis)` : ""}.`;
   });
   if (s.ok) revalidatePath("/agenda-do-dia");
+  return s;
+}
+
+const GOOGLE_REOPEN_TEXT: Record<string, string> = {
+  updated: "O evento voltou ao horário com o imóvel na agenda Google.",
+  not_owner: "O evento é de outra pessoa: confira o horário e o imóvel no título na agenda Google.",
+  gone: "O evento não existe mais na agenda Google: crie de novo pelo app.",
+  no_permission: "Sem permissão para alterar a agenda Google: confira o evento à mão.",
+  error: "Não foi possível atualizar a agenda Google agora: confira o evento à mão.",
+};
+
+export async function reopenVisitAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const s = await runAction(async (a) => {
+    const r = await reopenCanceledVisit(a, str(fd, "visitId"), { note: str(fd, "note") });
+    return `Visita reaberta. A consultora foi avisada. ${GOOGLE_REOPEN_TEXT[r.google] ?? ""}`.trim();
+  });
+  if (s.ok) {
+    revalidatePath("/agenda-do-dia");
+    revalidatePath(`/visitas/${str(fd, "visitId")}`);
+  }
   return s;
 }
 

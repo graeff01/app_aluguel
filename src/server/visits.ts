@@ -360,6 +360,39 @@ export async function undoStaffCancel(actor: AuthzActor, undoId: string, now = n
   return { count: restored.length, google };
 }
 
+/**
+ * Reabrir visita cancelada no app (depois do "Desfazer" de 2 minutos): gestão ou pré-atendimento, com o motivo.
+ * Volta a agendada e, na agenda Google, o evento volta ao horário da visita com o imóvel no título.
+ * Cancelamento pela própria agenda (evento apagado ou movido para a noite) se desfaz na agenda, não aqui.
+ */
+export async function reopenCanceledVisit(actor: AuthzActor, visitId: string, input: { note: string }, now = new Date(), opts: { calendarApi?: CalendarApi } = {}) {
+  assert(isPreService(actor) || hasGlobalView(actor));
+  const why = input.note.trim().slice(0, 300);
+  if (why.length < 3) throw new AppError("VALIDATION", "Conte por que a visita está sendo reaberta.", { note: "Obrigatório." });
+  const v = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Visit" WHERE id = ${visitId} FOR UPDATE`;
+    const visit = await tx.visit.findUnique({ where: { id: visitId } });
+    if (!visit || visit.excluded) throw notFound();
+    if (visit.status !== "CANCELED") throw new AppError("INVALID_STATE", "Esta visita não está cancelada.");
+    if (visit.autoCanceled) throw new AppError("INVALID_STATE", "Esta visita foi cancelada pela agenda Google: volte o evento ao horário normal na agenda e ela reabre sozinha.");
+    const note = `Reaberta por ${(await tx.user.findUnique({ where: { id: actor.id }, select: { name: true } }))?.name.split(" ")[0] ?? "a equipe"}: ${why}`;
+    await tx.visit.update({
+      where: { id: visitId },
+      data: { status: "SCHEDULED", cancelReasonId: null, note: null, concludedAt: null, concludedById: null, version: { increment: 1 } },
+    });
+    await tx.visitOutcomeHistory.create({ data: { visitId, status: "SCHEDULED", note, authorId: actor.id } });
+    await audit(tx, { actorId: actor.id, action: "visit.reopened", entityType: "Visit", entityId: visitId, changes: { motivo: why, canceladaEm: visit.concludedAt?.toISOString() ?? null } });
+    return visit;
+  });
+  // agenda Google: horário da visita e todos os imóveis em aberto no título
+  const google = await pushVisitChange(visitId, { time: true, title: true }, opts.calendarApi);
+  if (v.consultantId && v.consultantId !== actor.id) {
+    const when = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(v.scheduledStart);
+    await notifyUser(v.consultantId, { title: `Visita de ${when} reaberta`, body: `${v.propertyCode ? `Imóvel ${v.propertyCode}. ` : ""}O cancelamento foi desfeito. Toque para ver.`, url: `/visitas/${v.id}`, tag: `reaberta-${v.id}` }).catch(() => undefined);
+  }
+  return { google };
+}
+
 /** Outros imóveis continuam: tira só o(s) código(s) cancelado(s) do título do evento. */
 async function removeCodesInGoogle(source: { calendarId: string; googleEventId: string } | null, codes: string[], injected?: CalendarApi, titles: { before?: string; after?: string } = {}): Promise<GoogleCancel> {
   if (!source || !codes.length) return "not_in_agenda";
