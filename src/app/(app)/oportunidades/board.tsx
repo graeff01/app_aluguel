@@ -7,9 +7,9 @@ import { cx } from "@/components/ui";
 
 export type BoardCard = { id: string; version: number; column: string; client: string; property: string; responsible: string | null; visits: number; idleDays: number; stale: boolean; photoUrl: string | null };
 
-const COLUMNS: { key: string; label: string; bar: string }[] = [
+const COLUMNS: { key: string; label: string; bar: string; n?: number }[] = [
   { key: "FOLLOW", label: FOLLOW_UP_LABEL, bar: "bg-ink-3" },
-  ...DEAL_STAGES.map((s, i) => ({ key: s as string, label: `${i + 1}. ${STAGE_LABEL[s]}`, bar: i >= 8 ? "bg-good" : i >= 5 ? "bg-accent" : "bg-[#2f6fde]" })),
+  ...DEAL_STAGES.map((s, i) => ({ key: s as string, label: STAGE_LABEL[s], n: i + 1, bar: i >= 8 ? "bg-good" : i >= 5 ? "bg-accent" : "bg-[#2f6fde]" })),
   // caiu, separado: desistência durante a contratação × não seguiu depois da visita
   { key: "FELL_DEAL", label: FELL_DEAL_LABEL, bar: "bg-bad" },
   { key: "FELL_VISIT", label: FELL_VISIT_LABEL, bar: "bg-warn" },
@@ -51,7 +51,10 @@ export function Board({ cards }: { cards: BoardCard[] }) {
               <h2 className="mb-3 flex items-start justify-between gap-2 px-1 text-[13px] leading-snug font-bold">
                 <span className="flex items-start gap-2">
                   <span aria-hidden className={cx("mt-1 size-2.5 shrink-0 rounded-full", col.bar)} />
-                  {col.label}
+                  <span>
+                    {col.n && <span className="text-ink-3">{col.n}. </span>}
+                    {col.label}
+                  </span>
                 </span>
                 <span className="num rounded-full bg-tint px-2 text-[12px] text-ink-2">{list.length}</span>
               </h2>
