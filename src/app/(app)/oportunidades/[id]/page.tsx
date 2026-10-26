@@ -54,10 +54,12 @@ export default async function OppPage({ params, searchParams }: { params: Promis
   const stageData: Record<Stage, (string | null)[]> = {
     NEGOTIATION: [brl(opp.proposedRentCents) && `Valor proposto ${brl(opp.proposedRentCents)}`, opp.intendedGuarantee && `Garantia pretendida: ${opp.intendedGuarantee}`],
     OWNER_PENDING: [d(opp.proposalSentAt) && `Proposta enviada em ${d(opp.proposalSentAt)}`],
-    KYC_SENT: [d(opp.ownerAcceptedAt) && `Aceite em ${d(opp.ownerAcceptedAt)}`, brl(opp.agreedRentCents) && `Valor final ${brl(opp.agreedRentCents)}`, d(opp.kycSentAt) && `KYC enviado em ${d(opp.kycSentAt)}`, d(opp.kycDueAt) && `prazo ${d(opp.kycDueAt)}`],
+    PRE_ANALYSIS: [d(opp.ownerAcceptedAt) && `Aceite em ${d(opp.ownerAcceptedAt)}`, brl(opp.agreedRentCents) && `Valor final ${brl(opp.agreedRentCents)}`],
+    KYC_SENT: [d(opp.kycSentAt) && `KYC enviado em ${d(opp.kycSentAt)}`, d(opp.kycDueAt) && `prazo ${d(opp.kycDueAt)}`, opp.docsMissing.length ? `Falta: ${opp.docsMissing.join(", ")}` : null],
     ANALYSIS: [],
-    DOCS: [opp.guarantee && `Garantia: ${opp.guarantee}`, d(opp.analysisDecidedAt) && `Aprovado em ${d(opp.analysisDecidedAt)}`, d(opp.docsRequestedAt) && `Pedida em ${d(opp.docsRequestedAt)}`, opp.docsMissing.length ? `Falta: ${opp.docsMissing.join(", ")}` : null],
-    CONTRACT: [d(opp.contractReleasedAt) && `Liberado em ${d(opp.contractReleasedAt)}`, d(opp.contractSentAt) && `Enviado em ${d(opp.contractSentAt)}`, opp.inspectionNeeded === null ? null : opp.inspectionNeeded ? "Com vistoria" : "Sem vistoria"],
+    APPROVED: [opp.guarantee && `Garantia: ${opp.guarantee}`, d(opp.analysisDecidedAt) && `Aprovado em ${d(opp.analysisDecidedAt)}`],
+    INSPECTION: [opp.inspectionNeeded === null ? null : opp.inspectionNeeded ? "Com vistoria" : "Sem vistoria"],
+    CONTRACT: [d(opp.contractReleasedAt) && `Liberado em ${d(opp.contractReleasedAt)}`, d(opp.contractSentAt) && `Enviado em ${d(opp.contractSentAt)}`],
     SIGNED: [d(opp.signedAt) && `Assinado em ${d(opp.signedAt)}`, opp.dealType && DEAL_TYPE_LABEL[opp.dealType], brl(opp.contractValueCents) && `${brl(opp.contractValueCents)} (VGL)`],
     POSSESSION: [d(opp.possessionAt) && `Posse em ${d(opp.possessionAt)}`, opp.keysHolderChecked ? "Chaves retiradas pelo titular" : null],
   };
@@ -81,7 +83,7 @@ export default async function OppPage({ params, searchParams }: { params: Promis
       {salvo && <p role="status" className="mb-5 rounded-2xl bg-good-soft px-4 py-3 text-sm font-semibold text-good">{salvo === "SIGNED" ? "✓ Contrato assinado. O marketing foi avisado para postar." : salvo === "FELL" ? "✓ Registrado que o negócio caiu." : `✓ Situação atualizada: ${STAGE_LABEL[salvo as Stage] ?? ""}.`}</p>}
 
       {/* linha do tempo do fluxo */}
-      <ol className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <ol className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         {DEAL_STAGES.map((s, i) => {
           const done = stageIndex(stage) > i || (stage === s && !lost) || (lost && stageIndex(opp.lostStage as Stage | null) > i);
           const current = stage === s && !lost;
@@ -131,7 +133,7 @@ export default async function OppPage({ params, searchParams }: { params: Promis
       {canUpdate && (
         <Section title="Atualizar situação">
           <DealForm
-            opp={{ id: opp.id, version: opp.version, stage, lost, intendedGuarantee: opp.intendedGuarantee }}
+            opp={{ id: opp.id, version: opp.version, stage, lost, intendedGuarantee: opp.intendedGuarantee, inspectionNeeded: opp.inspectionNeeded }}
             lists={{ guarantees, agents, highlights, missing, lostReasons }}
             suggested={suggested}
             today={dayKey(new Date())}

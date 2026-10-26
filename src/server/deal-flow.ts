@@ -85,27 +85,35 @@ export async function moveDealStage(actor: AuthzActor, oppId: string, input: Sta
     const d = date("proposalSentAt", "a data do envio da proposta");
     Object.assign(data, { proposalSentAt: d && dateOnlyFromKey(d) });
     if (d) summary.push(`Proposta enviada em ${br(d)}`);
-  } else if (to === "KYC_SENT") {
+  } else if (to === "PRE_ANALYSIS") {
     const a = date("ownerAcceptedAt", "a data do aceite do proprietário");
     const v = money("agreedRent", "o valor final acordado");
+    Object.assign(data, { ownerAcceptedAt: a && dateOnlyFromKey(a), agreedRentCents: v });
+    if (a && v) summary.push(`Aceite em ${br(a)} · valor final ${brl(v)}`);
+  } else if (to === "KYC_SENT") {
     const s = date("kycSentAt", "a data do envio do link de cadastro");
     const due = date("kycDueAt", "o prazo combinado para preencher");
     if (s && due && due < s) errors.kycDueAt = "O prazo deve ser depois do envio.";
-    Object.assign(data, { ownerAcceptedAt: a && dateOnlyFromKey(a), agreedRentCents: v, kycSentAt: s && dateOnlyFromKey(s), kycDueAt: due && dateOnlyFromKey(due) });
-    if (a && v && s && due) summary.push(`Aceite em ${br(a)} · valor final ${brl(v)} · KYC enviado em ${br(s)}, prazo ${br(due)}`);
-  } else if (to === "DOCS") {
+    const missing = input.docsMissingIds?.length ? await db.reason.findMany({ where: { id: { in: input.docsMissingIds }, kind: "PRE_MISSING" }, orderBy: { sortOrder: "asc" } }) : [];
+    Object.assign(data, { kycSentAt: s && dateOnlyFromKey(s), kycDueAt: due && dateOnlyFromKey(due), docsRequestedAt: s && dateOnlyFromKey(s), docsMissing: missing.map((m) => m.label) });
+    if (s && due) summary.push(`KYC enviado em ${br(s)}, prazo ${br(due)}${missing.length ? ` · falta: ${missing.map((m) => m.label).join(", ")}` : ""}`);
+  } else if (to === "APPROVED") {
     const g = await listLabel("GUARANTEE", "guarantee", "a garantia definida");
     const d = date("analysisDecidedAt", "a data da aprovação");
-    const req = date("docsRequestedAt", "a data em que a documentação foi pedida");
-    const missing = input.docsMissingIds?.length ? await db.reason.findMany({ where: { id: { in: input.docsMissingIds }, kind: "PRE_MISSING" }, orderBy: { sortOrder: "asc" } }) : [];
-    Object.assign(data, { guarantee: g, analysisDecidedAt: d && dateOnlyFromKey(d), docsRequestedAt: req && dateOnlyFromKey(req), docsMissing: missing.map((m) => m.label) });
-    if (g && d) summary.push(`Aprovado em ${br(d)} · garantia ${g}${missing.length ? ` · falta: ${missing.map((m) => m.label).join(", ")}` : ""}`);
+    Object.assign(data, { guarantee: g, analysisDecidedAt: d && dateOnlyFromKey(d), docsMissing: [] });
+    if (g && d) summary.push(`Aprovado em ${br(d)} · garantia ${g}`);
+  } else if (to === "INSPECTION") {
+    if (!["sim", "nao"].includes(input.inspectionNeeded ?? "")) errors.inspectionNeeded = "Diga se tem vistoria.";
+    Object.assign(data, { inspectionNeeded: input.inspectionNeeded === "sim" });
+    summary.push(`Contrato pedido ao ADM · ${input.inspectionNeeded === "sim" ? "com vistoria" : "sem vistoria"}`);
   } else if (to === "CONTRACT") {
     const r = date("contractReleasedAt", "a data de liberação do contrato");
     const s = date("contractSentAt", "a data de envio do contrato", false);
-    if (!["sim", "nao"].includes(input.inspectionNeeded ?? "")) errors.inspectionNeeded = "Diga se tem vistoria.";
-    Object.assign(data, { contractReleasedAt: r && dateOnlyFromKey(r), contractSentAt: s && dateOnlyFromKey(s), inspectionNeeded: input.inspectionNeeded === "sim" });
-    if (r) summary.push(`Contrato liberado em ${br(r)}${s ? ` · enviado em ${br(s)}` : ""} · ${input.inspectionNeeded === "sim" ? "com vistoria" : "sem vistoria"}`);
+    // vistoria: respondida em "Aguardando vistoria" (ou aqui, se a etapa foi pulada)
+    const insp = input.inspectionNeeded === "sim" ? true : input.inspectionNeeded === "nao" ? false : undefined;
+    if (insp === undefined && (await db.opportunity.findUnique({ where: { id: oppId }, select: { inspectionNeeded: true } }))?.inspectionNeeded == null) errors.inspectionNeeded = "Diga se tem vistoria.";
+    Object.assign(data, { contractReleasedAt: r && dateOnlyFromKey(r), contractSentAt: s && dateOnlyFromKey(s), ...(insp === undefined ? {} : { inspectionNeeded: insp }) });
+    if (r) summary.push(`Contrato liberado em ${br(r)}${s ? ` · enviado em ${br(s)}` : ""}${insp === undefined ? "" : insp ? " · com vistoria" : " · sem vistoria"}`);
   } else if (to === "SIGNED") {
     const d = date("signedAt", "a data real da assinatura");
     if (input.dealType !== "LEASE" && input.dealType !== "INTERMEDIATION") errors.dealType = "Escolha o tipo de negócio.";

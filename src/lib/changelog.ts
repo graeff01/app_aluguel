@@ -12,6 +12,14 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-26-b",
+    title: "Andamento com as etapas novas",
+    changes: [
+      { text: "Andamento em 10 etapas: negociação, proprietário, pré-análise, KYC enviado / aguardando documentação, análise com o crédito, cadastro aprovado, vistoria / contrato ADM, contrato liberado, assinado e posse. Cada etapa pede só o que ela registra.", who: ["CONSULTANT", "MANAGER"], href: "/oportunidades" },
+      { text: "No quadro, o que caiu agora fica separado: “Desistiu na contratação” (caiu durante as etapas) e “Caiu após a visita” (não seguiu depois da visita).", who: ["CONSULTANT", "MANAGER"], href: "/oportunidades?vista=quadro" },
+    ],
+  },
+  {
     id: "2026-10-26",
     title: "Agenda do sistema: editar, trocar imóvel e quem agendou",
     changes: [

@@ -7,7 +7,7 @@ import { DEAL_STAGES, FELL_LABEL, STAGE_HINT, STAGE_LABEL, stageIndex, type Stag
 
 type Item = { id: string; label: string };
 type Props = {
-  opp: { id: string; version: number; stage: Stage | null; lost: boolean; intendedGuarantee: string | null };
+  opp: { id: string; version: number; stage: Stage | null; lost: boolean; intendedGuarantee: string | null; inspectionNeeded: boolean | null };
   lists: { guarantees: Item[]; agents: Item[]; highlights: Item[]; missing: Item[]; lostReasons: Item[] };
   suggested: string[];
   today: string;
@@ -81,34 +81,39 @@ export function DealForm({ opp, lists, suggested, today, initialTo, canManageLis
               </>
             )}
             {to === "OWNER_PENDING" && date("proposalSentAt", "Data do envio da proposta")}
-            {to === "KYC_SENT" && (
+            {to === "PRE_ANALYSIS" && (
               <>
                 {date("ownerAcceptedAt", "Data do aceite do proprietário")}
                 {money("agreedRent", "Valor final acordado (R$)")}
+              </>
+            )}
+            {to === "KYC_SENT" && (
+              <>
                 {date("kycSentAt", "Link de cadastro (KYC) enviado em")}
                 {date("kycDueAt", "Prazo combinado para preencher", true, undefined)}
               </>
             )}
-            {to === "DOCS" && (
+            {to === "APPROVED" && (
               <>
                 {guarantee("guarantee", "Garantia definida", opp.intendedGuarantee)}
                 {date("analysisDecidedAt", "Data da aprovação")}
-                {date("docsRequestedAt", "Documentação pedida em")}
               </>
+            )}
+            {(to === "INSPECTION" || (to === "CONTRACT" && opp.inspectionNeeded === null)) && (
+              <Field label="Tem vistoria?" htmlFor="inspectionNeeded">
+                <Select id="inspectionNeeded" name="inspectionNeeded" required defaultValue={opp.inspectionNeeded === null ? "" : opp.inspectionNeeded ? "sim" : "nao"}>
+                  <option value="" disabled>
+                    Escolha
+                  </option>
+                  <option value="sim">Sim</option>
+                  <option value="nao">Não</option>
+                </Select>
+              </Field>
             )}
             {to === "CONTRACT" && (
               <>
                 {date("contractReleasedAt", "Contrato liberado (ADM) em")}
                 {date("contractSentAt", "Contrato enviado em (se já foi)", false)}
-                <Field label="Tem vistoria?" htmlFor="inspectionNeeded">
-                  <Select id="inspectionNeeded" name="inspectionNeeded" required defaultValue="">
-                    <option value="" disabled>
-                      Escolha
-                    </option>
-                    <option value="sim">Sim</option>
-                    <option value="nao">Não</option>
-                  </Select>
-                </Field>
               </>
             )}
             {to === "SIGNED" && (
@@ -126,9 +131,9 @@ export function DealForm({ opp, lists, suggested, today, initialTo, canManageLis
             {to === "POSSESSION" && date("possessionAt", "Data da posse")}
           </div>
 
-          {to === "DOCS" && lists.missing.length > 0 && (
+          {to === "KYC_SENT" && lists.missing.length > 0 && (
             <div className="mb-4">
-              <p className="mb-2 text-sm font-semibold">O que falta</p>
+              <p className="mb-2 text-sm font-semibold">Documentação que falta (opcional)</p>
               <Chips name="docsMissingIds" items={lists.missing} />
               <p className="mt-2 text-[12px] text-ink-3">Parado aqui há muitos dias, o app avisa você e a gestora.</p>
             </div>

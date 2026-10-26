@@ -652,12 +652,16 @@ enum LostOrigin {
 }
 
 /// Situação do negócio depois da visita (fluxo da agência: mesmas situações das planilhas).
+/// ordem do fluxo em src/lib/deal-stages.ts; DOCS é antiga (virou APPROVED) e não é mais usada
 enum DealStage {
   NEGOTIATION
   OWNER_PENDING
+  PRE_ANALYSIS
   KYC_SENT
   ANALYSIS
   DOCS
+  APPROVED
+  INSPECTION
   CONTRACT
   SIGNED
   POSSESSION

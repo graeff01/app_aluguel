@@ -2,15 +2,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DEAL_STAGES, FELL_LABEL, FOLLOW_UP_LABEL, STAGE_LABEL } from "@/lib/deal-stages";
+import { DEAL_STAGES, FELL_DEAL_LABEL, FELL_LABEL, FELL_VISIT_LABEL, FOLLOW_UP_LABEL, STAGE_LABEL } from "@/lib/deal-stages";
 import { cx } from "@/components/ui";
 
 export type BoardCard = { id: string; version: number; column: string; client: string; property: string; responsible: string | null; visits: number; idleDays: number; stale: boolean; photoUrl: string | null };
 
 const COLUMNS: { key: string; label: string; bar: string }[] = [
   { key: "FOLLOW", label: FOLLOW_UP_LABEL, bar: "bg-ink-3" },
-  ...DEAL_STAGES.map((s, i) => ({ key: s as string, label: STAGE_LABEL[s], bar: i >= 6 ? "bg-good" : i >= 4 ? "bg-accent" : "bg-[#2f6fde]" })),
-  { key: "FELL", label: FELL_LABEL, bar: "bg-bad" },
+  ...DEAL_STAGES.map((s, i) => ({ key: s as string, label: `${i + 1}. ${STAGE_LABEL[s]}`, bar: i >= 8 ? "bg-good" : i >= 5 ? "bg-accent" : "bg-[#2f6fde]" })),
+  // caiu, separado: desistência durante a contratação × não seguiu depois da visita
+  { key: "FELL_DEAL", label: FELL_DEAL_LABEL, bar: "bg-bad" },
+  { key: "FELL_VISIT", label: FELL_VISIT_LABEL, bar: "bg-warn" },
 ];
 
 /** Quadro do fluxo: uma coluna por situação. Mover (arrastar ou "Mover para…") abre o formulário da etapa. */
@@ -19,12 +21,14 @@ export function Board({ cards }: { cards: BoardCard[] }) {
   const [over, setOver] = useState<string | null>(null);
   const move = (card: BoardCard, to: string) => {
     if (to === card.column || to === "FOLLOW") return;
-    router.push(`/oportunidades/${card.id}?para=${to}`);
+    const fell = (c: string) => c.startsWith("FELL");
+    if (fell(to) && fell(card.column)) return;
+    router.push(`/oportunidades/${card.id}?para=${fell(to) ? "FELL" : to}`);
   };
 
   return (
     <div className="-mx-4 overflow-x-auto px-4 pb-4 md:mx-0 md:px-0">
-      <div className="grid min-w-[2200px] grid-cols-10 gap-3">
+      <div className="grid min-w-[2860px] grid-cols-13 gap-3">
         {COLUMNS.map((col) => {
           const list = cards.filter((c) => c.column === col.key);
           return (
@@ -70,11 +74,12 @@ export function Board({ cards }: { cards: BoardCard[] }) {
                       <span className="sr-only">Mover {c.client} para</span>
                       <select value="" onChange={(e) => e.target.value && move(c, e.target.value)} className="min-h-9 w-full rounded-xl border border-line bg-surface-2 px-2 text-[13px] text-ink-2">
                         <option value="">Mover para…</option>
-                        {COLUMNS.filter((x) => x.key !== c.column && x.key !== "FOLLOW").map((x) => (
+                        {COLUMNS.filter((x) => x.key !== c.column && x.key !== "FOLLOW" && !x.key.startsWith("FELL")).map((x) => (
                           <option key={x.key} value={x.key}>
                             {x.label}
                           </option>
                         ))}
+                        {!c.column.startsWith("FELL") && <option value="FELL">{FELL_LABEL} (desistiu)</option>}
                       </select>
                     </label>
                   </li>

@@ -7,7 +7,7 @@ import { getSettings } from "@/lib/settings";
 import { db } from "@/lib/db";
 import { dayKey, fmt, startOfDayInTz } from "@/lib/time";
 import { dealFunnel } from "@/server/deal-flow";
-import { DEAL_STAGES, FELL_LABEL, FOLLOW_UP_LABEL, STAGE_LABEL, situationLabel } from "@/lib/deal-stages";
+import { DEAL_STAGES, FELL_LABEL, FOLLOW_UP_LABEL, STAGE_LABEL, fellInDeal, situationLabel } from "@/lib/deal-stages";
 import { Badge, Empty, Field, Input, PageHeader, Segmented, Select } from "@/components/ui";
 import { Board, type BoardCard } from "./board";
 
@@ -47,7 +47,7 @@ export default async function OppsPage({ searchParams }: { searchParams: Promise
   const cards: BoardCard[] = withIdle.map((o) => ({
     id: o.id,
     version: o.version,
-    column: o.status === "LOST" ? "FELL" : o.stage ?? (o.status === "CLOSED_WON" ? "SIGNED" : "FOLLOW"),
+    column: o.status === "LOST" ? (fellInDeal(o) ? "FELL_DEAL" : "FELL_VISIT") : o.stage ?? (o.status === "CLOSED_WON" ? "SIGNED" : "FOLLOW"),
     client: o.client.name,
     property: o.property.code,
     responsible: o.responsible?.name ?? null,
@@ -78,7 +78,7 @@ export default async function OppsPage({ searchParams }: { searchParams: Promise
           <p className="mb-3 text-[12px] font-bold tracking-[0.12em] text-ink-3 uppercase">Funil do mês · {funnel.total} negócio{funnel.total === 1 ? "" : "s"} com 1ª visita no mês</p>
           <ul className="space-y-1.5">
             {funnel.reached.map((r) => (
-              <li key={r.stage} className="grid grid-cols-[minmax(0,190px)_1fr_auto] items-center gap-3 text-[13px]">
+              <li key={r.stage} className="grid grid-cols-[minmax(0,250px)_1fr_auto] items-center gap-3 text-[13px]">
                 <span className="truncate text-ink-2">{r.label}</span>
                 <span className="h-5 overflow-hidden rounded-full bg-tint" aria-hidden>
                   <span className="block h-full rounded-full bg-accent" style={{ width: `${(r.count / maxReach) * 100}%` }} />

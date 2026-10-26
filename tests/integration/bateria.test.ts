@@ -516,21 +516,25 @@ describe("fluxo pós-visita", () => {
     await expect(go({ to: "NEGOTIATION" })).rejects.toMatchObject({ code: "VALIDATION", details: { proposedRent: expect.any(String), intendedGuarantee: expect.any(String) } });
     await go({ to: "NEGOTIATION", proposedRent: "2.300,00", intendedGuarantee: await gid("Seguro fiança") });
     await go({ to: "OWNER_PENDING", proposalSentAt: "2026-10-11" });
-    await expect(go({ to: "KYC_SENT", ownerAcceptedAt: "2026-10-12", agreedRent: "2.200", kycSentAt: "2026-10-12", kycDueAt: "2026-10-10" })).rejects.toMatchObject({ details: { kycDueAt: expect.any(String) } });
-    await go({ to: "KYC_SENT", ownerAcceptedAt: "2026-10-12", agreedRent: "2.200", kycSentAt: "2026-10-12", kycDueAt: "2026-10-15" });
-    await go({ to: "ANALYSIS" });
+    await go({ to: "PRE_ANALYSIS", ownerAcceptedAt: "2026-10-12", agreedRent: "2.200" });
     const renda = await db.reason.findFirstOrThrow({ where: { kind: "PRE_MISSING", label: "Comprovante de renda" } });
-    await go({ to: "DOCS", guarantee: await gid("CredPago"), analysisDecidedAt: "2026-10-13", docsRequestedAt: "2026-10-13", docsMissingIds: [renda.id] });
+    await expect(go({ to: "KYC_SENT", kycSentAt: "2026-10-12", kycDueAt: "2026-10-10" })).rejects.toMatchObject({ details: { kycDueAt: expect.any(String) } });
+    await go({ to: "KYC_SENT", kycSentAt: "2026-10-12", kycDueAt: "2026-10-15", docsMissingIds: [renda.id] });
+    expect((await db.opportunity.findUniqueOrThrow({ where: { id: o.id } })).docsMissing).toEqual(["Comprovante de renda"]);
+    await go({ to: "ANALYSIS" });
+    await go({ to: "APPROVED", guarantee: await gid("CredPago"), analysisDecidedAt: "2026-10-13" });
     expect((await db.opportunity.findUniqueOrThrow({ where: { id: o.id } })).status).toBe("DOCS_REVIEW"); // indicadores de sempre acompanham
-    await go({ to: "CONTRACT", contractReleasedAt: "2026-10-13", inspectionNeeded: "sim" });
+    await expect(go({ to: "INSPECTION" })).rejects.toMatchObject({ details: { inspectionNeeded: expect.any(String) } });
+    await go({ to: "INSPECTION", inspectionNeeded: "sim" });
+    await go({ to: "CONTRACT", contractReleasedAt: "2026-10-13" }); // vistoria já respondida na etapa anterior
     await expect(go({ to: "SIGNED", signedAt: "2026-10-13", dealType: "LEASE", contractValue: "2.200,00" })).rejects.toMatchObject({ details: { agentId: expect.any(String), highlightNote: expect.any(String) } });
     await go({ to: "SIGNED", signedAt: "2026-10-13", dealType: "LEASE", contractValue: "2.200,00", ...(await leaseInfo()) });
     await expect(go({ to: "POSSESSION", possessionAt: "2026-10-13" })).rejects.toMatchObject({ details: { keysHolderChecked: expect.any(String) } });
     await go({ to: "POSSESSION", possessionAt: "2026-10-13", keysHolderChecked: true });
 
     const done = await db.opportunity.findUniqueOrThrow({ where: { id: o.id }, include: { events: { orderBy: { createdAt: "asc" } } } });
-    expect(done).toMatchObject({ stage: "POSSESSION", status: "CLOSED_WON", proposedRentCents: 230000, agreedRentCents: 220000, guarantee: "CredPago", intendedGuarantee: "Seguro fiança", docsMissing: ["Comprovante de renda"], contractValueCents: 220000, dealType: "LEASE", keysHolderChecked: true });
-    expect(done.events.map((e) => e.toStage).filter(Boolean)).toEqual(["NEGOTIATION", "OWNER_PENDING", "KYC_SENT", "ANALYSIS", "DOCS", "CONTRACT", "SIGNED", "POSSESSION"]);
+    expect(done).toMatchObject({ stage: "POSSESSION", status: "CLOSED_WON", proposedRentCents: 230000, agreedRentCents: 220000, guarantee: "CredPago", intendedGuarantee: "Seguro fiança", inspectionNeeded: true, contractValueCents: 220000, dealType: "LEASE", keysHolderChecked: true });
+    expect(done.events.map((e) => e.toStage).filter(Boolean)).toEqual(["NEGOTIATION", "OWNER_PENDING", "PRE_ANALYSIS", "KYC_SENT", "ANALYSIS", "APPROVED", "INSPECTION", "CONTRACT", "SIGNED", "POSSESSION"]);
     expect(await db.leasePost.count({ where: { opportunityId: o.id } })).toBe(1); // marketing avisado no contrato assinado
     const f = await dealFunnel(u.manager, { from: new Date("2026-10-01T03:00:00Z"), to: new Date("2026-11-01T03:00:00Z") });
     expect(f.reached.find((r) => r.stage === "POSSESSION")?.count).toBe(1);
