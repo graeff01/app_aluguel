@@ -18,6 +18,7 @@ import { log } from "@/lib/log";
 import type { CalendarApi } from "./sync/types";
 import { authorizedClient, canEditEvents, realCalendarApi } from "./sync/google";
 import { requestManualSync } from "./sync/runner";
+import { consultantEventColor } from "./event-colors";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem 0/O/1/I
 export const LINK_CODE_RE = /\bVL-([A-HJ-NP-Z2-9]{6})\b/;
@@ -209,7 +210,10 @@ export async function createVisitEventInGoogle(actor: AuthzActor, visitId: strin
     const api = opts.calendarApi ?? realCalendarApi(await authorizedClient(conn.id));
     const attendees = [...new Set([consultantEmail, ...cc].filter((e): e is string => !!e && e.toLowerCase() !== conn.calendarId!.toLowerCase()))];
     const description = opts.extraNote?.trim() ? `Obs.: ${opts.extraNote.trim().slice(0, 500)}\n${details}` : details;
-    const eventId = await api.insertEvent(conn.calendarId, { summary: title, description, location, start: v.scheduledStart, end: v.scheduledEnd, attendees });
+    // agendada pela consultora: já nasce com a cor das consultoras na agenda central
+    const byConsultant = v.scheduledById ? (await db.user.findUnique({ where: { id: v.scheduledById }, select: { role: true } }))?.role === "CONSULTANT" : false;
+    const colorId = byConsultant ? ((await consultantEventColor()) ?? undefined) : undefined;
+    const eventId = await api.insertEvent(conn.calendarId, { summary: title, description, location, start: v.scheduledStart, end: v.scheduledEnd, attendees, colorId });
     await db.$transaction(async (tx) => {
       await tx.visit.update({ where: { id: v.id }, data: { googleCreatedAt: opts.now ?? new Date() } });
       await audit(tx, { actorId: actor.id, action: "google.event_created", entityType: "Visit", entityId: v.id, changes: { evento: eventId } });

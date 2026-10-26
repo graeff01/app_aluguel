@@ -7,9 +7,10 @@ import { db } from "@/lib/db";
 import { errorCode, log } from "@/lib/log";
 import { getSettings } from "@/lib/settings";
 import { runSync, type SyncStats } from "./engine";
-import { authorizedClient, realCalendarApi } from "./google";
+import { authorizedClient, canEditEvents, realCalendarApi } from "./google";
 import { GoogleApiError, type CalendarApi } from "./types";
 import { refreshPropertyPreviews } from "../property-preview";
+import { paintConsultantEvents } from "../event-colors";
 
 export const SYNC_LOCK_KEY = 74_210_626;
 
@@ -49,6 +50,8 @@ export async function executeRun(runId: string, apiFactory: ApiFactory = default
       log.info("sync.success", { runId, mode: stats.mode, received: stats.received, created: stats.created, updated: stats.updated, conflicts: stats.conflicts });
       // visita nova: busca a foto do imóvel na hora (não espera o ciclo periódico)
       if (stats.created > 0 || stats.updated > 0) await refreshPropertyPreviews({ limit: 10, pauseMs: 300 }).catch(() => undefined);
+      // agenda central: eventos agendados pelas consultoras ganham a cor delas (precisa da permissão de edição)
+      if (conn.calendarId && canEditEvents(conn.scopes)) await paintConsultantEvents(api, conn.calendarId).catch(() => undefined);
       return stats;
     } catch (e) {
       const code = errorCode(e);

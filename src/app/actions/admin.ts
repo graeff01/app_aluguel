@@ -1,4 +1,5 @@
 "use server";
+import { GOOGLE_EVENT_COLORS } from "@/lib/event-colors";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
@@ -301,6 +302,7 @@ export async function settingsAction(_: ActionState, fd: FormData) {
         cancelAfterHour: int("cancelAfterHour", 0, 23),
         preAnalysisRetentionDays: int("preAnalysisRetentionDays", 7, 365),
         docLinksEnabled: str(fd, "docLinksEnabled") === "1",
+        consultantEventColor: GOOGLE_EVENT_COLORS[str(fd, "consultantEventColor")] ? str(fd, "consultantEventColor") : "",
         confirmMessage: (() => {
           const t = str(fd, "confirmMessage").trim().slice(0, 600);
           if (t.length < 10) throw new AppError("VALIDATION", "Escreva a mensagem de confirmação.", { confirmMessage: "Muito curta." });

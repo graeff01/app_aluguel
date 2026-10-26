@@ -739,6 +739,7 @@ describe("Agenda Google dentro do app (espelho do pré-atendimento)", () => {
       insertEvent: own.insertEvent.bind(own),
       patchEvent: own.patchEvent.bind(own),
       restoreEvent: own.restoreEvent.bind(own),
+      setColor: own.setColor.bind(own),
     };
     return { own, api };
   };

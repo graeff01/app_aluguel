@@ -199,6 +199,7 @@ async function processEvent(ctx: Ctx, ev: GEvent, opts: { inWindowOnly: boolean;
     attendees: attendees as Prisma.InputJsonValue,
     attendeesOmitted: !!ev.attendeesOmitted,
     parsed: (parsed ?? Prisma.DbNull) as Prisma.InputJsonValue,
+    colorId: ev.colorId ?? null,
   };
 
   await db.$transaction(async (tx) => {

@@ -191,6 +191,7 @@ export function realCalendarApi(auth: OAuth2Client): CalendarApi {
             start: ev.allDay ? { date: ev.allDay.startDay } : { dateTime: ev.start.toISOString(), timeZone: "America/Sao_Paulo" },
             end: ev.allDay ? { date: ev.allDay.endDay } : { dateTime: ev.end.toISOString(), timeZone: "America/Sao_Paulo" },
             attendees: ev.attendees.map((email) => ({ email })),
+            ...(ev.colorId ? { colorId: ev.colorId } : {}),
           },
         });
         return res.data.id!;
@@ -221,6 +222,16 @@ export function realCalendarApi(auth: OAuth2Client): CalendarApi {
           body.attendees = [...kept, ...patch.swapAttendees.add.filter((e) => !have.has(e.toLowerCase())).map((email) => ({ email }))];
         }
         await api.events.patch({ calendarId, eventId, sendUpdates: "all", requestBody: body });
+        return "updated";
+      } catch (e) {
+        const m = mapGoogleError(e);
+        if (m.kind === "NOT_FOUND" || m.status === 410) return "gone";
+        throw m;
+      }
+    },
+    async setColor(calendarId, eventId, colorId) {
+      try {
+        await api.events.patch({ calendarId, eventId, sendUpdates: "none", requestBody: { colorId } });
         return "updated";
       } catch (e) {
         const m = mapGoogleError(e);

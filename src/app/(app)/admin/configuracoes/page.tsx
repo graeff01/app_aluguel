@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/require";
+import { GOOGLE_EVENT_COLORS } from "@/lib/event-colors";
 import { getSettings } from "@/lib/settings";
 import { dateOnlyKey } from "@/lib/time";
 import { ActionForm, SubmitButton } from "@/components/action-form";
@@ -70,6 +71,16 @@ export default async function SettingsPage() {
           ))}
           <Field label="E-mails em cópia nos agendamentos das consultoras" htmlFor="calendarCcEmails" hint="Vão como convidados no evento que a consultora cria pelo app (Reagendar / Nova visita), além da conta central. Separe por vírgula. Ex.: o e-mail do pré-atendimento.">
             <Input id="calendarCcEmails" name="calendarCcEmails" defaultValue={s.calendarCcEmails} maxLength={500} />
+          </Field>
+          <Field label="Cor dos eventos agendados pelas consultoras" htmlFor="consultantEventColor" hint="Na agenda central (Google e Agenda Google do app), as visitas que as consultoras agendam ganham esta cor e se separam das do pré-atendimento. Só pinta evento sem cor; precisa da permissão de edição da agenda.">
+            <Select id="consultantEventColor" name="consultantEventColor" defaultValue={s.consultantEventColor}>
+              <option value="">Desligado (cor da agenda)</option>
+              {Object.entries(GOOGLE_EVENT_COLORS).map(([id, c]) => (
+                <option key={id} value={id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
           </Field>
           <YesNo name="docLinksEnabled" value={s.docLinksEnabled} label="Pedir documentos pelo link do cliente" hint="Desligado: some o botão “Pedir documentos ao cliente” e os links já enviados param de abrir. Os documentos já recebidos continuam visíveis." />
           <Field label="Apagar CPF, nascimento, e-mail, telefone e salário da pré-análise após (dias)" htmlFor="preAnalysisRetentionDays" hint="Contados a partir do resultado. Ficam nome, faixa de renda e resultado para os indicadores.">

@@ -104,7 +104,7 @@ export class MockCalendar implements CalendarApi {
   }
   private deleted = new Map<string, GEvent>();
   inserted = 0;
-  async insertEvent(calendarId: string, ev: { summary: string; description: string; location?: string; start: Date; end: Date; attendees: string[]; allDay?: { startDay: string; endDay: string } }) {
+  async insertEvent(calendarId: string, ev: { summary: string; description: string; location?: string; start: Date; end: Date; attendees: string[]; allDay?: { startDay: string; endDay: string }; colorId?: string }) {
     const id = `app-${++this.inserted}`;
     this.put({
       id,
@@ -115,8 +115,15 @@ export class MockCalendar implements CalendarApi {
       end: ev.allDay ? { date: ev.allDay.endDay } : { dateTime: ev.end.toISOString() },
       organizer: { email: calendarId },
       attendees: [{ email: calendarId, organizer: true, responseStatus: "accepted" }, ...ev.attendees.map((email) => ({ email, responseStatus: "needsAction" }))],
+      colorId: ev.colorId ?? null,
     });
     return id;
+  }
+  async setColor(_cal: string, id: string, colorId: string) {
+    const s = this.events.get(id);
+    if (!s || s.ev.status === "cancelled") return "gone" as const;
+    this.put({ ...s.ev, colorId });
+    return "updated" as const;
   }
   async restoreEvent(_cal: string, id: string) {
     const ev = this.deleted.get(id);

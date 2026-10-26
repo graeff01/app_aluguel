@@ -7,6 +7,7 @@ import { cancelVisitByStaff, concludeVisit, reopenCanceledVisit, swapVisitProper
 import { computeMetrics } from "@/lib/metrics";
 import { staffEditVisit } from "@/server/staff-edit";
 import { dayAgenda } from "@/server/day-agenda";
+import { paintConsultantEvents } from "@/server/event-colors";
 import { assignVisit } from "@/server/visits";
 import { GoogleApiError } from "@/server/sync/types";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
@@ -437,6 +438,26 @@ describe("evento com vários imóveis", () => {
     // a próxima leitura da agenda mantém tudo
     await sync();
     expect(await check()).toEqual(expected);
+  });
+
+  it("agenda central: evento agendado pela consultora ganha a cor das consultoras uma vez só", async () => {
+    const title = (who: string) => `Visita clt - ${who} - cod 664465 - (51) 99876-5432`;
+    api.put(visitEvent("central", { start: "2026-10-07T17:00:00Z", title: title("Ana Souza"), organizer: "central@exemplo.test" }));
+    api.put(visitEvent("dela", { start: "2026-10-07T13:00:00Z", title: title("Bia Lima"), extra: { creator: { email: "consultora.a@exemplo.test" } } }));
+    await sync();
+    expect(await paintConsultantEvents(api, "central@exemplo.test", NOW)).toBe(1);
+    expect((await api.getEvent("central@exemplo.test", "dela"))?.colorId).toBe("3");
+    expect((await api.getEvent("central@exemplo.test", "central"))?.colorId ?? null).toBeNull();
+    // a Jasmin troca a cor à mão: o app não pinta de novo
+    const ev = (await api.getEvent("central@exemplo.test", "dela"))!;
+    api.put({ ...ev, colorId: "5" });
+    await sync();
+    expect(await paintConsultantEvents(api, "central@exemplo.test", NOW)).toBe(0);
+    expect((await api.getEvent("central@exemplo.test", "dela"))?.colorId).toBe("5");
+    // desligado nas regras: não pinta
+    await db.appSettings.update({ where: { id: 1 }, data: { consultantEventColor: "" } });
+    await db.sourceEvent.updateMany({ data: { colorId: null, colorPaintedAt: null } });
+    expect(await paintConsultantEvents(api, "central@exemplo.test", NOW)).toBe(0);
   });
 
   it("evento movido para depois das 21h cancela todas as visitas do evento e voltar restaura", async () => {
