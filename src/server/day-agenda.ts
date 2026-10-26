@@ -2,11 +2,20 @@
 import { db } from "@/lib/db";
 import { assert, hasGlobalView, isPreService, type AuthzActor } from "@/lib/authz";
 import { dayKey, endOfDayInTz, startOfDayInTz } from "@/lib/time";
+import type { Prisma } from "@/generated/prisma/client";
 
-export async function dayAgenda(actor: AuthzActor, day: string) {
+/** Quem agendou: a consultora (evento criado por ela ou remarcação dela) ou o pré-atendimento (agenda central ou app). */
+export type ScheduledByFilter = "pre" | "cons" | null;
+function whoWhere(who: ScheduledByFilter): Prisma.VisitWhereInput {
+  if (who === "cons") return { scheduledBy: { role: "CONSULTANT" } };
+  if (who === "pre") return { OR: [{ scheduledById: null }, { scheduledBy: { role: { not: "CONSULTANT" } } }] };
+  return {};
+}
+
+export async function dayAgenda(actor: AuthzActor, day: string, who: ScheduledByFilter = null) {
   assert(isPreService(actor) || hasGlobalView(actor));
   const visits = await db.visit.findMany({
-    where: { excluded: false, scheduledStart: { gte: startOfDayInTz(day), lt: endOfDayInTz(day) } },
+    where: { excluded: false, scheduledStart: { gte: startOfDayInTz(day), lt: endOfDayInTz(day) }, ...whoWhere(who) },
     orderBy: { scheduledStart: "asc" },
     select: {
       id: true,
@@ -26,6 +35,7 @@ export async function dayAgenda(actor: AuthzActor, day: string) {
       autoCanceled: true,
       swappedTo: true,
       concludedBy: { select: { name: true } },
+      scheduledBy: { select: { name: true, role: true } },
       consultant: { select: { name: true } },
       property: { select: { neighborhood: true } },
     },
@@ -42,10 +52,10 @@ export async function dayAgenda(actor: AuthzActor, day: string) {
 }
 
 /** Semana ou mês: visitas agrupadas por dia (todas as consultoras). */
-export async function rangeAgenda(actor: AuthzActor, fromDay: string, toDayExclusive: string) {
+export async function rangeAgenda(actor: AuthzActor, fromDay: string, toDayExclusive: string, who: ScheduledByFilter = null) {
   assert(isPreService(actor) || hasGlobalView(actor));
   const visits = await db.visit.findMany({
-    where: { excluded: false, scheduledStart: { gte: startOfDayInTz(fromDay), lt: startOfDayInTz(toDayExclusive) } },
+    where: { excluded: false, scheduledStart: { gte: startOfDayInTz(fromDay), lt: startOfDayInTz(toDayExclusive) }, ...whoWhere(who) },
     orderBy: { scheduledStart: "asc" },
     select: {
       id: true,
@@ -65,6 +75,7 @@ export async function rangeAgenda(actor: AuthzActor, fromDay: string, toDayExclu
       autoCanceled: true,
       swappedTo: true,
       concludedBy: { select: { name: true } },
+      scheduledBy: { select: { name: true, role: true } },
       consultant: { select: { name: true } },
       property: { select: { neighborhood: true } },
     },

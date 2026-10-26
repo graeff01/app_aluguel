@@ -9,6 +9,7 @@ import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
 import { createVisitEventInGoogle, rescheduleVisit } from "@/server/reschedule";
 import { cancelOldEvent } from "@/server/google-write";
 import { createStaffVisit } from "@/server/staff-visit";
+import { staffEditVisit } from "@/server/staff-edit";
 import { moveDealStage } from "@/server/deal-flow";
 import { setPresence } from "@/server/presence";
 import { followUpAction } from "@/server/followups";
@@ -254,6 +255,41 @@ export async function swapPropertyAction(_: ActionState, fd: FormData): Promise<
   if (s.ok) {
     revalidatePath("/agenda-do-dia");
     revalidatePath(`/visitas/${str(fd, "visitId")}`);
+  }
+  return s;
+}
+
+const GOOGLE_EDIT_TEXT: Record<string, string> = {
+  updated: "Agenda Google atualizada.",
+  not_owner: "O evento é de outra pessoa: confira o título e os convidados na agenda Google.",
+  gone: "O evento não existe mais na agenda Google.",
+  no_permission: "Sem permissão para alterar a agenda Google: confira o evento à mão.",
+  error: "Não foi possível atualizar a agenda Google agora: confira o evento à mão.",
+};
+
+/** Pré-atendimento edita a visita pela agenda do sistema (volta para o dia da visita). */
+export async function staffEditVisitAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  let target = "";
+  const s = await runAction(async (a) => {
+    const r = await staffEditVisit(a, str(fd, "visitId"), {
+      expectedVersion: Number(str(fd, "version")),
+      clientName: str(fd, "clientName"),
+      externalRef: str(fd, "externalRef"),
+      phoneRaw: str(fd, "phoneRaw"),
+      date: str(fd, "date"),
+      time: str(fd, "time"),
+      durationMinutes: Number(str(fd, "duration")) || 60,
+      consultantId: str(fd, "consultantId"),
+      addCodes: str(fd, "addCodes"),
+      allowOverlap: str(fd, "allowOverlap") === "1",
+    });
+    const msg = r.changed.length ? `Visita atualizada (${r.changed.join(", ")}). ${r.google === "not_in_agenda" ? "" : (GOOGLE_EDIT_TEXT[r.google] ?? "")}`.trim() : "Nada mudou.";
+    target = `/agenda-do-dia?dia=${str(fd, "date")}&editada=${encodeURIComponent(msg)}`;
+    return msg;
+  });
+  if (s.ok && target) {
+    revalidatePath("/agenda-do-dia");
+    redirect(target);
   }
   return s;
 }

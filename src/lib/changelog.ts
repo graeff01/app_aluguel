@@ -13,8 +13,10 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 export const CHANGELOG: ChangelogEntry[] = [
   {
     id: "2026-10-26",
-    title: "Trocar imóvel da visita",
+    title: "Agenda do sistema: editar, trocar imóvel e quem agendou",
     changes: [
+      { text: "Editar a visita na agenda do sistema: toque em “Editar” para mudar dia, horário, cliente, telefone, consultora ou adicionar outro imóvel. O evento na agenda Google é atualizado junto e a consultora é avisada.", who: STAFF, href: "/agenda-do-dia" },
+      { text: "Cada visita mostra quem agendou (“Pré-atendimento” ou “Agendada pela consultora”), e dá para filtrar a agenda por isso.", who: STAFF, href: "/agenda-do-dia" },
       { text: "Imóvel indisponível e o cliente quer ver outro no mesmo horário? Na agenda do dia, toque em “Trocar imóvel”: o imóvel antigo fica como trocado (o cliente não aparece como cancelado) e a visita segue com o novo, também na agenda Google.", who: STAFF, href: "/agenda-do-dia" },
       { text: "Quando o pré-atendimento troca o imóvel de uma visita sua, você recebe um aviso com o novo código. O horário e o cliente continuam os mesmos.", who: ["CONSULTANT"] },
     ],

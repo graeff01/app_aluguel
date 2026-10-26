@@ -5,6 +5,8 @@ import { runSync } from "@/server/sync/engine";
 import { executeRun, withSyncLock } from "@/server/sync/runner";
 import { cancelVisitByStaff, concludeVisit, reopenCanceledVisit, swapVisitProperty } from "@/server/visits";
 import { computeMetrics } from "@/lib/metrics";
+import { staffEditVisit } from "@/server/staff-edit";
+import { dayAgenda } from "@/server/day-agenda";
 import { assignVisit } from "@/server/visits";
 import { GoogleApiError } from "@/server/sync/types";
 import { acceptAmbiguous, rejectAmbiguous } from "@/server/review";
@@ -401,6 +403,40 @@ describe("evento com vários imóveis", () => {
     expect(m.totals).toMatchObject({ scheduled: 1, canceled: 0 });
     // o imóvel que saiu não é trocado de novo
     await expect(swapVisitProperty(users.manager, old.id, { newCode: "999999", reasonId: reason.id })).rejects.toMatchObject({ code: "INVALID_STATE" });
+  });
+
+  it("agenda do sistema: separa quem agendou e o pré-atendimento edita a visita (horário, cliente, consultora e mais um imóvel)", async () => {
+    const jas = await db.user.create({ data: { name: "Jasmin Teste", email: "jas@exemplo.test", role: "PRE_SERVICE" } });
+    const title = (who: string, codes: string) => `Visita clt - ${who} - cod ${codes} - (51) 99876-5432`;
+    api.put(visitEvent("central", { start: "2026-10-07T17:00:00Z", title: title("Ana Souza", "664465"), organizer: "central@exemplo.test" }));
+    api.put(visitEvent("dela", { start: "2026-10-07T13:00:00Z", title: title("Bia Lima", "111222"), extra: { creator: { email: "consultora.a@exemplo.test" } } }));
+    await sync();
+    const names = async (who: "pre" | "cons" | null) => (await dayAgenda(jas, "2026-10-07", who)).groups.flatMap((g) => g.items.map((v) => v.clientName));
+    expect(await names("pre")).toEqual(["Ana Souza"]);
+    expect(await names("cons")).toEqual(["Bia Lima"]);
+    expect((await names(null)).length).toBe(2);
+
+    const v = await db.visit.findFirstOrThrow({ where: { clientName: "Ana Souza" } });
+    const base = { expectedVersion: v.version, clientName: "Ana Souza Lima", phoneRaw: "(51) 99876-5432", date: "2026-10-07", time: "15:00", durationMinutes: 60, consultantId: users.b.id, addCodes: "835840" };
+    await expect(staffEditVisit(users.a, v.id, base)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(staffEditVisit(jas, v.id, { ...base, expectedVersion: v.version + 7 })).rejects.toMatchObject({ code: "CONFLICT" });
+    const r = await staffEditVisit(jas, v.id, base, { calendarApi: api });
+    expect(r.google).toBe("updated");
+    expect(r.added).toEqual(["835840"]);
+    const ev = await api.getEvent("central@exemplo.test", "central");
+    expect(ev?.summary).toContain("Ana Souza Lima");
+    expect(ev?.summary).toContain("cod 664465;835840");
+    expect(ev?.start?.dateTime).toBe("2026-10-07T18:00:00.000Z");
+    const check = async () =>
+      (await db.visit.findMany({ where: { OR: [{ id: v.id }, { companionOfId: v.id }] }, orderBy: { createdAt: "asc" } })).map((x) => [x.propertyCode, x.status, x.clientName, x.consultantId === users.b.id, x.scheduledStart.toISOString()]);
+    const expected = [
+      ["664465", "SCHEDULED", "Ana Souza Lima", true, "2026-10-07T18:00:00.000Z"],
+      ["835840", "SCHEDULED", "Ana Souza Lima", true, "2026-10-07T18:00:00.000Z"],
+    ];
+    expect(await check()).toEqual(expected);
+    // a próxima leitura da agenda mantém tudo
+    await sync();
+    expect(await check()).toEqual(expected);
   });
 
   it("evento movido para depois das 21h cancela todas as visitas do evento e voltar restaura", async () => {

@@ -35,9 +35,10 @@ export function newLinkCode() {
  */
 export type RescheduleOutcome = { status: "RESCHEDULED" | "NO_SHOW" | "DONE"; evaluation?: "POSITIVE" | "NEGATIVE" | "UNDECIDED" | null; negativeReasonId?: string | null; note?: string };
 /** Avisa quando o horário cai em cima de outra visita agendada da consultora (pode ser confirmado). */
-export async function assertNoOverlap(consultantId: string, start: Date, end: Date, excludeId?: string) {
+export async function assertNoOverlap(consultantId: string, start: Date, end: Date, excludeId?: string | string[]) {
+  const exclude = excludeId === undefined ? [] : Array.isArray(excludeId) ? excludeId : [excludeId];
   const clash = await db.visit.findFirst({
-    where: { consultantId, status: "SCHEDULED", excluded: false, ...(excludeId ? { id: { not: excludeId } } : {}), scheduledStart: { lt: end }, scheduledEnd: { gt: start } },
+    where: { consultantId, status: "SCHEDULED", excluded: false, ...(exclude.length ? { id: { notIn: exclude } } : {}), scheduledStart: { lt: end }, scheduledEnd: { gt: start } },
     orderBy: { scheduledStart: "asc" },
   });
   if (clash) {

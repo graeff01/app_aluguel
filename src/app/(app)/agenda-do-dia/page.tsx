@@ -32,6 +32,7 @@ type Row = {
   autoCanceled: boolean;
   swappedTo?: string | null;
   concludedBy: { name: string } | null;
+  scheduledBy?: { name: string; role: string } | null;
   consultant?: { name: string } | null;
   property: { neighborhood: string | null } | null;
 };
@@ -52,7 +53,7 @@ const prevMonth = (k: string) => {
 const dayTitle = (k: string) => new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", timeZone: "UTC" }).format(new Date(`${k}T12:00:00Z`));
 const monthTitle = (k: string) => new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${k}T12:00:00Z`));
 
-export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ dia?: string; vista?: string; ref?: string; cancelado?: string; n?: string; g?: string; criada?: string }> }) {
+export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ dia?: string; vista?: string; ref?: string; cancelado?: string; n?: string; g?: string; criada?: string; quem?: string; editada?: string }> }) {
   const actor = await requireActor({ preService: true });
   if (!isPreService(actor) && !hasGlobalView(actor)) redirect("/minhas");
   const sp = await searchParams;
@@ -61,10 +62,13 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const tomorrow = addDays(today, 1);
   const view = sp.vista === "semana" || sp.vista === "mes" ? sp.vista : "dia";
   const ref = isDayKey(sp.ref) ? sp.ref : today;
+  // quem agendou: pré-atendimento (agenda central ou app) ou a própria consultora
+  const who = sp.quem === "pre" || sp.quem === "cons" ? sp.quem : null;
+  const withWho = (href: string) => (who ? `${href}${href.includes("?") ? "&" : "?"}quem=${who}` : href);
   const cancelReasons = await db.reason.findMany({ where: { kind: "VISIT_CANCEL", active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, label: true } });
 
   // endereço da tela atual (sem os dados do último cancelamento): o cancelamento volta para cá
-  const keep = new URLSearchParams(Object.entries({ dia: sp.dia, vista: sp.vista, ref: sp.ref }).filter((e): e is [string, string] => !!e[1]));
+  const keep = new URLSearchParams(Object.entries({ dia: sp.dia, vista: sp.vista, ref: sp.ref, quem: who ?? undefined }).filter((e): e is [string, string] => !!e[1]));
   const back = `/agenda-do-dia${keep.size ? `?${keep}` : ""}`;
   const undo = sp.cancelado && /^[a-z0-9]{20,40}$/.test(sp.cancelado) ? <UndoCancel key={sp.cancelado} undoId={sp.cancelado} count={Number(sp.n) || 1} google={sp.g ?? ""} back={back} /> : null;
   // acabou de agendar pelo app: confirmação (e o botão do Google, se o app não conseguiu criar o evento)
@@ -114,6 +118,9 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           {v.property?.neighborhood ? ` · ${v.property.neighborhood}` : ""}
           {v.rescheduledFromId && v.assignmentNote === "REAGENDADA" ? " · ↻ remarcada" : ""}
         </span>
+        <span className={cx("mt-0.5 inline-block rounded-full px-2 py-px text-[11px] font-bold", v.scheduledBy?.role === "CONSULTANT" ? "bg-tint text-ink-2" : "bg-accent-soft text-accent-strong")}>
+          {v.scheduledBy?.role === "CONSULTANT" ? `Agendada pela consultora${v.scheduledBy && v.consultant?.name !== v.scheduledBy.name ? ` (${v.scheduledBy.name.split(" ")[0]})` : ""}` : "Pré-atendimento"}
+        </span>
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5 text-right text-[12px] font-semibold">
         <span className={v.status === "CANCELED" && !v.swappedTo ? "text-bad" : "text-ink-2"}>{status(v)}</span>
@@ -156,6 +163,13 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           />
         </span>
       )}
+      {v.status === "SCHEDULED" && (
+        <span className="basis-full sm:basis-auto">
+          <Link href={`/agenda-do-dia/${v.id}/editar`} className="press inline-flex min-h-9 items-center rounded-full border border-line-strong px-3 text-[12px] font-semibold text-ink-2 hover:bg-tint">
+            Editar
+          </Link>
+        </span>
+      )}
       {v.status === "SCHEDULED" && v.scheduledEnd > now && v.propertyCode && (
         <span className="basis-full sm:basis-auto">
           <SwapProperty visitId={v.id} code={v.propertyCode} reasons={cancelReasons} />
@@ -169,24 +183,47 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       <Segmented
         label="Período"
         items={[
-          { href: "/agenda-do-dia", label: "Hoje", active: view === "dia" && (sp.dia ?? today) === today },
-          { href: `/agenda-do-dia?dia=${tomorrow}`, label: "Amanhã", active: view === "dia" && sp.dia === tomorrow },
-          { href: "/agenda-do-dia?vista=semana", label: "Semana", active: view === "semana" },
-          { href: "/agenda-do-dia?vista=mes", label: "Mês", active: view === "mes" },
+          { href: withWho("/agenda-do-dia"), label: "Hoje", active: view === "dia" && (sp.dia ?? today) === today },
+          { href: withWho(`/agenda-do-dia?dia=${tomorrow}`), label: "Amanhã", active: view === "dia" && sp.dia === tomorrow },
+          { href: withWho("/agenda-do-dia?vista=semana"), label: "Semana", active: view === "semana" },
+          { href: withWho("/agenda-do-dia?vista=mes"), label: "Mês", active: view === "mes" },
         ]}
       />
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px]" role="group" aria-label="Quem agendou">
+        <span className="font-semibold text-ink-3">Agendadas por:</span>
+        {(
+          [
+            [null, "Todas"],
+            ["pre", "Pré-atendimento"],
+            ["cons", "Consultoras"],
+          ] as const
+        ).map(([k, label]) => {
+          const q = new URLSearchParams(Object.entries({ dia: sp.dia, vista: sp.vista, ref: sp.ref, quem: k ?? undefined }).filter((e): e is [string, string] => !!e[1]));
+          return (
+            <Link key={label} href={`/agenda-do-dia${q.size ? `?${q}` : ""}`} aria-current={who === k ? "true" : undefined} className={cx("press inline-flex min-h-9 items-center rounded-full border px-3 font-semibold", who === k ? "border-ink bg-ink text-surface" : "border-line-strong text-ink-2 hover:bg-tint")}>
+              {label}
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
+  const edited = sp.editada ? (
+    <p role="status" className="mb-5 rounded-2xl bg-good-soft px-4 py-3 text-[14px] font-semibold text-good">
+      ✓ {sp.editada.slice(0, 300)}
+    </p>
+  ) : null;
 
   if (view === "dia") {
     const day = isDayKey(sp.dia) ? sp.dia : today;
-    const a = await dayAgenda(actor, day);
+    const a = await dayAgenda(actor, day, who);
     track(a.groups.flatMap((g) => g.items));
     return (
       <div className="mx-auto max-w-3xl">
         <PageHeader eyebrow={fmt.longDate(new Date(day + "T15:00:00Z"))} title={day === today ? "Visitas de hoje" : day === tomorrow ? "Visitas de amanhã" : "Visitas do dia"} subtitle={<AutoRefresh seconds={60} />} action={<LinkButton href="/agenda-do-dia/nova">+ Nova visita</LinkButton>} />
         {tabs}
         {created}
+        {edited}
         {undo}
         {a.unassigned > 0 && (
           <p role="alert" className="mb-5 rounded-2xl border border-bad/20 bg-bad-soft px-4 py-3 text-sm font-semibold text-bad">
@@ -216,7 +253,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const to = view === "semana" ? addDays(from, 7) : nextMonth(from);
   const prev = view === "semana" ? addDays(from, -7) : prevMonth(from);
   const isCurrent = view === "semana" ? from === mondayOf(today) : from === monthOf(today);
-  const a = await rangeAgenda(actor, from, to);
+  const a = await rangeAgenda(actor, from, to, who);
   track(a.days.flatMap((d) => d.items));
   const title = view === "semana" ? `Semana de ${from.slice(8, 10)}/${from.slice(5, 7)} a ${addDays(to, -1).slice(8, 10)}/${addDays(to, -1).slice(5, 7)}` : monthTitle(from).replace(/^./, (c) => c.toUpperCase());
   const nav = (href: string, label: string, aria: string) => (
@@ -229,11 +266,12 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       <PageHeader eyebrow={view === "semana" ? "Visitas da semana" : "Visitas do mês"} title={title} subtitle={<AutoRefresh seconds={60} />} action={<LinkButton href="/agenda-do-dia/nova">+ Nova visita</LinkButton>} />
       {tabs}
       {created}
+      {edited}
       {undo}
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        {nav(`/agenda-do-dia?vista=${view}&ref=${prev}`, "←", view === "semana" ? "Semana anterior" : "Mês anterior")}
-        {!isCurrent && nav(`/agenda-do-dia?vista=${view}`, view === "semana" ? "Esta semana" : "Este mês", "Voltar ao período atual")}
-        {nav(`/agenda-do-dia?vista=${view}&ref=${to}`, "→", view === "semana" ? "Próxima semana" : "Próximo mês")}
+        {nav(withWho(`/agenda-do-dia?vista=${view}&ref=${prev}`), "←", view === "semana" ? "Semana anterior" : "Mês anterior")}
+        {!isCurrent && nav(withWho(`/agenda-do-dia?vista=${view}`), view === "semana" ? "Esta semana" : "Este mês", "Voltar ao período atual")}
+        {nav(withWho(`/agenda-do-dia?vista=${view}&ref=${to}`), "→", view === "semana" ? "Próxima semana" : "Próximo mês")}
       </div>
       <div className="mb-5 flex flex-wrap gap-2 text-[13px]">
         <span className="rounded-full bg-tint px-3 py-1 font-semibold">{a.total - a.canceled} visita{a.total - a.canceled === 1 ? "" : "s"}</span>
