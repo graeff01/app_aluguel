@@ -31,7 +31,7 @@ export const EVENT_COLORS: Record<string, string> = {
 export const canUseMirror = (a: AuthzActor) => isPreService(a) || isAdmin(a);
 
 export type MirrorCalendar = { id: string; name: string; color: string; primary: boolean; canWrite: boolean; visible: boolean };
-export type MirrorVisit = { id: string; status: string; evaluation: string | null; confirmStatus: string | null; consultantId: string | null; consultant: string | null; codes: string[]; openCodes: string[]; cancelReason: string | null };
+export type MirrorVisit = { id: string; /** visita em aberto do grupo (a principal pode estar cancelada/trocada) */ openId: string | null; autoCanceled: boolean; swappedTo: string | null; status: string; evaluation: string | null; confirmStatus: string | null; consultantId: string | null; consultant: string | null; codes: string[]; openCodes: string[]; cancelReason: string | null };
 export type MirrorEvent = {
   key: string;
   calendarId: string;
@@ -108,7 +108,7 @@ export async function loadMirror(actor: AuthzActor, from: Date, to: Date, opts: 
     // visitas do app ligadas a estes eventos (situação, consultora, imóveis)
     const sources = await db.sourceEvent.findMany({
       where: { googleEventId: { in: [...new Set(flat.map((x) => x.e.id))] } },
-      select: { calendarId: true, googleEventId: true, visit: { select: { id: true, status: true, evaluation: true, confirmStatus: true, propertyCode: true, consultantId: true, scheduledBy: { select: { role: true } }, consultant: { select: { name: true } }, cancelReason: { select: { label: true } }, companions: { where: { excluded: false }, select: { propertyCode: true, status: true } } } } },
+      select: { calendarId: true, googleEventId: true, visit: { select: { id: true, autoCanceled: true, swappedTo: true, status: true, evaluation: true, confirmStatus: true, propertyCode: true, consultantId: true, scheduledBy: { select: { role: true } }, consultant: { select: { name: true } }, cancelReason: { select: { label: true } }, companions: { where: { excluded: false }, select: { id: true, propertyCode: true, status: true }, orderBy: { createdAt: "asc" } } } } },
     });
     const visitOf = new Map(sources.map((s) => [s.googleEventId, s.visit]));
     const events: MirrorEvent[] = flat.map(({ cal, e }) => {
@@ -119,7 +119,7 @@ export async function loadMirror(actor: AuthzActor, from: Date, to: Date, opts: 
       const end = allDay ? new Date(`${endDay}T03:00:00Z`) : new Date(e.end?.dateTime ?? start.getTime() + 3600_000);
       const v = visitOf.get(e.id);
       const self = (e.attendees ?? []).find((a) => a.self);
-      const group = v ? [{ propertyCode: v.propertyCode, status: v.status }, ...v.companions] : [];
+      const group = v ? [{ id: v.id, propertyCode: v.propertyCode, status: v.status }, ...v.companions] : [];
       return {
         key: `${cal.id}|${e.id}`,
         calendarId: cal.id,
@@ -143,6 +143,9 @@ export async function loadMirror(actor: AuthzActor, from: Date, to: Date, opts: 
         visit: v
           ? {
               id: v.id,
+              openId: group.find((g) => g.status === "SCHEDULED")?.id ?? null,
+              autoCanceled: v.autoCanceled,
+              swappedTo: v.swappedTo,
               status: v.status,
               evaluation: v.evaluation,
               confirmStatus: v.confirmStatus,

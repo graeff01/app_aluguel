@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createEventAction, deleteEventAction, editEventAction, moveEventAction } from "@/app/actions/calendar";
 import { EVALUATION_LABEL, STATUS_LABEL } from "@/lib/labels";
 import type { Mirror, MirrorEvent } from "@/server/calendar-mirror";
-import { CancelVisit } from "../agenda-do-dia/cancel";
+import { CancelVisit, ReopenVisit, SwapProperty } from "../agenda-do-dia/cancel";
 
 export type View = "dia" | "semana" | "mes";
 type Item = { id: string; label: string };
@@ -1030,9 +1030,16 @@ function EventDetails({ e, color, calendar, reasons, back, nowMs, onClose, onDon
               {v.codes.length > 0 && <p className="text-[13px] text-ink-2">Imóve{v.codes.length > 1 ? "is" : "l"} {v.codes.join(", ")}</p>}
               {v.cancelReason && <p className="text-[13px] text-ink-2">Motivo: {v.cancelReason}</p>}
               <div className="mt-2 flex flex-wrap gap-2">
-                <Link href={`/visitas/${v.id}`} className="inline-flex min-h-9 items-center rounded-full border border-line-strong bg-surface px-3.5 text-[13px] font-semibold">
-                  Abrir visita
+                {v.openId && (
+                  <Link href={`/agenda-do-dia/${v.openId}/editar`} className="inline-flex min-h-9 items-center rounded-full border border-line-strong bg-surface px-3.5 text-[13px] font-semibold">
+                    Editar
+                  </Link>
+                )}
+                <Link href={`/agenda-do-dia?dia=${keyOf(s)}`} className="inline-flex min-h-9 items-center rounded-full border border-line-strong bg-surface px-3.5 text-[13px] font-semibold">
+                  Ver no dia
                 </Link>
+                {v.openId && en > nowMs && v.openCodes[0] && <SwapProperty visitId={v.openId} code={v.openCodes[0]} reasons={reasons} />}
+                {!v.openId && v.status === "CANCELED" && !v.autoCanceled && !v.swappedTo && <ReopenVisit visitId={v.id} code={v.codes[0]} />}
               </div>
               {canCancel && (
                 <div className="mt-2">
