@@ -59,7 +59,9 @@ describe("proposta", () => {
   it("rodízio único: pré-análise e proposta dividem a vez; cliente da consultora não conta", async () => {
     // ninguém recebeu: A (ordem alfabética)
     expect(await nextOf(NOW)).toBe(u.a.id);
-    await createPreAnalysis(jasmin, { fullName: "Maria", consultantId: u.a.id, holderConfirmed: true }, NOW);
+    const pa = await createPreAnalysis(jasmin, { fullName: "Maria", consultantId: u.a.id, holderConfirmed: true }, NOW);
+    // a data de criação vem do banco (hoje de verdade): fixa no NOW para o teste não depender do dia em que roda
+    await db.preAnalysis.update({ where: { id: pa.id }, data: { createdAt: NOW } });
     expect(await nextOf(new Date(NOW.getTime() + 1000))).toBe(u.b.id);
     // a proposta vai para B (a da vez) e a vez volta para A
     await db.proposal.create({ data: { createdById: jasmin.id, consultantId: u.b.id, clientName: "X", rentCents: 1, propertyCode: "1", createdAt: new Date(NOW.getTime() + 60_000) } });
