@@ -57,6 +57,11 @@ function textOn(hex: string) {
   return 0.299 * r + 0.587 * g + 0.114 * b > 170 ? "#202124" : "#fff";
 }
 
+/** Texto do evento "vazado" (fundo branco): a cor do evento, escurecida para dar leitura. */
+function outlineText(hex: string) {
+  return `color-mix(in srgb, ${hex} 78%, #000)`;
+}
+
 function visitBadge(e: MirrorEvent) {
   const v = e.visit;
   if (!v) return null;
@@ -732,9 +737,9 @@ function DayColumn(props: {
           height: h,
           left: `calc(${(pos.col / pos.cols) * 100}% + 1px)`,
           width: `calc(${100 / pos.cols}% - ${pos.cols > 1 ? 3 : 8}px)`,
-          background: e.declined ? "transparent" : canceled ? `color-mix(in srgb, ${bg} 35%, var(--surface))` : bg,
-          color: e.declined ? bg : canceled ? "var(--ink-2)" : fg,
-          border: e.declined ? `1px solid ${bg}` : "1px solid var(--surface)",
+          background: e.declined ? "transparent" : canceled ? `color-mix(in srgb, ${bg} 35%, var(--surface))` : e.outlined ? "var(--surface)" : bg,
+          color: e.declined ? bg : canceled ? "var(--ink-2)" : e.outlined ? outlineText(bg) : fg,
+          border: e.declined || (e.outlined && !canceled) ? `1px solid ${bg}` : "1px solid var(--surface)",
         }}
       >
         <p className={`truncate font-semibold ${canceled ? "line-through" : ""} ${short ? "py-0.5" : "pt-0.5"}`}>
@@ -810,7 +815,7 @@ function AllDayRow({ days, events, colorOf, matches, onOpen, onCreate }: { days:
             type="button"
             onClick={(ev) => onOpen(e, ev.clientX, ev.clientY)}
             className={`z-10 mx-0.5 mt-0.5 truncate rounded px-2 text-left text-[12px] font-semibold ${matches(e) ? "" : "opacity-25"}`}
-            style={{ gridColumn: `${a + 2} / ${b + 3}`, gridRow: lane + 1, background: e.declined ? "transparent" : bg, color: e.declined ? bg : textOn(bg), border: `1px solid ${e.declined ? bg : "transparent"}` }}
+            style={{ gridColumn: `${a + 2} / ${b + 3}`, gridRow: lane + 1, background: e.declined ? "transparent" : e.outlined ? "var(--surface)" : bg, color: e.declined ? bg : e.outlined ? outlineText(bg) : textOn(bg), border: `1px solid ${e.declined || e.outlined ? bg : "transparent"}` }}
           >
             {e.title}
           </button>
@@ -849,7 +854,7 @@ function MonthGrid({ days, refDay, today, events, colorOf, matches, onOpen, onDa
                 const bg = colorOf(e);
                 return (
                   <button key={e.key} type="button" onClick={(ev) => onOpen(e, ev.clientX, ev.clientY)} className={`mb-0.5 flex w-full items-center gap-1 truncate rounded px-1 text-left text-[12px] ${matches(e) ? "" : "opacity-25"} ${e.allDay ? "font-semibold" : "hover:bg-tint"}`} style={e.allDay ? { background: bg, color: textOn(bg) } : undefined}>
-                    {!e.allDay && <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: bg }} />}
+                    {!e.allDay && <span aria-hidden className="size-2 shrink-0 rounded-full" style={e.outlined ? { border: `1.5px solid ${bg}` } : { background: bg }} />}
                     {!e.allDay && <span className="shrink-0 text-ink-2">{hm(Date.parse(e.start))}</span>}
                     <span className={`truncate ${e.visit?.status === "CANCELED" ? "line-through opacity-70" : ""}`}>{e.title}</span>
                   </button>

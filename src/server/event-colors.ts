@@ -2,6 +2,7 @@
  * Agenda central com cor por quem agendou: os eventos de visita agendados pelas consultoras (no app ou na agenda
  * delas) ganham a cor escolhida em Regras e app, para o pré-atendimento separar de relance o que é dele.
  * Só pinta evento ainda sem cor e uma vez só: se alguém trocar a cor à mão no Google, fica a escolhida.
+ * Desligada (padrão): tira a cor que o app tinha posto, se ninguém mexeu nela.
  */
 import { db } from "@/lib/db";
 import { log } from "@/lib/log";
@@ -18,7 +19,10 @@ export async function consultantEventColor() {
 
 export async function paintConsultantEvents(api: CalendarApi, calendarId: string, now = new Date()) {
   const color = await consultantEventColor();
-  if (!color) return 0;
+  if (!color) {
+    await unpaint(api, calendarId);
+    return 0;
+  }
   const rows = await db.sourceEvent.findMany({
     where: {
       calendarId,
@@ -36,7 +40,7 @@ export async function paintConsultantEvents(api: CalendarApi, calendarId: string
   for (const r of rows) {
     try {
       const res = await api.setColor(calendarId, r.googleEventId, color);
-      await db.sourceEvent.update({ where: { id: r.id }, data: { colorPaintedAt: now, ...(res === "updated" ? { colorId: color } : {}) } });
+      await db.sourceEvent.update({ where: { id: r.id }, data: { colorPaintedAt: now, ...(res === "updated" ? { colorId: color, paintedColorId: color } : {}) } });
       if (res === "updated") painted++;
     } catch (e) {
       log.warn("google.color_failed", { kind: (e as { kind?: string }).kind ?? "OTHER" });
@@ -44,4 +48,18 @@ export async function paintConsultantEvents(api: CalendarApi, calendarId: string
     }
   }
   return painted;
+}
+
+/** Opção desligada: volta à cor da agenda os eventos que o app pintou (os que mudaram de cor à mão ficam). */
+async function unpaint(api: CalendarApi, calendarId: string) {
+  const rows = await db.sourceEvent.findMany({ where: { calendarId, paintedColorId: { not: null }, googleStatus: { not: "cancelled" } }, select: { id: true, googleEventId: true, colorId: true, paintedColorId: true }, take: 40 });
+  for (const r of rows) {
+    try {
+      if (r.colorId === r.paintedColorId) await api.setColor(calendarId, r.googleEventId, null);
+      await db.sourceEvent.update({ where: { id: r.id }, data: { paintedColorId: null, colorPaintedAt: null, ...(r.colorId === r.paintedColorId ? { colorId: null } : {}) } });
+    } catch (e) {
+      log.warn("google.uncolor_failed", { kind: (e as { kind?: string }).kind ?? "OTHER" });
+      break;
+    }
+  }
 }

@@ -440,11 +440,14 @@ describe("evento com vários imóveis", () => {
     expect(await check()).toEqual(expected);
   });
 
-  it("agenda central: evento agendado pela consultora ganha a cor das consultoras uma vez só", async () => {
+  it("agenda central: cor das consultoras só se ligada, uma vez só, e sai ao desligar", async () => {
     const title = (who: string) => `Visita clt - ${who} - cod 664465 - (51) 99876-5432`;
     api.put(visitEvent("central", { start: "2026-10-07T17:00:00Z", title: title("Ana Souza"), organizer: "central@exemplo.test" }));
     api.put(visitEvent("dela", { start: "2026-10-07T13:00:00Z", title: title("Bia Lima"), extra: { creator: { email: "consultora.a@exemplo.test" } } }));
     await sync();
+    // padrão: desligado (a agenda fica como no Google)
+    expect(await paintConsultantEvents(api, "central@exemplo.test", NOW)).toBe(0);
+    await db.appSettings.update({ where: { id: 1 }, data: { consultantEventColor: "3" } });
     expect(await paintConsultantEvents(api, "central@exemplo.test", NOW)).toBe(1);
     expect((await api.getEvent("central@exemplo.test", "dela"))?.colorId).toBe("3");
     expect((await api.getEvent("central@exemplo.test", "central"))?.colorId ?? null).toBeNull();
@@ -454,10 +457,19 @@ describe("evento com vários imóveis", () => {
     await sync();
     expect(await paintConsultantEvents(api, "central@exemplo.test", NOW)).toBe(0);
     expect((await api.getEvent("central@exemplo.test", "dela"))?.colorId).toBe("5");
-    // desligado nas regras: não pinta
+    // desligar: a cor posta pelo app sai; a trocada à mão fica
+    api.put({ ...ev, colorId: "3" });
+    api.put(visitEvent("dela2", { start: "2026-10-07T19:00:00Z", title: title("Caio Reis"), extra: { creator: { email: "consultora.a@exemplo.test" } } }));
+    await sync();
+    await paintConsultantEvents(api, "central@exemplo.test", NOW);
+    expect((await api.getEvent("central@exemplo.test", "dela2"))?.colorId).toBe("3");
+    const ev2 = (await api.getEvent("central@exemplo.test", "dela2"))!;
+    api.put({ ...ev2, colorId: "7" });
+    await sync();
     await db.appSettings.update({ where: { id: 1 }, data: { consultantEventColor: "" } });
-    await db.sourceEvent.updateMany({ data: { colorId: null, colorPaintedAt: null } });
-    expect(await paintConsultantEvents(api, "central@exemplo.test", NOW)).toBe(0);
+    await paintConsultantEvents(api, "central@exemplo.test", NOW);
+    expect((await api.getEvent("central@exemplo.test", "dela2"))?.colorId).toBe("7");
+    expect(await db.sourceEvent.count({ where: { paintedColorId: { not: null } } })).toBe(0);
   });
 
   it("evento movido para depois das 21h cancela todas as visitas do evento e voltar restaura", async () => {

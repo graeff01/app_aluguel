@@ -49,7 +49,7 @@ export interface CalendarApi {
   /** cria o evento da visita marcada no app (convidados recebem o convite); devolve o id do evento */
   insertEvent(calendarId: string, ev: { summary: string; description: string; location?: string; start: Date; end: Date; attendees: string[]; allDay?: { startDay: string; endDay: string }; colorId?: string }): Promise<string>;
   /** cor do evento nesta agenda (vale também para a cópia de convidada; ninguém é notificado) */
-  setColor(calendarId: string, eventId: string, colorId: string): Promise<"updated" | "gone">;
+  setColor(calendarId: string, eventId: string, colorId: string | null): Promise<"updated" | "gone">;
   /** atualiza o evento (só se a agenda for a organizadora): horário, título, local e troca de convidada */
   patchEvent(calendarId: string, eventId: string, patch: { summary?: string; description?: string; start?: Date; end?: Date; allDay?: { startDay: string; endDay: string }; location?: string; swapAttendees?: { remove: string[]; add: string[] } }): Promise<"updated" | "not_owner" | "gone">;
   /** desfazer: reabre um evento cancelado pelo app */

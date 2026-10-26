@@ -16,7 +16,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     title: "Agenda do sistema: editar, trocar imóvel e quem agendou",
     changes: [
       { text: "Editar a visita na agenda do sistema: toque em “Editar” para mudar dia, horário, cliente, telefone, consultora ou adicionar outro imóvel. O evento na agenda Google é atualizado junto e a consultora é avisada.", who: STAFF, href: "/agenda-do-dia" },
-      { text: "Agenda central com cor: as visitas que as consultoras agendam (pelo app ou na agenda delas) ficam na cor Uva no Google e na Agenda Google do app. A cor muda em Regras e app.", who: STAFF },
+      { text: "Agenda Google do app igual à sua agenda: visitas agendadas pelas consultoras aparecem em branco com borda colorida; as suas, preenchidas.", who: STAFF, href: "/agenda-google" },
       { text: "Cada visita mostra quem agendou (“Pré-atendimento” ou “Agendada pela consultora”), e dá para filtrar a agenda por isso.", who: STAFF, href: "/agenda-do-dia" },
       { text: "Imóvel indisponível e o cliente quer ver outro no mesmo horário? Na agenda do dia, toque em “Trocar imóvel”: o imóvel antigo fica como trocado (o cliente não aparece como cancelado) e a visita segue com o novo, também na agenda Google.", who: STAFF, href: "/agenda-do-dia" },
       { text: "Quando o pré-atendimento troca o imóvel de uma visita sua, você recebe um aviso com o novo código. O horário e o cliente continuam os mesmos.", who: ["CONSULTANT"] },

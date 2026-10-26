@@ -165,7 +165,7 @@ model AppSettings {
   /// "Documentos pelo link do cliente" ligado (desligado: some dos menus e os links enviados param de abrir)
   docLinksEnabled          Boolean  @default(false)
   /// cor (paleta do Google, "1"–"11") dos eventos agendados pelas consultoras na agenda central; "" = desligado
-  consultantEventColor     String   @default("3")
+  consultantEventColor     String   @default("")
   /// e-mails colocados em cópia nos eventos que as consultoras criam pelo app (reagendar/nova visita), separados por vírgula
   calendarCcEmails         String   @default("")
   /// mensagem de confirmação de presença (WhatsApp aberto pela consultora). {cliente} {consultora} {dia} {hora} {codigo} {bairro}
@@ -372,6 +372,8 @@ model SourceEvent {
   colorId           String?
   /// quando o app pintou o evento (agendado pela consultora): pinta uma vez só, a cor trocada à mão fica
   colorPaintedAt    DateTime?
+  /// cor que o app pôs (para tirar se a opção for desligada; cor trocada à mão não é mexida)
+  paintedColorId    String?
   firstSeenAt       DateTime        @default(now())
   lastSeenAt        DateTime        @default(now())
 

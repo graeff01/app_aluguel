@@ -119,7 +119,7 @@ export class MockCalendar implements CalendarApi {
     });
     return id;
   }
-  async setColor(_cal: string, id: string, colorId: string) {
+  async setColor(_cal: string, id: string, colorId: string | null) {
     const s = this.events.get(id);
     if (!s || s.ev.status === "cancelled") return "gone" as const;
     this.put({ ...s.ev, colorId });

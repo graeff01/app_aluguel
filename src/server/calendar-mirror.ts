@@ -52,6 +52,8 @@ export type MirrorEvent = {
   canEdit: boolean;
   recurring: boolean;
   declined: boolean;
+  /** como no Google: fundo branco e borda colorida (convite ainda não aceito ou visita agendada pela consultora) */
+  outlined: boolean;
   htmlLink: string | null;
   visit: MirrorVisit | null;
 };
@@ -106,7 +108,7 @@ export async function loadMirror(actor: AuthzActor, from: Date, to: Date, opts: 
     // visitas do app ligadas a estes eventos (situação, consultora, imóveis)
     const sources = await db.sourceEvent.findMany({
       where: { googleEventId: { in: [...new Set(flat.map((x) => x.e.id))] } },
-      select: { calendarId: true, googleEventId: true, visit: { select: { id: true, status: true, evaluation: true, confirmStatus: true, propertyCode: true, consultantId: true, consultant: { select: { name: true } }, cancelReason: { select: { label: true } }, companions: { where: { excluded: false }, select: { propertyCode: true, status: true } } } } },
+      select: { calendarId: true, googleEventId: true, visit: { select: { id: true, status: true, evaluation: true, confirmStatus: true, propertyCode: true, consultantId: true, scheduledBy: { select: { role: true } }, consultant: { select: { name: true } }, cancelReason: { select: { label: true } }, companions: { where: { excluded: false }, select: { propertyCode: true, status: true } } } } },
     });
     const visitOf = new Map(sources.map((s) => [s.googleEventId, s.visit]));
     const events: MirrorEvent[] = flat.map(({ cal, e }) => {
@@ -136,6 +138,7 @@ export async function loadMirror(actor: AuthzActor, from: Date, to: Date, opts: 
         canEdit: cal.canWrite && isOwn(e, cal.id),
         recurring: !!e.recurringEventId,
         declined: self?.responseStatus === "declined",
+        outlined: self?.responseStatus === "needsAction" || v?.scheduledBy?.role === "CONSULTANT",
         htmlLink: e.htmlLink ?? null,
         visit: v
           ? {
