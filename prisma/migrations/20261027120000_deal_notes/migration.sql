@@ -1,0 +1,1 @@
+ALTER TABLE "OpportunityEvent" ADD COLUMN "isNote" BOOLEAN NOT NULL DEFAULT false;

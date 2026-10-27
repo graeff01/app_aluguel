@@ -191,6 +191,24 @@ export async function moveDealStage(actor: AuthzActor, oppId: string, input: Sta
   return { to, label: to === "FELL" ? "Caiu" : STAGE_LABEL[to] };
 }
 
+/**
+ * Atualização sem mudar de etapa: a consultora anota o andamento ("liguei, o cliente vai pensar até sexta").
+ * Fica no histórico e conta como movimento (o negócio deixa de aparecer como parado); a etapa e o tempo nela não mudam.
+ */
+export async function addDealNote(actor: AuthzActor, oppId: string, note: string, now = new Date()) {
+  const text = note.trim().slice(0, 2000);
+  if (text.length < 3) throw new AppError("VALIDATION", "Escreva a atualização.", { note: "Obrigatório." });
+  const settings = await getSettings();
+  return db.$transaction(async (tx) => {
+    const opp = await tx.opportunity.findUnique({ where: { id: oppId } });
+    if (!opp || !canViewOpportunity(actor, opp)) throw notFound();
+    assert(canUpdateOpportunity(actor, opp, settings));
+    // toStage vazio: não conta como entrada em etapa (datas e tempo por etapa continuam certos)
+    await tx.opportunityEvent.create({ data: { opportunityId: oppId, fromStatus: opp.status, toStatus: opp.status, fromStage: opp.stage, toStage: null, isNote: true, note: text, authorId: actor.id, createdAt: now } });
+    await audit(tx, { actorId: actor.id, action: "deal.note_added", entityType: "Opportunity", entityId: oppId });
+  });
+}
+
 // ─────────────── Indicadores do fluxo ───────────────
 
 const DAY = 86400_000;

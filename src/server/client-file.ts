@@ -73,7 +73,7 @@ export async function clientFile(actor: AuthzActor, clientId: string, now = new 
         property: { select: { code: true } },
         responsible: { select: { name: true } },
         lostReason: { select: { label: true } },
-        events: { orderBy: { createdAt: "asc" }, select: { id: true, createdAt: true, fromStatus: true, toStatus: true, toStage: true, note: true, author: { select: { name: true } } } },
+        events: { orderBy: { createdAt: "asc" }, select: { id: true, createdAt: true, fromStatus: true, toStatus: true, toStage: true, isNote: true, note: true, author: { select: { name: true } } } },
       },
     }),
     db.clientSearch.findMany({ where: { clientId, ...(own ? { consultantId: me } : {}) }, orderBy: { startedAt: "desc" } }),
@@ -191,7 +191,7 @@ export async function clientFile(actor: AuthzActor, clientId: string, now = new 
 
   for (const o of opps) {
     for (const e of o.events) {
-      const label = e.toStatus === "LOST" ? FELL_LABEL : e.toStage ? STAGE_LABEL[e.toStage as Stage] : e.fromStatus ? FOLLOW_UP_LABEL : "Negócio aberto";
+      const label = e.isNote ? "Atualização do negócio" : e.toStatus === "LOST" ? FELL_LABEL : e.toStage ? STAGE_LABEL[e.toStage as Stage] : e.fromStatus ? FOLLOW_UP_LABEL : "Negócio aberto";
       const tone: Tone = e.toStatus === "LOST" ? "bad" : e.toStatus === "CLOSED_WON" ? "good" : "accent";
       timeline.push({
         id: `deal-${e.id}`,

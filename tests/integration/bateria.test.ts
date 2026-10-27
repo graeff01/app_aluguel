@@ -559,6 +559,19 @@ describe("fluxo pós-visita", () => {
     expect(await db.opportunity.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({ status: "FOLLOW_UP", stage: "OWNER_PENDING", lostStage: null });
   });
 
+  it("atualização sem mudar de etapa: fica no histórico, etapa e tempo nela não mudam; só a responsável ou a gestão", async () => {
+    const { moveDealStage, addDealNote } = await import("@/server/deal-flow");
+    const o = await ready();
+    await moveDealStage(u.a, o.id, { expectedVersion: await ver(o.id), to: "NEGOTIATION", proposedRent: "4.200", intendedGuarantee: await gid("Aluga Rápido") }, NOW);
+    const before = await db.opportunity.findUniqueOrThrow({ where: { id: o.id } });
+    await expect(addDealNote(u.a, o.id, " ")).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(addDealNote(u.b, o.id, "não é meu")).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await addDealNote(u.a, o.id, "Cliente vai decidir até sexta", new Date(NOW.getTime() + 3600_000));
+    const after = await db.opportunity.findUniqueOrThrow({ where: { id: o.id }, include: { events: { where: { isNote: true } } } });
+    expect(after).toMatchObject({ stage: "NEGOTIATION", status: before.status, version: before.version, stageChangedAt: before.stageChangedAt });
+    expect(after.events[0]).toMatchObject({ isNote: true, note: "Cliente vai decidir até sexta", toStage: null, fromStage: "NEGOTIATION" });
+  });
+
   it("negócio parado na mesma situação: alerta para a consultora e para a gestão (uma vez por dia)", async () => {
     const { moveDealStage } = await import("@/server/deal-flow");
     const o = await ready();
@@ -574,6 +587,12 @@ describe("fluxo pós-visita", () => {
     const again: string[] = [];
     await sendOperationalAlerts(new Date(NOW.getTime() + 60_000), { send: async (_t, p) => (again.push(p.title), "ok"), email: null });
     expect(again.filter((t) => /parado/.test(t))).toEqual([]);
+    // a consultora anotou uma atualização: não está mais parado (no dia seguinte não avisa)
+    const { addDealNote } = await import("@/server/deal-flow");
+    await addDealNote(u.a, o.id, "Cliente pediu mais uns dias", NOW);
+    const next: string[] = [];
+    await sendOperationalAlerts(new Date(NOW.getTime() + 24 * H), { send: async (_t, p) => (next.push(p.title), "ok"), email: null });
+    expect(next.filter((t) => /parado/.test(t))).toEqual([]);
   });
 });
 

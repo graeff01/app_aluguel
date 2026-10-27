@@ -10,7 +10,7 @@ import { createVisitEventInGoogle, rescheduleVisit } from "@/server/reschedule";
 import { cancelOldEvent } from "@/server/google-write";
 import { createStaffVisit } from "@/server/staff-visit";
 import { staffEditVisit } from "@/server/staff-edit";
-import { moveDealStage } from "@/server/deal-flow";
+import { moveDealStage, addDealNote } from "@/server/deal-flow";
 import { setPresence } from "@/server/presence";
 import { followUpAction } from "@/server/followups";
 import { refreshPropertyNow } from "@/server/property-preview";
@@ -332,6 +332,18 @@ export async function createStaffVisitAction(_: ActionState, fd: FormData): Prom
 }
 
 /** Fluxo pós-visita: muda a situação do negócio (com os dados da etapa). */
+/** Atualização do negócio sem mudar de etapa (fica no histórico). */
+export async function dealNoteAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const id = str(fd, "oppId");
+  const s = await runAction(async (a) => {
+    await addDealNote(a, id, str(fd, "note"));
+    return "Atualização registrada.";
+  });
+  if (!s.ok) return s;
+  revalidatePath("/", "layout");
+  redirect(`/oportunidades/${id}?salvo=NOTE`);
+}
+
 export async function dealStageAction(_: ActionState, fd: FormData): Promise<ActionState> {
   const id = str(fd, "oppId");
   let to = "";

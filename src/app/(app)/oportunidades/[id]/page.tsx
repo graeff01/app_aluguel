@@ -13,6 +13,7 @@ import { Badge, KeyValue, PageHeader, Panel, Section, cx } from "@/components/ui
 import { VisitCard } from "@/components/visit-card";
 import { TransferForm } from "./forms";
 import { DealForm } from "./deal-form";
+import { DealNoteForm } from "./note-form";
 
 export const metadata = { title: "Negócio" };
 
@@ -80,7 +81,7 @@ export default async function OppPage({ params, searchParams }: { params: Promis
         }
       />
       <ClientFileLink clientId={opp.clientId} className="-mt-2 mb-5" />
-      {salvo && <p role="status" className="mb-5 rounded-2xl bg-good-soft px-4 py-3 text-sm font-semibold text-good">{salvo === "SIGNED" ? "✓ Contrato assinado. O marketing foi avisado para postar." : salvo === "FELL" ? "✓ Registrado que o negócio caiu." : `✓ Situação atualizada: ${STAGE_LABEL[salvo as Stage] ?? ""}.`}</p>}
+      {salvo && <p role="status" className="mb-5 rounded-2xl bg-good-soft px-4 py-3 text-sm font-semibold text-good">{salvo === "SIGNED" ? "✓ Contrato assinado. O marketing foi avisado para postar." : salvo === "FELL" ? "✓ Registrado que o negócio caiu." : salvo === "NOTE" ? "✓ Atualização registrada no histórico." : `✓ Situação atualizada: ${STAGE_LABEL[salvo as Stage] ?? ""}.`}</p>}
 
       {/* linha do tempo do fluxo */}
       <ol className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
@@ -131,7 +132,12 @@ export default async function OppPage({ params, searchParams }: { params: Promis
         </section>
       )}
       {canUpdate && (
-        <Section title="Atualizar situação">
+        <Section title="Registrar atualização">
+          <DealNoteForm oppId={opp.id} stageLabel={situationLabel({ stage, status: opp.status })} />
+        </Section>
+      )}
+      {canUpdate && (
+        <Section title="Mudar de etapa">
           <DealForm
             opp={{ id: opp.id, version: opp.version, stage, lost, intendedGuarantee: opp.intendedGuarantee, inspectionNeeded: opp.inspectionNeeded }}
             lists={{ guarantees, agents, highlights, missing, lostReasons }}
@@ -162,7 +168,7 @@ export default async function OppPage({ params, searchParams }: { params: Promis
                 {fmt.dateTime(e.createdAt)} · {e.author?.name ?? "Sistema"}
               </p>
               <p className="font-medium">
-                {e.toStatus === "LOST" ? FELL_LABEL : e.toStage ? STAGE_LABEL[e.toStage as Stage] : e.fromStatus && e.fromStatus !== e.toStatus ? "Situação alterada" : "Em acompanhamento"}
+                {e.isNote ? `Atualização${e.fromStage ? ` · ${STAGE_LABEL[e.fromStage as Stage] ?? ""}` : ""}` : e.toStatus === "LOST" ? FELL_LABEL : e.toStage ? STAGE_LABEL[e.toStage as Stage] : e.fromStatus && e.fromStatus !== e.toStatus ? "Situação alterada" : "Em acompanhamento"}
               </p>
               {e.note && <p className="whitespace-pre-wrap text-ink-2">{e.note}</p>}
             </li>

@@ -577,7 +577,7 @@ export async function sendOperationalAlerts(now = new Date(), opts: { send?: Sen
   // negócios parados na mesma situação há X dias (fluxo pós-visita): consultora responsável e gestão
   if (localHour(now) >= settings.reminderHour && localWeekday(now) !== 0) {
     const limit = new Date(now.getTime() - settings.staleOpportunityDays * 24 * H);
-    const stale = await db.opportunity.findMany({ where: { status: { in: ["FOLLOW_UP", "DOCS_REVIEW"] }, stage: { not: null }, stageChangedAt: { lt: limit } }, select: { responsibleId: true } });
+    const stale = await db.opportunity.findMany({ where: { status: { in: ["FOLLOW_UP", "DOCS_REVIEW"] }, stage: { not: null }, stageChangedAt: { lt: limit }, events: { none: { isNote: true, createdAt: { gte: limit } } } }, select: { responsibleId: true } });
     const per = new Map<string, number>();
     for (const o of stale) if (o.responsibleId) per.set(o.responsibleId, (per.get(o.responsibleId) ?? 0) + 1);
     const label = (n: number) => (n === 1 ? "1 negócio parado" : `${n} negócios parados`);

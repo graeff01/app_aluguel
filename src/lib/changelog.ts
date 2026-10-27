@@ -12,6 +12,13 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-27",
+    title: "Atualização sem mudar de etapa",
+    changes: [
+      { text: "No negócio, “Registrar atualização”: anote o andamento (ex.: o cliente vai decidir até sexta) sem mudar de etapa. Fica no histórico e o negócio deixa de contar como parado.", who: ["CONSULTANT", "MANAGER"], href: "/oportunidades" },
+    ],
+  },
+  {
     id: "2026-10-26-b",
     title: "Andamento com as etapas novas",
     changes: [

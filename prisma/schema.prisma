@@ -752,6 +752,8 @@ model OpportunityEvent {
   fromStage     DealStage?
   toStage       DealStage?
   note          String?
+  /// atualização sem mudar de etapa ("liguei, o cliente vai pensar"): só anotação no histórico
+  isNote        Boolean            @default(false)
   authorId      String?
   author        User?              @relation(fields: [authorId], references: [id])
   createdAt     DateTime           @default(now())
