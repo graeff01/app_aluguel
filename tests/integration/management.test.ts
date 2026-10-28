@@ -1,4 +1,5 @@
 // Gestão: funil, oportunidades paradas, cobrança, resumo semanal, e-mail e registro de erros (dados sintéticos).
+import type { AuthzActor } from "@/lib/authz";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { concludeVisit, createManualVisit } from "@/server/visits";
@@ -12,7 +13,7 @@ let u: Awaited<ReturnType<typeof makeUsers>>;
 let seq = 0;
 const visit = (consultantId: string, start: string, code = "100", name = "Cliente Sintético", phone = "") =>
   createManualVisit(u.admin, { requestId: `mg-${++seq}-req`, scheduledStart: start, clientName: name, phoneRaw: phone, propertyCode: code, consultantId });
-const conclude = (actor: { id: string; role: "ADMIN" | "MANAGER" | "CONSULTANT" | "PRE_SERVICE" | "MARKETING" }, id: string, evaluation: "POSITIVE" | "NEGATIVE" | "UNDECIDED", now: Date) =>
+const conclude = (actor: AuthzActor, id: string, evaluation: "POSITIVE" | "NEGATIVE" | "UNDECIDED", now: Date) =>
   concludeVisit(actor, id, { requestId: `conclude-${++seq}-req`, expectedVersion: 1, status: "DONE", evaluation, negativeReasonId: null, note: "ok" }, now);
 
 beforeEach(async () => {

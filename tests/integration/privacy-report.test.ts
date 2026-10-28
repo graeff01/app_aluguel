@@ -1,4 +1,5 @@
 // LGPD (anonimização e retenção) e relatório mensal — dados sintéticos; Google SIMULADO.
+import type { AuthzActor } from "@/lib/authz";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { concludeVisit, createManualVisit } from "@/server/visits";
@@ -13,7 +14,7 @@ let u: Awaited<ReturnType<typeof makeUsers>>;
 let seq = 0;
 const visit = (consultantId: string, start: string, name = "Fulana de Tal", phone = "(51) 99555-0101", code = "761739") =>
   createManualVisit(u.admin, { requestId: `pr-${++seq}-req`, scheduledStart: start, clientName: name, phoneRaw: phone, propertyCode: code, consultantId });
-const done = (actor: { id: string; role: "ADMIN" | "MANAGER" | "CONSULTANT" | "PRE_SERVICE" | "MARKETING" }, id: string, evaluation: "POSITIVE" | "NEGATIVE" | "UNDECIDED", negativeReasonId: string | null = null) =>
+const done = (actor: AuthzActor, id: string, evaluation: "POSITIVE" | "NEGATIVE" | "UNDECIDED", negativeReasonId: string | null = null) =>
   concludeVisit(actor, id, { requestId: `prd-${++seq}-req`, expectedVersion: 1, status: "DONE", evaluation, negativeReasonId, note: "Ligou para Fulana no 51 99555-0101" }, new Date("2026-10-08T12:00:00Z"));
 
 beforeEach(async () => {

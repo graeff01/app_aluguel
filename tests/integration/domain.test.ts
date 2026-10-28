@@ -1,4 +1,5 @@
 // Regras de negócio com Postgres real (dados sintéticos).
+import type { AuthzActor } from "@/lib/authz";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { assignVisit, concludeVisit, correctVisitData, createManualVisit, setVisitExcluded } from "@/server/visits";
@@ -12,7 +13,7 @@ let u: Awaited<ReturnType<typeof makeUsers>>;
 let seq = 0;
 const rid = () => `req-${Date.now()}-${++seq}`;
 
-async function manual(actor: { id: string; role: "ADMIN" | "MANAGER" | "CONSULTANT" | "PRE_SERVICE" | "MARKETING" }, p: { name?: string; phone?: string; code?: string; start?: string; consultantId?: string } = {}) {
+async function manual(actor: AuthzActor, p: { name?: string; phone?: string; code?: string; start?: string; consultantId?: string } = {}) {
   return createManualVisit(actor, {
     requestId: rid(),
     scheduledStart: p.start ?? "2026-10-06T10:00",
