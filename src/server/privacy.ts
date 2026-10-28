@@ -41,6 +41,9 @@ async function anonymizeTx(tx: Tx, clientId: string, actorId: string | null, rea
   await tx.opportunityEvent.updateMany({ where: { opportunityId: { in: oppIds }, note: { not: null } }, data: { note: ANON_NOTE } });
   await tx.clientSearch.updateMany({ where: { clientId }, data: { note: null, mustNot: null, closeNote: null, areas: [] } });
   await tx.proposal.updateMany({ where: { clientId }, data: { clientName: ANON_NAME, phoneEnc: null, phoneHash: null, note: null, resultNote: null, purgedAt: new Date() } });
+  const radarIds = (await tx.clientRadar.findMany({ where: { clientId }, select: { id: true } })).map((r) => r.id);
+  await tx.clientRadar.updateMany({ where: { id: { in: radarIds } }, data: { clientName: ANON_NAME, phoneEnc: null, phoneHash: null, closeNote: null, purgedAt: new Date() } });
+  await tx.radarEvent.updateMany({ where: { radarId: { in: radarIds } }, data: { note: ANON_NOTE } });
   await audit(tx, { actorId, action: "client.anonymized", entityType: "Client", entityId: clientId, changes: { motivo: reason, visitas: visitIds.length } });
   return true;
 }

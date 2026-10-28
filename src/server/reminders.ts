@@ -8,7 +8,7 @@
 import { dueAftercare } from "./aftercare";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
-import { dateOnlyKey, dayKey, startOfDayInTz, TZ } from "@/lib/time";
+import { dateOnlyFromKey, dateOnlyKey, dayKey, startOfDayInTz, TZ } from "@/lib/time";
 import { pushConfig, sendPush, type PushPayload, type PushTarget } from "@/lib/push";
 
 export type Sender = (target: PushTarget, payload: PushPayload) => Promise<"ok" | "gone" | "error">;
@@ -583,6 +583,12 @@ export async function sendOperationalAlerts(now = new Date(), opts: { send?: Sen
     const label = (n: number) => (n === 1 ? "1 negócio parado" : `${n} negócios parados`);
     for (const [uid, n] of per) await once(uid, "deals_stale", { title: `${label(n)} há mais de ${settings.staleOpportunityDays} dias`, body: "Atualize a situação (ou registre que caiu). Toque para ver.", url: "/oportunidades?paradas=1", tag: `negocios-${day}` });
     if (stale.length) for (const m of staff.filter((x) => x.role === "MANAGER")) await once(m.id, "deals_stale_team", { title: `Equipe: ${label(stale.length)} há mais de ${settings.staleOpportunityDays} dias`, body: "Sem mudança de situação no fluxo. Toque para ver.", url: "/oportunidades?paradas=1", tag: `negocios-${day}` });
+  }
+
+  // radar de clientes: pedidos à captação com o dia de cobrar vencido (pré-atendimento)
+  if (localHour(now) >= settings.reminderHour && localWeekday(now) !== 0) {
+    const due = await db.clientRadar.count({ where: { status: { in: ["SEARCHING", "FOUND"] }, followUpOn: { lte: dateOnlyFromKey(day) } } });
+    if (due) for (const s of staff.filter((x) => x.role === "PRE_SERVICE")) await once(s.id, "radar_due", { title: due === 1 ? "1 cliente do radar para cobrar hoje" : `${due} clientes do radar para cobrar hoje`, body: "Cobre a captação ou dê o retorno ao cliente. Toque para ver.", url: "/radar?aba=cobrar", tag: `radar-${day}` });
   }
 
   // 16h: confirmar com os clientes as visitas de amanhã (WhatsApp com mensagem pronta)

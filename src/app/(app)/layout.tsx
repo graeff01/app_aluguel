@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { countDueRadar } from "@/server/radar";
 import { requireActor } from "@/lib/require";
 import { isMobileRequest } from "@/lib/session";
 import { hasGlobalView, isAdmin, visitScope } from "@/lib/authz";
@@ -42,12 +43,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const preService = actor.role === "PRE_SERVICE";
   const marketing = actor.role === "MARKETING";
   // leituras do menu em paralelo (aparecem em todas as telas)
-  const [settings, preOpen, propNew, toPost, agents] = await Promise.all([
+  const [settings, preOpen, propNew, toPost, agents, radarDue] = await Promise.all([
     getSettings(),
     countOpenFor(actor),
     marketing ? Promise.resolve(0) : countNewProposalsFor(actor),
     marketing || global ? db.leasePost.count({ where: { postedAt: null } }) : Promise.resolve(0),
     global ? db.reason.count({ where: { kind: "LEASE_AGENT", active: true } }) : Promise.resolve(1),
+    countDueRadar(actor, now),
   ]);
   const [pending, health, reviewCount] = await Promise.all([
     db.visit.count({
@@ -86,6 +88,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             { href: "/relatorios", label: "Relatórios", icon: "audit" },
             { href: "/pre-analises", label: "Pré-análises", icon: "clients", badge: preOpen },
             { href: "/propostas", label: "Propostas", icon: "pipeline", badge: propNew },
+            { href: "/radar", label: "Radar de clientes", icon: "pulse", badge: radarDue },
             { href: "/hoje", label: "Hoje", icon: "today" },
             { href: "/pendencias", label: "Pendências", icon: "pending", badge: pending },
             { href: "/revisao", label: "Revisão", icon: "review", badge: reviewCount },
@@ -146,6 +149,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/pre-analises", label: "Pré-análises", icon: "clients", badge: preOpen },
     { href: "/pre-analises/nova", label: "Nova", icon: "plus" },
     { href: "/propostas", label: "Propostas", icon: "pipeline", badge: propNew },
+    { href: "/radar", label: "Radar", icon: "pulse", badge: radarDue },
     { href: "/agenda-google", label: "Agenda Google", icon: "today" },
     { href: "/agenda-do-dia", label: "Visitas", icon: "today" },
     { href: "/agenda-do-dia/nova", label: "Agendar", icon: "plus" },

@@ -197,6 +197,7 @@ export async function mergeClients(actor: AuthzActor, sourceId: string, targetId
       await tx.clientSearch.delete({ where: { id: srcSearch.id } });
     }
     await tx.clientSearch.updateMany({ where: { clientId: sourceId }, data: { clientId: targetId } });
+    await tx.clientRadar.updateMany({ where: { clientId: sourceId }, data: { clientId: targetId } });
     await tx.client.update({ where: { id: sourceId }, data: { mergedIntoId: targetId } });
     const hasValidPhone = await tx.clientPhone.count({ where: { clientId: targetId, valid: true } });
     if (hasValidPhone) await tx.client.update({ where: { id: targetId }, data: { identityStatus: "CONFIRMED" } });

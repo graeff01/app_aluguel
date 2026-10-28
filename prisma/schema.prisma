@@ -79,6 +79,9 @@ model User {
   proposalsCreated    Proposal[]    @relation("ProposalCreatedBy")
   proposalsAssigned   Proposal[]    @relation("ProposalConsultant")
   proposalsUpdated    Proposal[]    @relation("ProposalStatusBy")
+  radarCreated        ClientRadar[] @relation("RadarCreatedBy")
+  radarClosed         ClientRadar[] @relation("RadarClosedBy")
+  radarEvents         RadarEvent[]
 }
 
 /// E-mails usados para reconhecer a consultora entre os convidados do evento.
@@ -410,6 +413,7 @@ model Client {
   searches      ClientSearch[]
   preAnalyses   PreAnalysis[]
   proposals     Proposal[]
+  radar         ClientRadar[]
 
   @@index([identityStatus])
 }
@@ -1177,3 +1181,65 @@ model ClientSearch {
   @@index([status, followUpOn])
 }
 
+
+// ───────────────────────────── Radar de clientes ─────────────────────────────
+
+enum RadarStatus {
+  /// com a captação, procurando
+  SEARCHING
+  /// a captação achou imóvel(is): falta o retorno ao cliente
+  FOUND
+  CLOSED
+}
+
+/// Pedido que o pré-atendimento passa à captação quando a base não tem o perfil que o cliente procura.
+model ClientRadar {
+  id              String        @id @default(cuid())
+  requestId       String?       @unique
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  createdById     String
+  createdBy       User          @relation("RadarCreatedBy", fields: [createdById], references: [id])
+  clientName      String
+  /// telefone cifrado + impressão (HMAC) para ligar ao cadastro do cliente
+  phoneEnc        String?
+  phoneHash       String?
+  clientId        String?
+  client          Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  /// o que o cliente procura (texto livre) e o perfil (opcional)
+  wants           String
+  maxBudgetCents  Int?
+  areas           String[]      @default([])
+  propertyType    String?
+  bedrooms        Int?
+  /// quando foi passado à captação (null = ainda não passou)
+  sentToCaptureAt DateTime?
+  status          RadarStatus   @default(SEARCHING)
+  /// imóveis que a captação achou
+  foundCodes      String[]      @default([])
+  /// dia de cobrar a captação / dar retorno ao cliente
+  followUpOn      DateTime      @db.Date
+  lastUpdateAt    DateTime      @default(now())
+  closedAt        DateTime?
+  closedById      String?
+  closedBy        User?         @relation("RadarClosedBy", fields: [closedById], references: [id])
+  closeReason     String?
+  closeNote       String?
+  /// telefone apagado (retenção LGPD)
+  purgedAt        DateTime?
+  events          RadarEvent[]
+
+  @@index([status, followUpOn])
+}
+
+model RadarEvent {
+  id        String      @id @default(cuid())
+  radarId   String
+  radar     ClientRadar @relation(fields: [radarId], references: [id], onDelete: Cascade)
+  note      String
+  authorId  String?
+  author    User?       @relation(fields: [authorId], references: [id])
+  createdAt DateTime    @default(now())
+
+  @@index([radarId, createdAt])
+}

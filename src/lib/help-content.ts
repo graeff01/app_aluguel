@@ -179,6 +179,22 @@ export const HELP: HelpTopic[] = [
     tips: ["Você é avisada quando a consultora envia ao proprietário e quando ele responde."],
   },
   {
+    id: "radar",
+    title: "Radar de clientes",
+    who: ["PRE_SERVICE", "MANAGER"],
+    href: "/radar",
+    paths: [/^\/radar/],
+    summary: "Cliente procura um perfil que não temos na base: o pedido vai para a captação e fica no radar até ter resposta.",
+    steps: [
+      "Toque em Radar e depois em “Novo no radar”.",
+      "Preencha nome, telefone e o que o cliente procura (tipo, quartos, valor e bairros são opcionais).",
+      "Marque “Já passei para a captação” e escolha em quantos dias cobrar.",
+      "No dia de cobrar, o pedido aparece em “Cobrar hoje” e você recebe um aviso. Registre o que aconteceu e a próxima data.",
+      "Quando a captação achar, coloque os códigos dos imóveis na atualização. No fim, encerre com o resultado (agendou visita, alugou, desistiu…).",
+    ],
+    tips: ["O número ao lado de Radar no menu mostra quantos pedidos estão para cobrar hoje."],
+  },
+  {
     id: "agenda-google",
     title: "Agenda Google (no app)",
     who: ["PRE_SERVICE"],

@@ -12,6 +12,13 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-28",
+    title: "Radar de clientes",
+    changes: [
+      { text: "Radar de clientes: quando o cliente procura um perfil que não temos na base, registre o pedido que vai para a captação. O app lembra você de cobrar, guarda cada atualização e os imóveis achados, até o resultado final.", who: STAFF, href: "/radar" },
+    ],
+  },
+  {
     id: "2026-10-27",
     title: "Atualização sem mudar de etapa",
     changes: [
