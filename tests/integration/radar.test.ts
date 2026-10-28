@@ -93,3 +93,37 @@ describe("radar de clientes", () => {
     await expect(reopenRadar(jasmin, done.id)).rejects.toMatchObject({ code: "INVALID_STATE" });
   });
 });
+
+describe("radar: opções parecidas no site", () => {
+  it("busca por bairro com o perfil, filtra tipo/valor/quartos, ordena e não repete os já indicados; site fora → aviso", async () => {
+    const { similarOnSite, addSuggestedToRadar } = await import("@/server/radar");
+    const ORIGIN = "https://www.auxiliadorapredial.com.br";
+    const item = (codigo: string, cat: string, dorm: string, valor: number, total: number, bairro: string) => ({ codigo, categoria: { nome: cat }, dormitorios: dorm, valores: { valor, valorTotal: total }, endereco: { bairro: { nome: bairro } }, fotos: [] });
+    const html = (items: unknown[]) => `<script>self.__next_f.push([1,${JSON.stringify(`1e:${JSON.stringify(["$", "$L1f", null, { initialData: items, totalItems: items.length }])}`)}])</script>`;
+    const urls: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      urls.push(url);
+      const list = url.includes("+centro")
+        ? [item("1001", "Casa", "2", 2000, 2300, "Centro"), item("1002", "Casa", "1", 1500, 1600, "Centro"), item("1003", "Apartamento", "2", 1800, 2000, "Centro"), item("1004", "Casa", "3", 2600, 2700, "Centro"), item("1005", "Casa", "2", 3000, 3400, "Centro")]
+        : [item("2001", "Casa", "2", 2100, 2200, "Igara")];
+      return new Response(html(list), { status: 200 });
+    }) as unknown as typeof fetch;
+    const r = await createRadar(jasmin, valid({ areas: "Centro, Igara", propertyType: "Casa", bedrooms: "2", maxBudget: "2.500" }), NOW);
+    const radar = await db.clientRadar.findUniqueOrThrow({ where: { id: r.id } });
+    await expect(similarOnSite(u.a, radar, { fetchImpl, origin: ORIGIN })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const s = await similarOnSite(jasmin, radar, { fetchImpl, origin: ORIGIN });
+    expect(urls.some((x) => x === `${ORIGIN}/alugar/residencial/rs+canoas+centro?tipoImovel=casa&quartos=2&valorMax=2500`)).toBe(true);
+    // 1002: 1 quarto; 1003: apartamento; 1005: acima de 10% do valor → fora. 1004: 2.700 (até 10% acima) entra depois
+    expect(s.items.map((x) => x.code)).toEqual(["2001", "1001", "1004"]);
+    expect(s.items[0].reasons).toEqual(["dentro do valor", "no Igara", "2 quartos"]);
+    // indicado ao cliente: vai para os imóveis do pedido e some das sugestões
+    await addSuggestedToRadar(jasmin, r.id, "1001", NOW);
+    const after = await db.clientRadar.findUniqueOrThrow({ where: { id: r.id } });
+    expect(after.foundCodes).toEqual(["1001"]);
+    expect((await similarOnSite(jasmin, after, { fetchImpl, origin: ORIGIN })).items.map((x) => x.code)).not.toContain("1001");
+    // site fora do ar
+    const down = (async () => { throw new Error("offline"); }) as unknown as typeof fetch;
+    const other = await createRadar(jasmin, valid({ areas: "Niterói", bedrooms: "4" }), NOW);
+    expect((await similarOnSite(jasmin, await db.clientRadar.findUniqueOrThrow({ where: { id: other.id } }), { fetchImpl: down, origin: ORIGIN })).error).toBe(true);
+  });
+});

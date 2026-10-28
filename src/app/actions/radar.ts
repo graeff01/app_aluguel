@@ -2,7 +2,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { runAction, str, type ActionState } from "@/lib/action";
-import { closeRadar, createRadar, reopenRadar, updateRadar } from "@/server/radar";
+import { addSuggestedToRadar, closeRadar, createRadar, reopenRadar, updateRadar } from "@/server/radar";
 
 export async function createRadarAction(_: ActionState, fd: FormData): Promise<ActionState> {
   let id = "";
@@ -52,6 +52,15 @@ export async function reopenRadarAction(_: ActionState, fd: FormData): Promise<A
   const s = await runAction(async (a) => {
     await reopenRadar(a, str(fd, "id"));
     return "Pedido reaberto.";
+  });
+  if (s.ok) revalidatePath("/", "layout");
+  return s;
+}
+
+export async function addSuggestedAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const s = await runAction(async (a) => {
+    await addSuggestedToRadar(a, str(fd, "id"), str(fd, "code"));
+    return `Imóvel ${str(fd, "code")} indicado.`;
   });
   if (s.ok) revalidatePath("/", "layout");
   return s;

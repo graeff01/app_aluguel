@@ -22,6 +22,7 @@ import { log } from "@/lib/log";
 import { addDays, dateOnlyFromKey, dateOnlyKey, dayKey } from "@/lib/time";
 import { clientByPhone, phoneHash } from "./client-links";
 import { parseProfile } from "./client-search";
+import { SITE_CITY, searchSite, siteOrigin, siteSearchUrl, type SiteListing, type SiteQuery } from "./site-search";
 import type { RadarStatus } from "@/generated/prisma/enums";
 
 const DAY = 86400_000;
@@ -142,7 +143,7 @@ export async function radarDetail(actor: AuthzActor, id: string) {
  * Atualização: o que aconteceu, quando cobrar de novo e, se a captação achou, os códigos.
  * "Passei à captação" marca a data de envio (para quem cadastrou antes de passar).
  */
-export async function updateRadar(actor: AuthzActor, id: string, input: { note: string; followUpDays?: string | number; foundCodes?: string; sentToCapture?: boolean }, now = new Date()) {
+export async function updateRadar(actor: AuthzActor, id: string, input: { note: string; followUpDays?: string | number; foundCodes?: string; sentToCapture?: boolean; foundLabel?: string }, now = new Date()) {
   assert(canUseRadar(actor));
   const note = input.note.trim().slice(0, 1500);
   if (note.length < 3) throw new AppError("VALIDATION", "Conte o que aconteceu.", { note: "Obrigatório." });
@@ -163,7 +164,7 @@ export async function updateRadar(actor: AuthzActor, id: string, input: { note: 
         ...(markSent ? { sentToCaptureAt: now } : {}),
       },
     });
-    const extra = [markSent ? "Passado à captação." : "", codes.length ? `Captação achou: ${codes.join(", ")}.` : ""].filter(Boolean).join(" ");
+    const extra = [markSent ? "Passado à captação." : "", codes.length ? `${input.foundLabel ?? "Captação achou"}: ${codes.join(", ")}.` : ""].filter(Boolean).join(" ");
     await tx.radarEvent.create({ data: { radarId: id, note: [extra, note].filter(Boolean).join(" — ").slice(0, 2000), authorId: actor.id, createdAt: now } });
     await audit(tx, { actorId: actor.id, action: "radar.updated", entityType: "ClientRadar", entityId: id, changes: codes.length ? { imoveis: codes } : undefined });
   });
@@ -213,4 +214,84 @@ export async function runRadarRetention(now = new Date()) {
     await db.$transaction((tx) => audit(tx, { actorId: null, action: "radar.purged", entityType: "ClientRadar", entityId: "-", changes: { quantidade: r.count, dias: settings.preAnalysisRetentionDays } }));
   }
   return { purged: r.count };
+}
+
+// ─────────────── Opções parecidas no site ───────────────
+
+const normText = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+/** Tipo do perfil → filtro do site (quando o site tem) e palavras da categoria do anúncio. */
+const TYPE_SEARCH: Record<string, { slug: string | null; kind: "residencial" | "comercial"; words: string[] }> = {
+  Apartamento: { slug: "apartamento", kind: "residencial", words: ["apartamento"] },
+  Casa: { slug: "casa", kind: "residencial", words: ["casa"] },
+  Sobrado: { slug: "sobrado", kind: "residencial", words: ["sobrado"] },
+  Cobertura: { slug: "cobertura", kind: "residencial", words: ["cobertura"] },
+  "Kitnet / studio": { slug: null, kind: "residencial", words: ["kitnet", "kit", "studio", "jk", "loft"] },
+  Comercial: { slug: null, kind: "comercial", words: [] },
+};
+
+export type SimilarListing = SiteListing & { reasons: string[] };
+
+/**
+ * Imóveis do site parecidos com o perfil do pedido (cidade da agência): busca por bairro (até 3), tipo, quartos
+ * mínimos e valor; no app, o total (aluguel + condomínio + IPTU) pode passar até 10% do valor máximo.
+ * Sem perfil preenchido não busca. `error`: o site não respondeu.
+ */
+export async function similarOnSite(
+  actor: AuthzActor,
+  radar: { maxBudgetCents: number | null; areas: string[]; propertyType: string | null; bedrooms: number | null; foundCodes: string[] },
+  opts: { fetchImpl?: typeof fetch; origin?: string; limit?: number } = {},
+): Promise<{ items: SimilarListing[]; error: boolean; moreUrl: string | null; searched: boolean }> {
+  assert(canUseRadar(actor));
+  if (!radar.maxBudgetCents && !radar.areas.length && !radar.propertyType && !radar.bedrooms) return { items: [], error: false, moreUrl: null, searched: false };
+  const origin = opts.origin ?? (await siteOrigin());
+  const t = radar.propertyType ? TYPE_SEARCH[radar.propertyType] : undefined;
+  const base: SiteQuery = { city: SITE_CITY, kind: t?.kind ?? "residencial", type: t?.slug ?? null, minBedrooms: radar.bedrooms, maxRentReais: radar.maxBudgetCents ? radar.maxBudgetCents / 100 : null };
+  const areas = radar.areas.slice(0, 3);
+  // por bairro; sem bairro (ou bairro que o site não conhece), a cidade toda
+  let pages = await Promise.all((areas.length ? areas.map((a) => ({ ...base, area: a })) : [base, { ...base, page: 2 }]).map((q) => searchSite(q, { fetchImpl: opts.fetchImpl, origin })));
+  if (areas.length && pages.every((p) => p !== null && p.length === 0)) pages = await Promise.all([base, { ...base, page: 2 }].map((q) => searchSite(q, { fetchImpl: opts.fetchImpl, origin })));
+  const error = pages.every((p) => p === null);
+  const wantedAreas = areas.map(normText);
+  const seen = new Set(radar.foundCodes);
+  const scored: (SimilarListing & { score: number })[] = [];
+  for (const it of pages.flatMap((p) => p ?? [])) {
+    if (seen.has(it.code)) continue;
+    seen.add(it.code);
+    const reasons: string[] = [];
+    let score = 0;
+    if (t?.words.length) {
+      const cat = normText(it.category ?? "");
+      if (!t.words.some((w) => new RegExp(`\\b${w}\\b`).test(cat))) continue;
+    }
+    const price = it.totalCents ?? it.rentCents;
+    if (radar.maxBudgetCents) {
+      if (!price || price > radar.maxBudgetCents * 1.1) continue;
+      reasons.push(price <= radar.maxBudgetCents ? "dentro do valor" : "um pouco acima do valor");
+      score += price <= radar.maxBudgetCents ? 2 : 1;
+    }
+    if (wantedAreas.length && it.neighborhood) {
+      const n = normText(it.neighborhood);
+      if (wantedAreas.some((a) => n.includes(a) || a.includes(n))) {
+        reasons.push(`no ${it.neighborhood}`);
+        score += 3;
+      }
+    }
+    if (radar.bedrooms && it.bedrooms) {
+      if (it.bedrooms < radar.bedrooms) continue;
+      reasons.push(it.bedrooms === radar.bedrooms ? `${it.bedrooms} quarto${it.bedrooms > 1 ? "s" : ""}` : `${it.bedrooms} quartos`);
+      score += it.bedrooms === radar.bedrooms ? 2 : 1;
+    }
+    scored.push({ ...it, reasons, score });
+  }
+  const items = scored
+    .sort((a, b) => b.score - a.score || (a.totalCents ?? a.rentCents ?? 0) - (b.totalCents ?? b.rentCents ?? 0))
+    .slice(0, opts.limit ?? 8)
+    .map(({ score: _score, ...rest }) => rest);
+  return { items, error, moreUrl: siteSearchUrl(origin, { ...base, area: areas.length === 1 ? areas[0] : null }), searched: true };
+}
+
+/** Indica ao pedido um imóvel sugerido (fica nos imóveis achados e no histórico). */
+export async function addSuggestedToRadar(actor: AuthzActor, id: string, code: string, now = new Date()) {
+  if (!/^[\w-]{2,40}$/.test(code)) throw new AppError("VALIDATION", "Código inválido.");
+  return updateRadar(actor, id, { note: "Indicada ao cliente a partir das opções parecidas do site.", foundCodes: code, followUpDays: 2, foundLabel: "Opção da base" }, now);
 }

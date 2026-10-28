@@ -16,6 +16,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     title: "Radar de clientes",
     changes: [
       { text: "Radar de clientes: quando o cliente procura um perfil que não temos na base, registre o pedido que vai para a captação. O app lembra você de cobrar, guarda cada atualização e os imóveis achados, até o resultado final.", who: STAFF, href: "/radar" },
+      { text: "No pedido do radar, “Opções parecidas no site”: o app busca no site da Auxiliadora imóveis disponíveis com o perfil (bairro, tipo, quartos e valor) para você já oferecer ao cliente.", who: STAFF, href: "/radar" },
     ],
   },
   {

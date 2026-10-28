@@ -8,7 +8,9 @@ import { dateOnlyKey, fmt } from "@/lib/time";
 import { formatPhone } from "@/lib/phone";
 import { PageHeader, cx } from "@/components/ui";
 import { ContactButtons } from "@/components/contact-buttons";
+import { Suspense } from "react";
 import { RadarCloseForm, RadarReopen, RadarUpdateForm } from "./forms";
+import { SimilarOnSite } from "./similar";
 
 export const metadata = { title: "Radar de clientes" };
 
@@ -70,6 +72,13 @@ export default async function RadarItemPage({ params, searchParams }: { params: 
 
       {!closed ? (
         <>
+          <section className="mb-6 rounded-[26px] border border-line bg-surface p-5 shadow-card sm:p-6">
+            <h2 className="text-[15px] font-bold">Opções parecidas no site</h2>
+            <p className="mb-3 text-[13px] text-ink-3">Imóveis disponíveis hoje no site da Auxiliadora com o perfil do pedido. Só o perfil vai na busca, nunca os dados do cliente.</p>
+            <Suspense fallback={<p className="text-[14px] text-ink-3">Buscando no site…</p>}>
+              <SimilarOnSite actor={actor} radar={r} />
+            </Suspense>
+          </section>
           <section className="mb-6 rounded-[26px] border border-line bg-surface p-5 shadow-card sm:p-6">
             <h2 className="mb-3 text-[15px] font-bold">Registrar atualização</h2>
             <RadarUpdateForm id={r.id} sent={!!r.sentToCaptureAt} />

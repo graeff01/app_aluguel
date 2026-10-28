@@ -192,7 +192,10 @@ export const HELP: HelpTopic[] = [
       "No dia de cobrar, o pedido aparece em “Cobrar hoje” e você recebe um aviso. Registre o que aconteceu e a próxima data.",
       "Quando a captação achar, coloque os códigos dos imóveis na atualização. No fim, encerre com o resultado (agendou visita, alugou, desistiu…).",
     ],
-    tips: ["O número ao lado de Radar no menu mostra quantos pedidos estão para cobrar hoje."],
+    tips: [
+      "O número ao lado de Radar no menu mostra quantos pedidos estão para cobrar hoje.",
+      "Com o perfil preenchido, o pedido mostra “Opções parecidas no site”: imóveis disponíveis agora no site da Auxiliadora. Ofereceu ao cliente? Toque em “Indiquei ao cliente”.",
+    ],
   },
   {
     id: "agenda-google",
