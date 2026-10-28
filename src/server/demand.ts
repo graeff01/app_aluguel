@@ -65,8 +65,21 @@ export async function demandMap(actor: AuthzActor, f: { days: number }, now = ne
   const [radars, searches, radarClosed] = await Promise.all([
     db.clientRadar.findMany({ where: { OR: [{ createdAt: { gte: since } }, { status: { in: ["SEARCHING", "FOUND"] } }] }, select: { areas: true, propertyType: true, bedrooms: true, maxBudgetCents: true, status: true, createdAt: true } }),
     db.clientSearch.findMany({ where: { OR: [{ startedAt: { gte: since } }, { status: "ACTIVE" }] }, select: { areas: true, propertyType: true, bedrooms: true, maxBudgetCents: true, status: true } }),
-    db.clientRadar.findMany({ where: { status: "CLOSED", closedAt: { gte: since } }, select: { closeReason: true, createdAt: true, closedAt: true, foundCodes: true } }),
+    db.clientRadar.findMany({ where: { status: "CLOSED", closedAt: { gte: since } }, select: { closeReason: true, createdAt: true, closedAt: true } }),
   ]);
+  return buildDemand({ radars, searches, radarClosed }, f.days, now);
+}
+
+type Profile = { areas: string[]; propertyType: string | null; bedrooms: number | null; maxBudgetCents: number | null };
+export type DemandInput = {
+  radars: (Profile & { status: string; createdAt: Date })[];
+  searches: (Profile & { status: string })[];
+  radarClosed: { closeReason: string | null; createdAt: Date; closedAt: Date | null }[];
+};
+
+/** Monta o mapa a partir dos pedidos (sem banco: usado também na demonstração com dados fictícios). */
+export function buildDemand({ radars, searches, radarClosed }: DemandInput, days: number, now = new Date()) {
+  const f = { days };
   const rows: Row[] = [
     ...radars.map((r) => ({ source: "radar" as const, areas: r.areas, propertyType: r.propertyType, bedrooms: r.bedrooms, maxBudgetCents: r.maxBudgetCents, open: r.status !== "CLOSED" })),
     ...searches.map((s) => ({ source: "busca" as const, areas: s.areas, propertyType: s.propertyType, bedrooms: s.bedrooms, maxBudgetCents: s.maxBudgetCents, open: s.status === "ACTIVE" })),
@@ -136,6 +149,11 @@ export type DemandSegment = Awaited<ReturnType<typeof demandMap>>["segments"][nu
  */
 export async function segmentSupply(actor: AuthzActor, segments: DemandSegment[], opts: { fetchImpl?: typeof fetch; origin?: string } = {}) {
   assert(canSeeDemand(actor));
+  return supplyForSegments(segments, opts);
+}
+
+/** Oferta no site (dado público) para segmentos já montados; usado também na demonstração com dados fictícios. */
+export async function supplyForSegments(segments: DemandSegment[], opts: { fetchImpl?: typeof fetch; origin?: string } = {}) {
   const origin = opts.origin ?? (await siteOrigin());
   return Promise.all(
     segments.map(async (s) => {

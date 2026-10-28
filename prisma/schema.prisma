@@ -1256,3 +1256,15 @@ model RadarEvent {
 
   @@index([radarId, createdAt])
 }
+
+/// Sugestões deixadas na demonstração pública (sem login), para a gestão ler em Configurações.
+model DemoFeedback {
+  id        String   @id @default(cuid())
+  /// qual demonstração (ex.: "captacao")
+  demo      String
+  name      String?
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([demo, createdAt])
+}

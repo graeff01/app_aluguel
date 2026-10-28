@@ -17,6 +17,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     changes: [
       { text: "Bem-vindo(a) ao app! Em “Mapa da demanda” você vê o que os clientes mais procuram e onde falta imóvel no site. Em “Pedidos”, cada pedido do pré-atendimento com o perfil (sem dados pessoais).", who: ["CAPTURE"], href: "/demanda" },
       { text: "Achou um imóvel para um pedido? Toque em “Achei imóvel” e informe o código: o pré-atendimento é avisado na hora para oferecer ao cliente.", who: ["CAPTURE"], href: "/demanda/pedidos" },
+      { text: "Demonstração da captação sem login, com dados fictícios, para mostrar a quem ainda não tem acesso: endereço do app + /demo/captacao. As sugestões deixadas lá aparecem em “Sugestões (demo)”.", who: ["MANAGER"], href: "/config/sugestoes" },
       { text: "Novo perfil “Captação” em Usuários: vê só o Mapa da demanda e os pedidos do radar (sem nome nem telefone dos clientes) e indica os imóveis que achar.", who: ["MANAGER"], href: "/config/usuarios" },
       { text: "Quando a captação achar um imóvel para um pedido do radar, você recebe um aviso e o pedido vai para “Cobrar hoje”.", who: ["PRE_SERVICE"], href: "/radar" },
     ],
