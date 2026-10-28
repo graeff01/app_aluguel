@@ -14,11 +14,16 @@ type BIP = Event & { prompt: () => Promise<void>; userChoice?: Promise<{ outcome
 type Platform = { ios: boolean; android: boolean; mobile: boolean; standalone: boolean };
 type StepKey = "welcome" | "install" | "notify" | "howto";
 
-const HOWTO: Record<"consultant" | "manager" | "pre" | "marketing", { icon: IconName; title: string; text: string }[]> = {
+const HOWTO: Record<"consultant" | "manager" | "pre" | "marketing" | "capture", { icon: IconName; title: string; text: string }[]> = {
   pre: [
     { icon: "plus", title: "Nova pré-análise", text: "Preencha os dados do titular do CPF e escolha a consultora. Ela recebe na hora, no app." },
     { icon: "pending", title: "Acompanhe o resultado", text: "Aprovado, reprovado ou pendente: você é avisada quando a consultora responder." },
     { icon: "today", title: "Cancelar visita", text: "Em Visitas, toque em Cancelar e escolha o motivo. A consultora é avisada na hora." },
+  ],
+  capture: [
+    { icon: "dashboard", title: "Onde falta imóvel", text: "O mapa mostra o que os clientes mais procuram e quantos imóveis assim existem hoje no site." },
+    { icon: "list", title: "Pedidos em aberto", text: "Cada pedido do pré-atendimento com o perfil do cliente (sem dados pessoais): bairro, tipo, quartos e valor." },
+    { icon: "check", title: "Achou? Indique", text: "Toque em “Achei imóvel” e informe o código: o pré-atendimento é avisado na hora para oferecer ao cliente." },
   ],
   marketing: [
     { icon: "home", title: "Locação fechada", text: "Quando um contrato é assinado, chega um aviso com o imóvel, o diferencial e o agenciador." },
@@ -37,7 +42,7 @@ const HOWTO: Record<"consultant" | "manager" | "pre" | "marketing", { icon: Icon
   ],
 };
 
-export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN" | "MANAGER" | "CONSULTANT" | "PRE_SERVICE" | "MARKETING"; pushKey: string | null }) {
+export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN" | "MANAGER" | "CONSULTANT" | "PRE_SERVICE" | "MARKETING" | "CAPTURE"; pushKey: string | null }) {
   const [platform, setPlatform] = useState<Platform | null>(null);
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -46,7 +51,7 @@ export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN
   const [iosHandoff, setIosHandoff] = useState(false);
   const push = usePush(pushKey);
   const first = name.split(" ")[0];
-  const kind = role === "CONSULTANT" ? "consultant" : role === "PRE_SERVICE" ? "pre" : role === "MARKETING" ? "marketing" : "manager";
+  const kind = role === "CONSULTANT" ? "consultant" : role === "PRE_SERVICE" ? "pre" : role === "MARKETING" ? "marketing" : role === "CAPTURE" ? "capture" : "manager";
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -117,6 +122,8 @@ export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN
                     ? ["Você envia a pré-análise direto para a consultora.", "Os dados do cliente ficam protegidos e criptografados.", "Você acompanha o resultado de cada uma."]
                     : kind === "marketing"
                       ? ["Cada locação fechada chega para você na hora.", "Com o diferencial e o agenciador para a postagem.", "Você marca o que já foi postado."]
+                    : kind === "capture"
+                      ? ["Você vê o que os clientes estão procurando.", "O mapa mostra onde falta imóvel no site.", "Achou um imóvel? Indique e o pré-atendimento oferece ao cliente."]
                     : ["As visitas chegam sozinhas da agenda da equipe.", "Você acompanha o dia de cada consultora ao vivo.", "Relatórios e PDFs prontos para a direção e proprietários."]
                 ).map((t) => (
                   <li key={t} className="flex items-start gap-3 text-[15px]">
@@ -184,7 +191,7 @@ export function Onboarding({ name, role, pushKey }: { name: string; role: "ADMIN
                 Ative as notificações
               </h1>
               <p className="mt-2 text-[15px] text-ink-2">
-                {kind === "consultant" ? "É assim que o app avisa antes de cada visita e pergunta “Como foi?” quando ela termina." : kind === "pre" ? "É assim que você fica sabendo quando a consultora responder a pré-análise." : kind === "marketing" ? "É assim que você fica sabendo de cada locação fechada para postar." : "É assim que você fica sabendo de visitas sem resultado e se a agenda parar."}
+                {kind === "consultant" ? "É assim que o app avisa antes de cada visita e pergunta “Como foi?” quando ela termina." : kind === "pre" ? "É assim que você fica sabendo quando a consultora responder a pré-análise." : kind === "marketing" ? "É assim que você fica sabendo de cada locação fechada para postar." : kind === "capture" ? "É assim que você fica sabendo de cada pedido novo de cliente." : "É assim que você fica sabendo de visitas sem resultado e se a agenda parar."}
               </p>
               <div className="mt-6">
                 {push.state === "on" ? (

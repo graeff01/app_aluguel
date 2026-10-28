@@ -41,6 +41,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
                   <option value="CONSULTANT">Consultora</option>
                   <option value="PRE_SERVICE">Pré-atendimento</option>
                   <option value="MARKETING">Marketing</option>
+                  <option value="CAPTURE">Captação</option>
                   <option value="MANAGER">Gestora</option>
                   <option value="ADMIN">Administrador(a)</option>
                 </Select>

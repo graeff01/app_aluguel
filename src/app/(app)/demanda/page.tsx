@@ -96,7 +96,7 @@ async function Gaps({ actor, segments, days }: { actor: AuthzActor; segments: De
 }
 
 export default async function DemandPage({ searchParams }: { searchParams: Promise<{ dias?: string }> }) {
-  const actor = await requireActor({ preService: true });
+  const actor = await requireActor({ capture: true });
   if (!canSeeDemand(actor)) notFound();
   const sp = await searchParams;
   const days = [30, 90, 180].includes(Number(sp.dias)) ? Number(sp.dias) : 90;
@@ -112,11 +112,14 @@ export default async function DemandPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <PageHeader title="Mapa da demanda" subtitle="O que os clientes procuram e não encontram, cruzado com o que existe hoje no site. Mostra onde a captação deve buscar." />
-      <div className="mb-5">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <Segmented
           label="Período"
           items={[30, 90, 180].map((n) => ({ href: `/demanda?dias=${n}`, label: `${n} dias`, active: days === n }))}
         />
+        <a href="/demanda/pedidos" className="press inline-flex min-h-10 items-center rounded-full border border-line-strong px-4 text-[13px] font-semibold">
+          Ver os pedidos em aberto →
+        </a>
       </div>
       {d.total === 0 ? (
         <Empty title="Ainda não há pedidos no período" icon="◌">

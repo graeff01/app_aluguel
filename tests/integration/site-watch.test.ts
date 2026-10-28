@@ -111,8 +111,12 @@ describe("mapa da demanda", () => {
     await createRadar(jasmin, { ...base, clientName: "Bia", areas: "centro, Igara", propertyType: "Casa", bedrooms: "2", maxBudget: "2.000" }, NOW);
     const c = await db.client.create({ data: { name: "C" } });
     await db.clientSearch.create({ data: { clientId: c.id, consultantId: u.a.id, createdById: u.a.id, areas: ["Igara"], propertyType: "Apartamento", bedrooms: 1, maxBudgetCents: 150000 } });
+    // só a captação e a gestão: consultora e pré-atendimento não acessam
     await expect(demandMap(u.a, { days: 90 }, NOW)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    const d = await demandMap(jasmin, { days: 90 }, NOW);
+    await expect(demandMap(jasmin, { days: 90 }, NOW)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const cap = await db.user.create({ data: { name: "Carla Captadora", email: "captacao@exemplo.test", role: "CAPTURE" } });
+    const captador = { id: cap.id, role: "CAPTURE" as const };
+    const d = await demandMap(captador, { days: 90 }, NOW);
     expect(d).toMatchObject({ total: 3, radar: 2, searches: 1, open: 3 });
     expect(d.byArea).toEqual([{ label: "Centro", count: 2 }, { label: "Igara", count: 2 }]);
     expect(d.byBedrooms.find((b) => b.label === "2 quartos")?.count).toBe(2);
@@ -124,7 +128,7 @@ describe("mapa da demanda", () => {
       urls.push(url);
       return new Response(page([], url.includes("+centro") ? 0 : url.includes("tipoImovel=apartamento") ? 7 : 1), { status: 200 });
     }) as unknown as typeof fetch;
-    const rows = await segmentSupply(jasmin, d.segments, { fetchImpl: site, origin: ORIGIN });
+    const rows = await segmentSupply(captador, d.segments, { fetchImpl: site, origin: ORIGIN });
     expect(urls).toContain(`${ORIGIN}/alugar/residencial/rs+canoas+centro?tipoImovel=casa&quartos=2&valorMax=2000`);
     expect(rows.map((r) => [r.area, r.type, r.supply, r.gap])).toEqual([
       ["Centro", "Casa", 0, "none"],
@@ -135,5 +139,38 @@ describe("mapa da demanda", () => {
     expect(brief).toContain("• Casa · Centro · 2+ quartos · até R$ 2.000 — 2 clientes procurando, nenhum no site");
     expect(brief).not.toContain("Apartamento");
     expect(brief).not.toContain("99876");
+  });
+});
+
+describe("captação", () => {
+  it("vê os pedidos passados à captação sem nome nem telefone; 'Achei imóvel' avisa o pré-atendimento e põe o pedido para cobrar hoje", async () => {
+    const { captureFound, notifyCaptureNewRequest } = await import("@/server/radar");
+    const { captureRequests, countCaptureOpen } = await import("@/server/demand");
+    const cap = await db.user.create({ data: { name: "Carla Captadora", email: "captacao@exemplo.test", role: "CAPTURE" } });
+    const captador = { id: cap.id, role: "CAPTURE" as const };
+    const r = await createRadar(jasmin, { clientName: "Rita Secreta", phone: "(51) 99876-1111", wants: "Casa com pátio para cachorro", areas: "Centro", propertyType: "Casa", bedrooms: "2", maxBudget: "2.500" }, NOW);
+    await createRadar(jasmin, { clientName: "Ainda não passou", phone: "(51) 99876-2222", wants: "Apartamento perto da estação", sentToCapture: false }, NOW);
+
+    const sentCap: { uid: string; body: string }[] = [];
+    await notifyCaptureNewRequest(r.id, async (uid, p) => void sentCap.push({ uid, body: p.body }));
+    expect(sentCap).toEqual([{ uid: cap.id, body: "Casa · 2+ quartos · Centro · até R$\u00a02.500" }]);
+
+    await expect(captureRequests(jasmin)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const list = await captureRequests(captador, NOW);
+    expect(list.map((x) => x.id)).toEqual([r.id]); // o que não foi passado à captação não aparece
+    expect(JSON.stringify(list)).not.toContain("Rita");
+    expect(JSON.stringify(list)).not.toContain("99876");
+    expect(await countCaptureOpen(captador)).toBe(1);
+
+    await expect(captureFound(u.a, r.id, { codes: "734999" }, NOW)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(captureFound(captador, r.id, { codes: "" }, NOW)).rejects.toMatchObject({ code: "VALIDATION" });
+    const sentPre: { uid: string; url: string }[] = [];
+    await captureFound(captador, r.id, { codes: "734999", note: "entra no site amanhã" }, new Date(NOW.getTime() + DAY), async (uid, p) => void sentPre.push({ uid, url: p.url }));
+    expect(sentPre).toEqual([{ uid: jasmin.id, url: `/radar/${r.id}` }]);
+    const after = await db.clientRadar.findUniqueOrThrow({ where: { id: r.id } });
+    expect(after).toMatchObject({ status: "FOUND", foundCodes: ["734999"] });
+    expect(after.followUpOn.toISOString().slice(0, 10)).toBe("2026-10-29");
+    expect(await db.radarEvent.count({ where: { radarId: r.id, note: "Captação achou: 734999. — entra no site amanhã", authorId: cap.id } })).toBe(1);
+    expect(await countCaptureOpen(captador)).toBe(0);
   });
 });

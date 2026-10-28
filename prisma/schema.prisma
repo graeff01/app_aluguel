@@ -20,6 +20,8 @@ enum Role {
   PRE_SERVICE
   /// marketing: recebe as locações fechadas para postar
   MARKETING
+  /// captação: vê o que os clientes procuram (mapa da demanda e pedidos do radar) e indica imóveis captados
+  CAPTURE
 }
 
 model User {

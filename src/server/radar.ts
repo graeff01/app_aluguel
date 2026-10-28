@@ -15,7 +15,8 @@ import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { AppError, notFound } from "@/lib/errors";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
-import { assert, hasGlobalView, isPreService, type AuthzActor } from "@/lib/authz";
+import { assert, hasGlobalView, isCapture, isPreService, type AuthzActor } from "@/lib/authz";
+import { notifyUser } from "./notify";
 import { normalizePhone } from "@/lib/phone";
 import { getSettings } from "@/lib/settings";
 import { log } from "@/lib/log";
@@ -70,7 +71,7 @@ export async function createRadar(actor: AuthzActor, input: z.input<typeof creat
   const phone = normalizePhone(p.phone);
   if (!phone.valid || !phone.normalized) throw new AppError("VALIDATION", "Revise os campos destacados.", { phone: "Telefone inválido (DDD + número)." });
   const profile = parseProfile({ maxBudget: p.maxBudget, areas: p.areas, propertyType: p.propertyType, bedrooms: p.bedrooms });
-  return db.$transaction(async (tx) => {
+  const created = await db.$transaction(async (tx) => {
     const row = await tx.clientRadar.create({
       data: {
         requestId: p.requestId || null,
@@ -94,6 +95,8 @@ export async function createRadar(actor: AuthzActor, input: z.input<typeof creat
     await audit(tx, { actorId: actor.id, action: "radar.created", entityType: "ClientRadar", entityId: row.id });
     return row;
   });
+  if (created.sentToCaptureAt) await notifyCaptureNewRequest(created.id);
+  return created;
 }
 
 export type RadarTab = "cobrar" | "novos" | "abertos" | "encerrados";
@@ -150,7 +153,7 @@ export async function updateRadar(actor: AuthzActor, id: string, input: { note: 
   if (note.length < 3) throw new AppError("VALIDATION", "Conte o que aconteceu.", { note: "Obrigatório." });
   const codes = codesOf(input.foundCodes ?? "");
   if (codes.some((c) => !/^[\w-]{2,40}$/.test(c))) throw new AppError("VALIDATION", "Confira os códigos dos imóveis.", { foundCodes: "Código inválido (vários: separe com ;)." });
-  return db.$transaction(async (tx) => {
+  const sentNow = await db.$transaction(async (tx) => {
     const r = await tx.clientRadar.findUnique({ where: { id } });
     if (!r) throw notFound();
     if (r.status === "CLOSED") throw new AppError("INVALID_STATE", "Este pedido está encerrado. Reabra para atualizar.");
@@ -168,7 +171,9 @@ export async function updateRadar(actor: AuthzActor, id: string, input: { note: 
     const extra = [markSent ? "Passado à captação." : "", codes.length ? `${input.foundLabel ?? "Captação achou"}: ${codes.join(", ")}.` : ""].filter(Boolean).join(" ");
     await tx.radarEvent.create({ data: { radarId: id, note: [extra, note].filter(Boolean).join(" — ").slice(0, 2000), authorId: actor.id, createdAt: now } });
     await audit(tx, { actorId: actor.id, action: "radar.updated", entityType: "ClientRadar", entityId: id, changes: codes.length ? { imoveis: codes } : undefined });
+    return markSent;
   });
+  if (sentNow) await notifyCaptureNewRequest(id);
 }
 
 export async function closeRadar(actor: AuthzActor, id: string, input: { reason: string; note?: string }, now = new Date()) {
@@ -240,4 +245,41 @@ export async function radarOptionsSent(actor: AuthzActor, id: string, codes: str
   const list = [...new Set(codes)].filter((c) => /^[\w-]{2,40}$/.test(c)).slice(0, 6);
   if (!list.length) throw new AppError("VALIDATION", "Escolha ao menos uma opção.");
   return updateRadar(actor, id, { note: via === "whatsapp" ? "Opções enviadas ao cliente pelo WhatsApp." : "Opções indicadas ao cliente.", foundCodes: list.join(";"), followUpDays: 2, foundLabel: "Opções do site para o cliente" }, now);
+}
+
+// ─────────────── Captação ───────────────
+
+const profileLine = (r: { propertyType: string | null; bedrooms: number | null; areas: string[]; maxBudgetCents: number | null }) =>
+  [r.propertyType ?? "Imóvel", r.bedrooms ? `${r.bedrooms}+ quartos` : null, r.areas.length ? r.areas.join(", ") : null, r.maxBudgetCents ? `até ${(r.maxBudgetCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}` : null].filter(Boolean).join(" · ");
+
+/** Avisa a captação de um pedido novo (só o perfil: nenhum dado do cliente). */
+export async function notifyCaptureNewRequest(radarId: string, notify: typeof notifyUser = notifyUser) {
+  const r = await db.clientRadar.findUnique({ where: { id: radarId }, select: { propertyType: true, bedrooms: true, areas: true, maxBudgetCents: true } });
+  if (!r) return;
+  const team = await db.user.findMany({ where: { role: "CAPTURE", active: true }, select: { id: true } });
+  for (const u of team) await notify(u.id, { title: "Novo pedido para a captação", body: profileLine(r), url: "/demanda/pedidos", tag: `captacao-${radarId}` }).catch(() => undefined);
+}
+
+/**
+ * A captação achou imóvel(is) para um pedido: entram nos imóveis do pedido, o pedido vai para "Cobrar hoje" do
+ * pré-atendimento (para oferecer ao cliente) e o pré-atendimento é avisado.
+ */
+export async function captureFound(actor: AuthzActor, id: string, input: { codes: string; note?: string }, now = new Date(), notify: typeof notifyUser = notifyUser) {
+  assert(isCapture(actor) || hasGlobalView(actor));
+  const codes = codesOf(input.codes);
+  if (!codes.length || codes.some((c) => !/^[\w-]{2,40}$/.test(c))) throw new AppError("VALIDATION", "Informe o código do imóvel.", { codes: "Código inválido (vários: separe com ;)." });
+  const note = (input.note ?? "").trim().slice(0, 500);
+  const r = await db.clientRadar.findUnique({ where: { id } });
+  if (!r || !r.sentToCaptureAt) throw notFound();
+  if (r.status === "CLOSED") throw new AppError("INVALID_STATE", "Este pedido já foi encerrado pelo pré-atendimento.");
+  await db.$transaction(async (tx) => {
+    await tx.clientRadar.update({
+      where: { id },
+      data: { foundCodes: [...new Set([...r.foundCodes, ...codes])].slice(0, 12), status: "FOUND", siteNewCodes: r.siteNewCodes.filter((c) => !codes.includes(c)), followUpOn: dateOnlyFromKey(dayKey(now)), lastUpdateAt: now },
+    });
+    await tx.radarEvent.create({ data: { radarId: id, note: [`Captação achou: ${codes.join(", ")}.`, note].filter(Boolean).join(" — "), authorId: actor.id, createdAt: now } });
+    await audit(tx, { actorId: actor.id, action: "radar.capture_found", entityType: "ClientRadar", entityId: id, changes: { imoveis: codes } });
+  });
+  const pre = await db.user.findMany({ where: { role: "PRE_SERVICE", active: true }, select: { id: true } });
+  for (const u of pre) await notify(u.id, { title: "A captação achou imóvel para o radar", body: `${codes.length === 1 ? `Imóvel ${codes[0]}` : `Imóveis ${codes.join(", ")}`} para o pedido: ${profileLine(r)}. Toque para oferecer ao cliente.`, url: `/radar/${id}`, tag: `radar-achou-${id}` }).catch(() => undefined);
 }

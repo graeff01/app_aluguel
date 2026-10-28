@@ -70,7 +70,7 @@ export function canUpdateOpportunity(a: AuthzActor, o: OppLike, s: PermissionSet
 /** Gestora gerencia consultoras e o pré-atendimento; admin gerencia todos. */
 export function canManageUser(a: AuthzActor, targetRole: Role) {
   if (isAdmin(a)) return true;
-  return a.role === "MANAGER" && (targetRole === "CONSULTANT" || targetRole === "PRE_SERVICE" || targetRole === "MARKETING");
+  return a.role === "MANAGER" && (targetRole === "CONSULTANT" || targetRole === "PRE_SERVICE" || targetRole === "MARKETING" || targetRole === "CAPTURE");
 }
 
 // ─────────── Pré-análise ───────────
@@ -99,3 +99,6 @@ export const canUpdateProposal = canResolvePreAnalysis;
 export function assert(cond: boolean, msg?: string): asserts cond {
   if (!cond) throw forbidden(msg);
 }
+
+// ─────────── Captação ───────────
+export const isCapture = (a: AuthzActor) => a.role === "CAPTURE";

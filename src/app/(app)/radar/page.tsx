@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireActor } from "@/lib/require";
+import { hasGlobalView } from "@/lib/authz";
 import { RADAR_STATUS_LABEL, canUseRadar, isRadarDue, listRadar, radarAgeDays, type RadarTab } from "@/server/radar";
 import { brl } from "@/server/proposals";
 import { dateOnlyKey, dayKey, fmt } from "@/lib/time";
@@ -26,9 +27,11 @@ export default async function RadarPage({ searchParams }: { searchParams: Promis
         subtitle="Clientes que procuram um perfil que não temos na base. O pedido vai para a captação e fica aqui até ter resposta."
         action={
           <span className="flex flex-wrap gap-2">
-            <LinkButton href="/demanda" variant="secondary">
-              Mapa da demanda
-            </LinkButton>
+            {hasGlobalView(actor) && (
+              <LinkButton href="/demanda" variant="secondary">
+                Mapa da demanda
+              </LinkButton>
+            )}
             <LinkButton href="/radar/novo">
               <Icon name="plus" className="size-4" /> Novo no radar
             </LinkButton>

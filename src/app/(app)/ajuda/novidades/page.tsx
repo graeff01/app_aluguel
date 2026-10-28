@@ -7,7 +7,7 @@ export const metadata = { title: "O que mudou" };
 
 /** Todas as novidades do app que valem para o perfil, da mais nova para a mais antiga. */
 export default async function ChangelogPage() {
-  const actor = await requireActor({ preService: true, marketing: true });
+  const actor = await requireActor({ preService: true, marketing: true, capture: true });
   const entries = CHANGELOG.map((e) => entryFor(actor.role, e)).filter((e) => !!e);
   return (
     <div className="mx-auto max-w-3xl">

@@ -8,12 +8,14 @@ import { AppError } from "./errors";
 /**
  * Usuário autenticado. O pré-atendimento só acessa as telas de pré-análise e o marketing só a tela de postagens:
  * qualquer outra tela os leva para a tela deles (passe { preService: true } / { marketing: true } nas telas permitidas).
+ * A captação só acessa o mapa da demanda ({ capture: true }).
  */
-export async function requireActor(opts: { preService?: boolean; marketing?: boolean } = {}): Promise<Actor> {
+export async function requireActor(opts: { preService?: boolean; marketing?: boolean; capture?: boolean } = {}): Promise<Actor> {
   const a = await getActor();
   if (!a) redirect("/login");
   if (a.role === "PRE_SERVICE" && !opts.preService) redirect("/pre-analises");
   if (a.role === "MARKETING" && !opts.marketing) redirect("/marketing");
+  if (a.role === "CAPTURE" && !opts.capture) redirect("/demanda");
   return a;
 }
 export async function requireManager(): Promise<Actor> {

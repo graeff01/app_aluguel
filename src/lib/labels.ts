@@ -16,7 +16,7 @@ export const OPP_STATUS_LABEL: Record<string, string> = {
   CLOSED_WON: "Locação fechada",
   LOST: "Perdida",
 };
-export const ROLE_LABEL: Record<string, string> = { ADMIN: "Administrador(a)", MANAGER: "Gestora", CONSULTANT: "Consultora", PRE_SERVICE: "Pré-atendimento", MARKETING: "Marketing" };
+export const ROLE_LABEL: Record<string, string> = { ADMIN: "Administrador(a)", MANAGER: "Gestora", CONSULTANT: "Consultora", PRE_SERVICE: "Pré-atendimento", MARKETING: "Marketing", CAPTURE: "Captação" };
 export const PRE_STATUS_LABEL: Record<string, string> = { AWAITING: "Aguardando análise", APPROVED: "Aprovado", REJECTED: "Reprovado", PENDING: "Pendente" };
 export const PROPOSAL_STATUS_LABEL: Record<string, string> = { NEW: "Aguardando a consultora", SENT: "Enviada ao proprietário", COUNTER: "Contraproposta", ACCEPTED: "Aceita", REJECTED: "Recusada" };
 export const PROPOSAL_STATUS_CLS: Record<string, string> = {

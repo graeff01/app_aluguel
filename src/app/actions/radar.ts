@@ -2,7 +2,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { runAction, str, type ActionState } from "@/lib/action";
-import { closeRadar, createRadar, radarOptionsSent, reopenRadar, updateRadar } from "@/server/radar";
+import { captureFound, closeRadar, createRadar, radarOptionsSent, reopenRadar, updateRadar } from "@/server/radar";
 import { searchOptionsSent } from "@/server/client-search";
 
 export async function createRadarAction(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -64,6 +64,16 @@ export async function optionsSentAction(kind: "radar" | "search", id: string, co
     if (kind === "radar") await radarOptionsSent(a, id, codes, via);
     else await searchOptionsSent(a, id, codes, via);
     return codes.length === 1 ? "Opção registrada no histórico." : `${codes.length} opções registradas no histórico.`;
+  });
+  if (s.ok) revalidatePath("/", "layout");
+  return s;
+}
+
+/** Captação: achou imóvel(is) para um pedido. */
+export async function captureFoundAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const s = await runAction(async (a) => {
+    await captureFound(a, str(fd, "id"), { codes: str(fd, "codes"), note: str(fd, "note") });
+    return "Enviado ao pré-atendimento. Ela foi avisada para oferecer ao cliente.";
   });
   if (s.ok) revalidatePath("/", "layout");
   return s;

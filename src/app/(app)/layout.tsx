@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { countDueRadar } from "@/server/radar";
+import { countCaptureOpen } from "@/server/demand";
 import { requireActor } from "@/lib/require";
 import { isMobileRequest } from "@/lib/session";
 import { hasGlobalView, isAdmin, visitScope } from "@/lib/authz";
@@ -31,7 +32,7 @@ import { UpdateBanner } from "@/components/update-banner";
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const actor = await requireActor({ preService: true, marketing: true });
+  const actor = await requireActor({ preService: true, marketing: true, capture: true });
   // senha provisória: nada do app é exibido até a troca
   if (actor.mustChangePassword) return <div className="min-h-dvh bg-bg"><ForcePasswordDialog name={actor.name} /></div>;
   // LGPD: ciência do aviso de privacidade no primeiro acesso
@@ -42,6 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const global = hasGlobalView(actor);
   const preService = actor.role === "PRE_SERVICE";
   const marketing = actor.role === "MARKETING";
+  const capture = actor.role === "CAPTURE";
   // leituras do menu em paralelo (aparecem em todas as telas)
   const [settings, preOpen, propNew, toPost, agents, radarDue] = await Promise.all([
     getSettings(),
@@ -51,6 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     global ? db.reason.count({ where: { kind: "LEASE_AGENT", active: true } }) : Promise.resolve(1),
     countDueRadar(actor, now),
   ]);
+  const captureOpen = capture ? await countCaptureOpen(actor) : 0;
   const [pending, health, reviewCount] = await Promise.all([
     db.visit.count({
       // "para registrar": já terminou ou já começou (em andamento)
@@ -151,14 +154,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/pre-analises/nova", label: "Nova", icon: "plus" },
     { href: "/propostas", label: "Propostas", icon: "pipeline", badge: propNew },
     { href: "/radar", label: "Radar", icon: "pulse", badge: radarDue },
-    { href: "/demanda", label: "Demanda", icon: "dashboard" },
     { href: "/agenda-google", label: "Agenda Google", icon: "today" },
     { href: "/agenda-do-dia", label: "Visitas", icon: "today" },
     { href: "/agenda-do-dia/nova", label: "Agendar", icon: "plus" },
   ];
+  // captação: o que os clientes procuram
+  const captureNav: NavItem[] = [
+    { href: "/demanda", label: "Mapa da demanda", icon: "dashboard" },
+    { href: "/demanda/pedidos", label: "Pedidos", icon: "list", badge: captureOpen },
+  ];
   // marketing: só as locações para postar
   const marketingNav: NavItem[] = [{ href: "/marketing", label: "Para postar", icon: "home", badge: toPost }];
-  const navGroups = preService ? [{ title: "Pré-atendimento", items: preNav }] : marketing ? [{ title: "Marketing", items: marketingNav }] : groups;
+  const navGroups = preService ? [{ title: "Pré-atendimento", items: preNav }] : capture ? [{ title: "Captação", items: captureNav }] : marketing ? [{ title: "Marketing", items: marketingNav }] : groups;
   const dot = { ok: "bg-good", stale: "bg-accent", error: "bg-bad", off: "bg-ink-3/50" }[health.level];
   // agenda parada (desconectada ou sem sucesso há mais de 1 h): faixa vermelha para a gestão
   const agendaDown = global && (health.level === "error" || (health.level === "stale" && !!health.lastSuccessAt && now.getTime() - health.lastSuccessAt.getTime() > 3600_000));
@@ -222,7 +229,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <OfflineBanner />
         <RefreshOnFocus />
         <UpdateBanner />
-        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew : marketing ? toPost : pending} />
+        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew : marketing ? toPost : capture ? captureOpen : pending} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-2.5">
             <Link href="/minhas" className="flex items-center gap-2">
@@ -260,7 +267,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <OfflineBanner />
         <RefreshOnFocus />
         <UpdateBanner />
-        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew : marketing ? toPost : pending} />
+        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew : marketing ? toPost : capture ? captureOpen : pending} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 md:px-8">
             <Link href="/" className="flex items-center gap-2 md:hidden">
@@ -292,7 +299,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {/* páginas de tela cheia (Agenda Google) usam toda a largura */}
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-32 has-[[data-full-bleed]]:max-w-none has-[[data-full-bleed]]:px-0 has-[[data-full-bleed]]:pt-0 has-[[data-full-bleed]]:pb-20 md:px-8 md:pt-9 md:pb-12 md:has-[[data-full-bleed]]:px-0 md:has-[[data-full-bleed]]:pt-0 md:has-[[data-full-bleed]]:pb-0">{children}</main>
       </div>
-      <BottomNav items={preService ? preNav.filter((i) => i.href !== "/demanda") : marketing ? marketingNav : global ? managerBottom : consultantNav} />
+      <BottomNav items={preService ? preNav : capture ? captureNav : marketing ? marketingNav : global ? managerBottom : consultantNav} />
       <Suspense>
         <UndoToast />
       </Suspense>

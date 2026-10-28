@@ -4,12 +4,13 @@
  * Só perfis (bairro, tipo, quartos, valor) — nenhum dado de cliente aparece aqui.
  */
 import { db } from "@/lib/db";
-import { assert, hasGlobalView, isPreService, type AuthzActor } from "@/lib/authz";
+import { assert, hasGlobalView, isCapture, type AuthzActor } from "@/lib/authz";
 import { RADAR_CLOSE_REASONS } from "./radar";
 import { countOnSite, normText, profileQuery, siteOrigin, siteSearchUrl } from "./site-search";
 
 const DAY = 86400_000;
-export const canSeeDemand = (a: AuthzActor) => isPreService(a) || hasGlobalView(a);
+/** Mapa da demanda e pedidos: captação e gestão (o pré-atendimento e as consultoras não precisam). */
+export const canSeeDemand = (a: AuthzActor) => isCapture(a) || hasGlobalView(a);
 
 export const BUDGET_BUCKETS = [
   { label: "até R$ 1.500", max: 150000 },
@@ -147,4 +148,27 @@ export function captureBrief(days: number, rows: Awaited<ReturnType<typeof segme
     .map((r) => `• ${[r.type ?? "Imóvel", r.area, r.bedrooms ? `${r.bedrooms}+ quartos` : null, r.budgetCents ? `até ${brl(r.budgetCents)}` : null].filter(Boolean).join(" · ")} — ${r.demand} cliente${r.demand > 1 ? "s" : ""} procurando, ${r.supply === 0 ? "nenhum no site" : `só ${r.supply} no site`}`);
   if (!lines.length) return null;
   return [`Mapa da demanda (últimos ${days} dias) — onde falta imóvel:`, "", ...lines, "", "Fonte: pedidos do pré-atendimento e clientes em busca das consultoras (app Visitas Locação)."].join("\n");
+}
+
+// ─────────────── Pedidos para a captação ───────────────
+
+/**
+ * Pedidos do radar passados à captação e ainda em aberto, sem dados pessoais do cliente (nem nome, nem telefone):
+ * o que procura, o perfil e há quanto tempo.
+ */
+export async function captureRequests(actor: AuthzActor, now = new Date()) {
+  assert(canSeeDemand(actor));
+  const rows = await db.clientRadar.findMany({
+    where: { status: { in: ["SEARCHING", "FOUND"] }, sentToCaptureAt: { not: null } },
+    orderBy: { sentToCaptureAt: "asc" },
+    select: { id: true, wants: true, maxBudgetCents: true, areas: true, propertyType: true, bedrooms: true, sentToCaptureAt: true, foundCodes: true, status: true, createdBy: { select: { name: true } } },
+    take: 300,
+  });
+  return rows.map((r) => ({ ...r, days: Math.max(0, Math.floor((now.getTime() - r.sentToCaptureAt!.getTime()) / DAY)) }));
+}
+
+/** Pedidos com a captação ainda sem nenhum imóvel indicado (número no menu da captação). */
+export async function countCaptureOpen(actor: AuthzActor) {
+  if (!canSeeDemand(actor)) return 0;
+  return db.clientRadar.count({ where: { status: "SEARCHING", sentToCaptureAt: { not: null } } });
 }

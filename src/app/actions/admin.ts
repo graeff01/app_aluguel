@@ -24,7 +24,7 @@ import { wipeTestData } from "@/server/wipe";
 import { hitRateLimit } from "@/lib/ratelimit";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const ROLES: Role[] = ["ADMIN", "MANAGER", "CONSULTANT", "PRE_SERVICE", "MARKETING"];
+const ROLES: Role[] = ["ADMIN", "MANAGER", "CONSULTANT", "PRE_SERVICE", "MARKETING", "CAPTURE"];
 
 async function issueResetLink(userId: string, actorId: string) {
   const token = randomToken(32);
