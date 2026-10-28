@@ -560,6 +560,8 @@ model Visit {
   evaluation       Evaluation?
   negativeReasonId String?
   negativeReason   Reason?          @relation("VisitNegativeReason", fields: [negativeReasonId], references: [id])
+  /// anúncio do imóvel saiu do site (404) antes da visita: quando o app avisou
+  listingGoneAt    DateTime?
   /// motivo do cancelamento (pré-atendimento)
   cancelReasonId   String?
   cancelReason     Reason?          @relation("VisitCancelReason", fields: [cancelReasonId], references: [id])
@@ -1175,6 +1177,11 @@ model ClientSearch {
   closeNote      String?
   createdById    String
   updatedAt      DateTime           @updatedAt
+  /// vigia do site (como no radar) e imóveis já enviados ao cliente como opção
+  siteSeenCodes  String[]           @default([])
+  siteNewCodes   String[]           @default([])
+  siteCheckedAt  DateTime?
+  sentCodes      String[]           @default([])
 
   @@index([consultantId, status])
   @@index([clientId, status])
@@ -1227,6 +1234,10 @@ model ClientRadar {
   closeNote       String?
   /// telefone apagado (retenção LGPD)
   purgedAt        DateTime?
+  /// vigia do site: imóveis com o perfil já vistos, os que apareceram na última conferência e quando foi
+  siteSeenCodes   String[]      @default([])
+  siteNewCodes    String[]      @default([])
+  siteCheckedAt   DateTime?
   events          RadarEvent[]
 
   @@index([status, followUpOn])

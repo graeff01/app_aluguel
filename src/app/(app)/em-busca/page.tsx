@@ -99,6 +99,7 @@ export default async function SearchesPage({ searchParams }: { searchParams: Pro
                   {s.status === "ACTIVE" ? (
                     <p className={cx("text-[12px] font-bold tracking-[0.06em] uppercase", s.due ? "text-accent-strong" : s.stale ? "text-bad" : "text-ink-3")}>
                       {s.due ? "Ligar hoje" : s.stale ? `Sem contato há ${s.silentDays} dias` : (s.days === 0 ? "Em busca desde hoje" : `Em busca há ${s.days} ${s.days === 1 ? "dia" : "dias"}`)}
+                      {s.siteNewCodes.length > 0 && <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[11px] tracking-normal text-white normal-case">{s.siteNewCodes.length === 1 ? "1 novo no site" : `${s.siteNewCodes.length} novos no site`}</span>}
                     </p>
                   ) : (
                     <p className={cx("text-[12px] font-bold tracking-[0.06em] uppercase", s.status === "WON" ? "text-good" : "text-ink-3")}>{SEARCH_CLOSE_LABEL[s.status as keyof typeof SEARCH_CLOSE_LABEL]}</p>

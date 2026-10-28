@@ -289,3 +289,25 @@ export async function searchStats(actor: AuthzActor, from: Date, now = new Date(
     avgDaysToWin: won.length ? Math.round(won.reduce((a, c) => a + (c.closedAt!.getTime() - c.startedAt.getTime()) / DAY, 0) / won.length) : null,
   };
 }
+
+/** Opções do site enviadas ao cliente em busca: não voltam como sugestão, ficam na observação e conta como contato. */
+export async function searchOptionsSent(actor: AuthzActor, id: string, codes: string[], via: "whatsapp" | "manual", now = new Date()) {
+  const s = await loadManaged(actor, id);
+  if (s.status !== "ACTIVE") throw new AppError("INVALID_STATE", "Esta busca já foi encerrada.");
+  const list = [...new Set(codes)].filter((c) => /^[\w-]{2,40}$/.test(c)).slice(0, 6);
+  if (!list.length) throw new AppError("VALIDATION", "Escolha ao menos uma opção.");
+  const stamp = dayKey(now).split("-").reverse().slice(0, 2).join("/");
+  await db.$transaction(async (tx) => {
+    await tx.clientSearch.update({
+      where: { id },
+      data: {
+        sentCodes: [...new Set([...s.sentCodes, ...list])].slice(-100),
+        siteNewCodes: s.siteNewCodes.filter((c) => !list.includes(c)),
+        lastContactAt: now,
+        followUpOn: dateOnlyFromKey(addDays(dayKey(now), 2)),
+        note: appendNote(s.note, `${stamp}: opções ${via === "whatsapp" ? "enviadas pelo WhatsApp" : "indicadas"}: ${list.join(", ")}`),
+      },
+    });
+    await audit(tx, { actorId: actor.id, action: "client_search.options_sent", entityType: "ClientSearch", entityId: id, changes: { imoveis: list } });
+  });
+}

@@ -17,6 +17,7 @@ export default async function MorePage() {
           ["/pre-analises", "Pré-análises", "Dados do cliente antes de agendar"],
           ["/propostas", "Propostas", "Valor proposto pelo cliente, com o proprietário"],
           ["/radar", "Radar de clientes", "Pedidos à captação: perfis que não temos na base"],
+          ["/demanda", "Mapa da demanda", "O que os clientes procuram × o que há no site"],
           ["/hoje", "Visitas de hoje", "Lista completa do dia"],
           ["/rota", "Rotas do dia", "Paradas de cada consultora no mapa"],
           ["/em-busca", "Clientes em busca", "Recusaram um imóvel e seguem procurando"],

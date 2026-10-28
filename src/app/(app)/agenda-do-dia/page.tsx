@@ -31,6 +31,7 @@ type Row = {
   note: string | null;
   autoCanceled: boolean;
   swappedTo?: string | null;
+  listingGoneAt?: Date | null;
   concludedBy: { name: string } | null;
   scheduledBy?: { name: string; role: string } | null;
   consultant?: { name: string } | null;
@@ -128,6 +129,14 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         {v.status === "SCHEDULED" && v.confirmStatus === "NO_REPLY" && <span className="text-warn">sem resposta</span>}
         {v.status === "CANCELED" && v.cancelReason && <span className="font-normal text-ink-3">{v.cancelReason.label}</span>}
       </span>
+      {v.status === "SCHEDULED" && v.listingGoneAt && (
+        <span className="basis-full rounded-xl bg-warn-soft px-3 py-1.5 text-[12px] font-semibold text-warn">
+          ⚠ O anúncio deste imóvel saiu do site (pode ter sido alugado). Confirme antes da visita.{" "}
+          <Link href={`/agenda-do-dia/${v.id}/opcoes`} className="underline underline-offset-2">
+            Ver opções parecidas
+          </Link>
+        </span>
+      )}
       {v.swappedTo && (
         <span className="basis-full text-[12px] text-ink-3">
           Trocado pelo imóvel <strong className="num text-ink-2">{v.swappedTo}</strong>

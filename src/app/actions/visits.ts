@@ -255,6 +255,7 @@ export async function swapPropertyAction(_: ActionState, fd: FormData): Promise<
   if (s.ok) {
     revalidatePath("/agenda-do-dia");
     revalidatePath(`/visitas/${str(fd, "visitId")}`);
+    revalidatePath(`/agenda-do-dia/${str(fd, "visitId")}/opcoes`);
   }
   return s;
 }

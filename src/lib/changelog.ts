@@ -12,6 +12,17 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-28-b",
+    title: "O app de olho no site da Auxiliadora",
+    changes: [
+      { text: "Mapa da demanda: o que os clientes procuram e não encontram (bairros, tipo, quartos e valor), cruzado com o que existe hoje no site. Mostra onde falta imóvel e monta o resumo pronto para mandar à captação.", who: STAFF, href: "/demanda" },
+      { text: "Radar vigiando o site: todo dia o app refaz a busca de cada pedido e avisa quando entra um imóvel novo com o perfil (aba “Novos no site”).", who: STAFF, href: "/radar?aba=novos" },
+      { text: "Opções do site direto para o cliente: escolha até 3 imóveis sugeridos e envie pelo WhatsApp com a mensagem pronta e os links. Fica registrado no histórico.", who: ["CONSULTANT", "PRE_SERVICE", "MANAGER"] },
+      { text: "Clientes em busca: o app sugere imóveis do site com o perfil do cliente (sem os que ele já visitou) e avisa você quando aparece um novo.", who: ["CONSULTANT", "MANAGER"], href: "/em-busca" },
+      { text: "Anúncio saiu do site antes da visita (pode ter sido alugado): o app avisa você e o pré-atendimento na véspera e no dia, com opções parecidas para trocar o imóvel.", who: ["CONSULTANT", "PRE_SERVICE", "MANAGER"] },
+    ],
+  },
+  {
     id: "2026-10-28",
     title: "Radar de clientes",
     changes: [

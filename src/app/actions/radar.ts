@@ -2,7 +2,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { runAction, str, type ActionState } from "@/lib/action";
-import { addSuggestedToRadar, closeRadar, createRadar, reopenRadar, updateRadar } from "@/server/radar";
+import { closeRadar, createRadar, radarOptionsSent, reopenRadar, updateRadar } from "@/server/radar";
+import { searchOptionsSent } from "@/server/client-search";
 
 export async function createRadarAction(_: ActionState, fd: FormData): Promise<ActionState> {
   let id = "";
@@ -57,10 +58,12 @@ export async function reopenRadarAction(_: ActionState, fd: FormData): Promise<A
   return s;
 }
 
-export async function addSuggestedAction(_: ActionState, fd: FormData): Promise<ActionState> {
+/** Opções do site enviadas/indicadas ao cliente (radar ou cliente em busca). Chamada direto pelo componente. */
+export async function optionsSentAction(kind: "radar" | "search", id: string, codes: string[], via: "whatsapp" | "manual"): Promise<ActionState> {
   const s = await runAction(async (a) => {
-    await addSuggestedToRadar(a, str(fd, "id"), str(fd, "code"));
-    return `Imóvel ${str(fd, "code")} indicado.`;
+    if (kind === "radar") await radarOptionsSent(a, id, codes, via);
+    else await searchOptionsSent(a, id, codes, via);
+    return codes.length === 1 ? "Opção registrada no histórico." : `${codes.length} opções registradas no histórico.`;
   });
   if (s.ok) revalidatePath("/", "layout");
   return s;

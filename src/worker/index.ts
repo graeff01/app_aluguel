@@ -22,6 +22,7 @@ import { runPreAnalysisRetention } from "@/server/pre-analysis";
 import { runDocRequestRetention } from "@/server/doc-requests";
 import { runProposalRetention } from "@/server/proposals";
 import { runRadarRetention } from "@/server/radar";
+import { checkVisitListings, watchDemandOnSite } from "@/server/site-watch";
 
 const TICK_MS = Number(process.env.WORKER_TICK_MS ?? 15_000);
 const WORKER_ID = process.env.RAILWAY_REPLICA_ID ?? process.env.HOSTNAME ?? "local";
@@ -97,6 +98,9 @@ async function main() {
         await runDocRequestRetention().catch((e) => log.error("docrequest_retention.failed", { code: errorCode(e) }));
         await runProposalRetention().catch((e) => log.error("proposal_retention.failed", { code: errorCode(e) }));
         await runRadarRetention().catch((e) => log.error("radar_retention.failed", { code: errorCode(e) }));
+        // site da imobiliária: imóveis novos para o radar/clientes em busca e anúncios que saíram antes da visita
+        await watchDemandOnSite().catch((e) => log.error("site_watch.demand_failed", { code: errorCode(e) }));
+        await checkVisitListings().catch((e) => log.error("site_watch.listings_failed", { code: errorCode(e) }));
         await backfillPreAnalysisLinks().catch((e) => log.error("preanalysis_links.failed", { code: errorCode(e) }));
         await sendMonthlyReportNotice().catch((e) => log.error("monthly_report_notice.failed", { code: errorCode(e) }));
         await maybeDailyBackup().catch((e) => log.error("backup.check_failed", { code: errorCode(e) }));

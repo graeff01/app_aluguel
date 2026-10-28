@@ -7,7 +7,9 @@ import { EVALUATION_LABEL, STATUS_LABEL } from "@/lib/labels";
 import { cx } from "@/components/ui";
 import { ContactButtons } from "@/components/contact-buttons";
 import { PropertyThumb } from "@/components/property-thumb";
+import { Suspense } from "react";
 import { ProfileForm, ContactForm, CloseForm } from "./forms";
+import { SearchSuggestions } from "./similar";
 
 export const metadata = { title: "Cliente em busca" };
 const dOnly = (d: Date) => dateOnlyKey(d).split("-").reverse().join("/");
@@ -80,6 +82,21 @@ export default async function SearchPage({ params, searchParams }: { params: Pro
           <p className="text-[14px] whitespace-pre-wrap text-ink-2">{s.note ?? "—"}</p>
         )}
       </section>
+
+      {active && !s.client.anonymizedAt && (
+        <section className="mt-6 rounded-[26px] border border-line bg-surface p-5 shadow-card sm:p-6" aria-labelledby="t-site">
+          <h2 id="t-site" className="text-[17px] font-bold">
+            Opções no site para este cliente
+          </h2>
+          <p className="mb-3 text-[13px] text-ink-3">Imóveis disponíveis hoje no site da Auxiliadora com o perfil acima. Escolha até 3 e envie pelo WhatsApp com a mensagem pronta.</p>
+          <Suspense fallback={<p className="text-[14px] text-ink-3">Buscando no site…</p>}>
+            <SearchSuggestions
+              actorId={actor.id}
+              s={{ id: s.id, name, phone: s.phone, maxBudgetCents: s.maxBudgetCents, areas: s.areas, propertyType: s.propertyType, bedrooms: s.bedrooms, sentCodes: s.sentCodes, siteNewCodes: s.siteNewCodes, seenCodes: s.seen.map((v) => v.propertyCode).filter((c): c is string => !!c) }}
+            />
+          </Suspense>
+        </section>
+      )}
 
       <section className="mt-6 rounded-[26px] border border-line bg-surface p-5 shadow-card sm:p-6" aria-labelledby="t-vistos">
         <h2 id="t-vistos" className="mb-3 text-[16px] font-bold">

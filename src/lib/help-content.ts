@@ -194,7 +194,9 @@ export const HELP: HelpTopic[] = [
     ],
     tips: [
       "O número ao lado de Radar no menu mostra quantos pedidos estão para cobrar hoje.",
-      "Com o perfil preenchido, o pedido mostra “Opções parecidas no site”: imóveis disponíveis agora no site da Auxiliadora. Ofereceu ao cliente? Toque em “Indiquei ao cliente”.",
+      "Com o perfil preenchido, o pedido mostra “Opções parecidas no site”. Escolha até 3 e toque em “Enviar pelo WhatsApp”: a mensagem vai pronta com os links e fica no histórico.",
+      "Todo dia o app confere o site: imóvel novo com o perfil aparece em “Novos no site” e você recebe um aviso.",
+      "“Mapa da demanda” mostra o que os clientes mais procuram e onde falta imóvel no site, com o resumo pronto para a captação.",
     ],
   },
   {

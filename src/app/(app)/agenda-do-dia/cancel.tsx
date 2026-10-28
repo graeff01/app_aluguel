@@ -196,6 +196,9 @@ export function SwapProperty({ visitId, code, reasons }: { visitId: string; code
             className="num"
           />
           <FieldError state={s} name="newCode" />
+          <a href={`/agenda-do-dia/${visitId}/opcoes`} className="mt-1 inline-block text-[12px] font-semibold underline underline-offset-2">
+            Ver opções parecidas no site
+          </a>
           <label className="mb-1 mt-2 block text-[12px] font-semibold text-ink-2" htmlFor={`swap-reason-${visitId}`}>
             Por que o imóvel {code} saiu
           </label>

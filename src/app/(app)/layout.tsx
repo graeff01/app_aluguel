@@ -89,6 +89,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             { href: "/pre-analises", label: "Pré-análises", icon: "clients", badge: preOpen },
             { href: "/propostas", label: "Propostas", icon: "pipeline", badge: propNew },
             { href: "/radar", label: "Radar de clientes", icon: "pulse", badge: radarDue },
+            { href: "/demanda", label: "Mapa da demanda", icon: "dashboard" },
             { href: "/hoje", label: "Hoje", icon: "today" },
             { href: "/pendencias", label: "Pendências", icon: "pending", badge: pending },
             { href: "/revisao", label: "Revisão", icon: "review", badge: reviewCount },
@@ -150,6 +151,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/pre-analises/nova", label: "Nova", icon: "plus" },
     { href: "/propostas", label: "Propostas", icon: "pipeline", badge: propNew },
     { href: "/radar", label: "Radar", icon: "pulse", badge: radarDue },
+    { href: "/demanda", label: "Demanda", icon: "dashboard" },
     { href: "/agenda-google", label: "Agenda Google", icon: "today" },
     { href: "/agenda-do-dia", label: "Visitas", icon: "today" },
     { href: "/agenda-do-dia/nova", label: "Agendar", icon: "plus" },
@@ -290,7 +292,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {/* páginas de tela cheia (Agenda Google) usam toda a largura */}
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-32 has-[[data-full-bleed]]:max-w-none has-[[data-full-bleed]]:px-0 has-[[data-full-bleed]]:pt-0 has-[[data-full-bleed]]:pb-20 md:px-8 md:pt-9 md:pb-12 md:has-[[data-full-bleed]]:px-0 md:has-[[data-full-bleed]]:pt-0 md:has-[[data-full-bleed]]:pb-0">{children}</main>
       </div>
-      <BottomNav items={preService ? preNav : marketing ? marketingNav : global ? managerBottom : consultantNav} />
+      <BottomNav items={preService ? preNav.filter((i) => i.href !== "/demanda") : marketing ? marketingNav : global ? managerBottom : consultantNav} />
       <Suspense>
         <UndoToast />
       </Suspense>

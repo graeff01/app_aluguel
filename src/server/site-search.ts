@@ -97,7 +97,7 @@ export function parseSearchPage(html: string, origin: string): { items: SiteList
   return { items: [], total: null };
 }
 
-const cache = new Map<string, { at: number; items: SiteListing[] }>();
+const cache = new Map<string, { at: number; items: SiteListing[]; total: number | null }>();
 const CACHE_MS = 30 * 60_000;
 
 export async function siteOrigin() {
@@ -110,24 +110,118 @@ export async function siteOrigin() {
 
 /** Uma página de busca do site (com cache de 30 min). Erro de rede → null. */
 export async function searchSite(q: SiteQuery, opts: { fetchImpl?: typeof fetch; origin?: string } = {}): Promise<SiteListing[] | null> {
+  return (await searchSitePage(q, opts))?.items ?? null;
+}
+
+/** Quantos imóveis o site tem com este filtro (oferta). Erro → null. */
+export async function countOnSite(q: SiteQuery, opts: { fetchImpl?: typeof fetch; origin?: string } = {}): Promise<number | null> {
+  const r = await searchSitePage(q, opts);
+  return r ? (r.total ?? r.items.length) : null;
+}
+
+async function searchSitePage(q: SiteQuery, opts: { fetchImpl?: typeof fetch; origin?: string } = {}): Promise<{ items: SiteListing[]; total: number | null } | null> {
   const origin = opts.origin ?? (await siteOrigin());
   const url = siteSearchUrl(origin, q);
   const hit = cache.get(url);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.items;
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit;
   try {
     const res = await (opts.fetchImpl ?? fetch)(url, {
       headers: { "user-agent": "VisitasLocacao/1.0 (+sugestao de imoveis)", accept: "text/html" },
       redirect: "follow",
       signal: AbortSignal.timeout(12_000),
     });
-    if (res.status === 404) return [];
+    if (res.status === 404) return { items: [], total: 0 };
     if (!res.ok) return null;
-    const { items } = parseSearchPage((await res.text()).slice(0, 2_000_000), origin);
-    cache.set(url, { at: Date.now(), items });
-    if (cache.size > 200) cache.delete(cache.keys().next().value!);
-    return items;
+    const page = parseSearchPage((await res.text()).slice(0, 2_000_000), origin);
+    cache.set(url, { at: Date.now(), ...page });
+    if (cache.size > 300) cache.delete(cache.keys().next().value!);
+    return page;
   } catch (e) {
     log.warn("site_search.failed", { kind: (e as { name?: string }).name ?? "OTHER" });
     return null;
   }
+}
+
+/** Limpa o cache (testes). */
+export const clearSiteCache = () => cache.clear();
+
+// ─────────────── Imóveis parecidos com um perfil ───────────────
+
+export const normText = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+/** Tipo do perfil → filtro do site (quando o site tem) e palavras da categoria do anúncio. */
+export const TYPE_SEARCH: Record<string, { slug: string | null; kind: "residencial" | "comercial"; words: string[] }> = {
+  Apartamento: { slug: "apartamento", kind: "residencial", words: ["apartamento"] },
+  Casa: { slug: "casa", kind: "residencial", words: ["casa"] },
+  Sobrado: { slug: "sobrado", kind: "residencial", words: ["sobrado"] },
+  Cobertura: { slug: "cobertura", kind: "residencial", words: ["cobertura"] },
+  "Kitnet / studio": { slug: "kitnet-jk", kind: "residencial", words: ["kitnet", "kit", "studio", "jk", "loft"] },
+  Comercial: { slug: null, kind: "comercial", words: [] },
+};
+
+export type SearchProfile = { maxBudgetCents: number | null; areas: string[]; propertyType: string | null; bedrooms: number | null; exclude?: string[] };
+export type SimilarListing = SiteListing & { reasons: string[] };
+export type SimilarResult = { items: SimilarListing[]; error: boolean; moreUrl: string | null; searched: boolean };
+
+export const hasProfile = (p: SearchProfile) => !!(p.maxBudgetCents || p.areas.length || p.propertyType || p.bedrooms);
+
+/** Consulta base do site para um perfil (sem bairro). */
+export function profileQuery(p: SearchProfile): SiteQuery {
+  const t = p.propertyType ? TYPE_SEARCH[p.propertyType] : undefined;
+  return { city: SITE_CITY, kind: t?.kind ?? "residencial", type: t?.slug ?? null, minBedrooms: p.bedrooms, maxRentReais: p.maxBudgetCents ? p.maxBudgetCents / 100 : null };
+}
+
+/**
+ * Imóveis do site parecidos com o perfil (cidade da agência): busca por bairro (até 3), tipo, quartos mínimos e
+ * valor; o total (aluguel + condomínio + IPTU) pode passar até 10% do valor máximo. Sem perfil não busca.
+ * `error`: o site não respondeu.
+ */
+export async function findSimilarOnSite(p: SearchProfile, opts: { fetchImpl?: typeof fetch; origin?: string; limit?: number } = {}): Promise<SimilarResult> {
+  if (!hasProfile(p)) return { items: [], error: false, moreUrl: null, searched: false };
+  const origin = opts.origin ?? (await siteOrigin());
+  const t = p.propertyType ? TYPE_SEARCH[p.propertyType] : undefined;
+  const base = profileQuery(p);
+  const areas = p.areas.slice(0, 3);
+  const run = (qs: SiteQuery[]) => Promise.all(qs.map((q) => searchSite(q, { fetchImpl: opts.fetchImpl, origin })));
+  // por bairro; sem bairro (ou bairro que o site não conhece), a cidade toda
+  let pages = await run(areas.length ? areas.map((a) => ({ ...base, area: a })) : [base, { ...base, page: 2 }]);
+  if (areas.length && pages.every((x) => x !== null && x.length === 0)) pages = await run([base, { ...base, page: 2 }]);
+  const error = pages.every((x) => x === null);
+  const wantedAreas = areas.map(normText);
+  const seen = new Set(p.exclude ?? []);
+  const scored: (SimilarListing & { score: number })[] = [];
+  for (const it of pages.flatMap((x) => x ?? [])) {
+    if (seen.has(it.code)) continue;
+    seen.add(it.code);
+    const reasons: string[] = [];
+    let score = 0;
+    if (t?.words.length) {
+      const cat = normText(it.category ?? "");
+      if (!t.words.some((w) => new RegExp(`\\b${w}\\b`).test(cat))) continue;
+    }
+    const price = it.totalCents ?? it.rentCents;
+    if (p.maxBudgetCents) {
+      if (!price || price > p.maxBudgetCents * 1.1) continue;
+      reasons.push(price <= p.maxBudgetCents ? "dentro do valor" : "um pouco acima do valor");
+      score += price <= p.maxBudgetCents ? 2 : 1;
+    }
+    if (wantedAreas.length && it.neighborhood) {
+      const n = normText(it.neighborhood);
+      if (wantedAreas.some((a) => n.includes(a) || a.includes(n))) {
+        reasons.push(`no ${it.neighborhood}`);
+        score += 3;
+      }
+    }
+    if (p.bedrooms && it.bedrooms) {
+      if (it.bedrooms < p.bedrooms) continue;
+      reasons.push(it.bedrooms === p.bedrooms ? `${it.bedrooms} quarto${it.bedrooms > 1 ? "s" : ""}` : `${it.bedrooms} quartos`);
+      score += it.bedrooms === p.bedrooms ? 2 : 1;
+    }
+    scored.push({ ...it, reasons, score });
+  }
+  const items = scored
+    .sort((a, b) => b.score - a.score || (a.totalCents ?? a.rentCents ?? 0) - (b.totalCents ?? b.rentCents ?? 0))
+    .slice(0, opts.limit ?? 8)
+    .map(({ score: _score, ...rest }) => rest);
+  return { items, error, moreUrl: siteSearchUrl(origin, { ...base, area: areas.length === 1 ? areas[0] : null }), searched: true };
 }

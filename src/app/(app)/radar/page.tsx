@@ -15,7 +15,7 @@ export default async function RadarPage({ searchParams }: { searchParams: Promis
   const actor = await requireActor({ preService: true });
   if (!canUseRadar(actor)) notFound();
   const sp = await searchParams;
-  const tab: RadarTab = sp.aba === "cobrar" || sp.aba === "encerrados" ? sp.aba : "abertos";
+  const tab: RadarTab = sp.aba === "cobrar" || sp.aba === "novos" || sp.aba === "encerrados" ? sp.aba : "abertos";
   const now = new Date();
   const today = dayKey(now);
   const rows = await listRadar(actor, { tab, q: sp.q }, now);
@@ -25,9 +25,14 @@ export default async function RadarPage({ searchParams }: { searchParams: Promis
         title="Radar de clientes"
         subtitle="Clientes que procuram um perfil que não temos na base. O pedido vai para a captação e fica aqui até ter resposta."
         action={
-          <LinkButton href="/radar/novo">
-            <Icon name="plus" className="size-4" /> Novo no radar
-          </LinkButton>
+          <span className="flex flex-wrap gap-2">
+            <LinkButton href="/demanda" variant="secondary">
+              Mapa da demanda
+            </LinkButton>
+            <LinkButton href="/radar/novo">
+              <Icon name="plus" className="size-4" /> Novo no radar
+            </LinkButton>
+          </span>
         }
       />
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -35,6 +40,7 @@ export default async function RadarPage({ searchParams }: { searchParams: Promis
           label="Situação"
           items={[
             { href: "/radar?aba=cobrar", label: "Cobrar hoje", active: tab === "cobrar" },
+            { href: "/radar?aba=novos", label: "Novos no site", active: tab === "novos" },
             { href: "/radar", label: "Em aberto", active: tab === "abertos" },
             { href: "/radar?aba=encerrados", label: "Encerrados", active: tab === "encerrados" },
           ]}
@@ -48,7 +54,7 @@ export default async function RadarPage({ searchParams }: { searchParams: Promis
         </form>
       </div>
       {rows.length === 0 ? (
-        <Empty title={tab === "cobrar" ? "Nada para cobrar hoje" : tab === "abertos" ? "Nenhum cliente no radar" : "Nenhum encerrado ainda"} icon="✓">
+        <Empty title={tab === "cobrar" ? "Nada para cobrar hoje" : tab === "novos" ? "Nenhum imóvel novo no site para os pedidos" : tab === "abertos" ? "Nenhum cliente no radar" : "Nenhum encerrado ainda"} icon="✓">
           {tab === "abertos" ? "Use “Novo no radar” quando o cliente procura um perfil que não temos e o pedido vai para a captação." : undefined}
         </Empty>
       ) : (
@@ -69,6 +75,11 @@ export default async function RadarPage({ searchParams }: { searchParams: Promis
                   <p className="mt-1 line-clamp-2 text-[14px] text-ink-2">{r.wants}</p>
                   {profile && <p className="mt-1 truncate text-[12px] text-ink-3">{profile}</p>}
                   {r.foundCodes.length > 0 && <p className="mt-1 text-[12px] font-semibold text-good">Imóveis: {r.foundCodes.join(", ")}</p>}
+                  {r.status !== "CLOSED" && r.siteNewCodes.length > 0 && (
+                    <p className="mt-1 inline-flex rounded-full bg-accent px-2.5 py-0.5 text-[12px] font-bold text-white">
+                      {r.siteNewCodes.length === 1 ? "1 imóvel novo no site" : `${r.siteNewCodes.length} imóveis novos no site`}
+                    </p>
+                  )}
                   <p className={cx("mt-1.5 text-[12px]", due ? "font-bold text-bad" : "text-ink-3")}>
                     {r.status === "CLOSED"
                       ? `Encerrado em ${r.closedAt ? fmt.shortDate(r.closedAt) : "—"}`
