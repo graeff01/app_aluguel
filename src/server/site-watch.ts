@@ -12,7 +12,7 @@ import { getSettings } from "@/lib/settings";
 import { addDays, dayKey, endOfDayInTz, startOfDayInTz, TZ } from "@/lib/time";
 import { notifyUser } from "./notify";
 import { fetchPreview, propertyUrl } from "./property-preview";
-import { findSimilarOnSite, hasProfile, normText, TYPE_SEARCH } from "./site-search";
+import { findSimilarOnSite, hasProfile, normText, TYPE_SEARCH, type LearnedRules } from "./site-search";
 import { notFound } from "@/lib/errors";
 import { assert, hasGlobalView, isPreService, type AuthzActor } from "@/lib/authz";
 
@@ -48,7 +48,7 @@ export async function watchDemandOnSite(now = new Date(), opts: Opts = {}) {
       await db.clientRadar.update({ where: { id: r.id }, data: { siteCheckedAt: now } });
       continue;
     }
-    const res = await find({ ...r, exclude: r.foundCodes });
+    const res = await find({ ...r, exclude: [...r.foundCodes, ...r.rejectedCodes], rules: r.siteRules as LearnedRules | null });
     if (res.error) continue; // site fora: tenta na próxima rodada
     const { newOnes, seen } = diffSeen(r, res.items.map((i) => i.code));
     await db.$transaction(async (tx) => {
@@ -73,7 +73,7 @@ export async function watchDemandOnSite(now = new Date(), opts: Opts = {}) {
     }
     // imóveis que o cliente já visitou não voltam como sugestão
     const visited = (await db.visit.findMany({ where: { clientId: s.clientId, propertyCode: { not: null } }, select: { propertyCode: true } })).map((v) => v.propertyCode!);
-    const res = await find({ ...s, exclude: [...s.sentCodes, ...visited] });
+    const res = await find({ ...s, exclude: [...s.sentCodes, ...s.rejectedCodes, ...visited], rules: s.siteRules as LearnedRules | null });
     if (res.error) continue;
     const { newOnes, seen } = diffSeen(s, res.items.map((i) => i.code));
     await db.clientSearch.update({ where: { id: s.id }, data: { siteSeenCodes: seen, siteNewCodes: newOnes, siteCheckedAt: now } });

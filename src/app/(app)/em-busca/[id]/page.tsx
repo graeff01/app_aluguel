@@ -92,7 +92,7 @@ export default async function SearchPage({ params, searchParams }: { params: Pro
           <Suspense fallback={<p className="text-[14px] text-ink-3">Buscando no site…</p>}>
             <SearchSuggestions
               actorId={actor.id}
-              s={{ id: s.id, name, phone: s.phone, maxBudgetCents: s.maxBudgetCents, areas: s.areas, propertyType: s.propertyType, bedrooms: s.bedrooms, sentCodes: s.sentCodes, siteNewCodes: s.siteNewCodes, seenCodes: s.seen.map((v) => v.propertyCode).filter((c): c is string => !!c) }}
+              s={{ id: s.id, name, phone: s.phone, maxBudgetCents: s.maxBudgetCents, areas: s.areas, propertyType: s.propertyType, bedrooms: s.bedrooms, sentCodes: s.sentCodes, siteNewCodes: s.siteNewCodes, rejectedCodes: s.rejectedCodes, siteRules: s.siteRules, seenCodes: s.seen.map((v) => v.propertyCode).filter((c): c is string => !!c) }}
             />
           </Suspense>
         </section>

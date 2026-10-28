@@ -9,7 +9,7 @@
  * - termina sozinha como "Alugou conosco" quando um contrato do cliente é assinado.
  */
 import { z } from "zod";
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import type { ClientSearchStatus } from "@/generated/prisma/enums";
 import { db, type Tx } from "@/lib/db";
 import { audit } from "@/lib/audit";
@@ -17,6 +17,7 @@ import { AppError, notFound } from "@/lib/errors";
 import { assert, canViewOpportunity, canViewVisit, hasGlobalView, visitScope, type AuthzActor } from "@/lib/authz";
 import { addDays, dateOnlyFromKey, dateOnlyKey, dayKey } from "@/lib/time";
 import { parseMoney } from "./pre-analysis";
+import { learnFromRejection, REJECT_REASONS, type LearnedRules, type RejectReason, type RejectedListing } from "./site-search";
 
 export const SEARCH_STALE_DAYS = 7;
 export const DEFAULT_SEARCH_FOLLOWUP_DAYS = 3;
@@ -310,4 +311,35 @@ export async function searchOptionsSent(actor: AuthzActor, id: string, codes: st
     });
     await audit(tx, { actorId: actor.id, action: "client_search.options_sent", entityType: "ClientSearch", entityId: id, changes: { imoveis: list } });
   });
+}
+
+/** "Fora do perfil" na busca do cliente: mesma regra do radar (sai das sugestões e ajusta as próximas). */
+export async function rejectSearchSuggestion(actor: AuthzActor, id: string, input: { reason: string; note?: string; listing: RejectedListing }, now = new Date()) {
+  const s = await loadManaged(actor, id);
+  if (s.status !== "ACTIVE") throw new AppError("INVALID_STATE", "Esta busca já foi encerrada.");
+  if (!(input.reason in REJECT_REASONS)) throw new AppError("VALIDATION", "Escolha o motivo.", { reason: "Obrigatório." });
+  const reason = input.reason as RejectReason;
+  const note = (input.note ?? "").trim().slice(0, 300);
+  if (reason === "OTHER" && !note) throw new AppError("VALIDATION", "Conte o motivo.", { note: "Obrigatório quando o motivo é Outro." });
+  if (!/^[\w-]{2,40}$/.test(input.listing.code)) throw new AppError("VALIDATION", "Código inválido.");
+  const { rules, learned } = learnFromRejection(s.siteRules as LearnedRules | null, reason, input.listing);
+  const stamp = dayKey(now).split("-").reverse().slice(0, 2).join("/");
+  await db.$transaction(async (tx) => {
+    await tx.clientSearch.update({
+      where: { id },
+      data: {
+        rejectedCodes: [...new Set([...s.rejectedCodes, input.listing.code])].slice(-200),
+        siteRules: rules,
+        siteNewCodes: s.siteNewCodes.filter((c) => c !== input.listing.code),
+        note: appendNote(s.note, `${stamp}: fora do perfil ${input.listing.code} — ${REJECT_REASONS[reason]}${note ? ` (${note})` : ""}`),
+      },
+    });
+    await audit(tx, { actorId: actor.id, action: "client_search.suggestion_rejected", entityType: "ClientSearch", entityId: id, changes: { imovel: input.listing.code, motivo: reason } });
+  });
+  return { learned };
+}
+
+export async function resetSearchRules(actor: AuthzActor, id: string) {
+  await loadManaged(actor, id);
+  await db.clientSearch.update({ where: { id }, data: { siteRules: Prisma.DbNull } });
 }

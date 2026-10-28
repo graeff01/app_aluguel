@@ -8,11 +8,14 @@
  */
 import { getSettings } from "@/lib/settings";
 import { log } from "@/lib/log";
+import { REJECT_REASONS, type RejectReason } from "@/lib/reject-reasons";
 
 export type SiteListing = {
   code: string;
   category: string | null;
   bedrooms: number | null;
+  /** vagas de garagem (0 = sem vaga; null = o anúncio não informa) */
+  parking: number | null;
   /** aluguel e total (aluguel + condomínio + IPTU), em centavos */
   rentCents: number | null;
   totalCents: number | null;
@@ -50,6 +53,11 @@ const num = (v: unknown) => {
   const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.replace(",", ".")) : NaN;
   return Number.isFinite(n) && n > 0 ? n : null;
 };
+/** contagem que aceita zero ("0" vagas) */
+const count = (v: unknown) => {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+  return Number.isInteger(n) && n >= 0 && n < 100 ? n : null;
+};
 const txt = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 80) : null);
 
 /** Lê a lista de imóveis da página de busca. Formato inesperado → lista vazia (nunca lança). */
@@ -81,6 +89,7 @@ export function parseSearchPage(html: string, origin: string): { items: SiteList
           code,
           category: txt(d.categoria?.nome),
           bedrooms: num(d.dormitorios),
+          parking: count(d.vagas),
           rentCents: rent ? Math.round(rent * 100) : null,
           totalCents: total ? Math.round(total * 100) : null,
           neighborhood: txt(d.endereco?.bairro?.nome),
@@ -159,7 +168,12 @@ export const TYPE_SEARCH: Record<string, { slug: string | null; kind: "residenci
   Comercial: { slug: null, kind: "comercial", words: [] },
 };
 
-export type SearchProfile = { maxBudgetCents: number | null; areas: string[]; propertyType: string | null; bedrooms: number | null; exclude?: string[] };
+/**
+ * O que o app aprendeu com as opções marcadas "fora do perfil" (por cliente): teto de valor estrito, bairros e
+ * tipos a evitar, quartos mínimos e exigência de vaga de garagem.
+ */
+export type LearnedRules = { priceCapCents?: number | null; avoidAreas?: string[]; avoidCategories?: string[]; minBedrooms?: number | null; needsGarage?: boolean };
+export type SearchProfile = { maxBudgetCents: number | null; areas: string[]; propertyType: string | null; bedrooms: number | null; exclude?: string[]; rules?: LearnedRules | null };
 export type SimilarListing = SiteListing & { reasons: string[] };
 export type SimilarResult = { items: SimilarListing[]; error: boolean; moreUrl: string | null; searched: boolean };
 
@@ -168,7 +182,9 @@ export const hasProfile = (p: SearchProfile) => !!(p.maxBudgetCents || p.areas.l
 /** Consulta base do site para um perfil (sem bairro). */
 export function profileQuery(p: SearchProfile): SiteQuery {
   const t = p.propertyType ? TYPE_SEARCH[p.propertyType] : undefined;
-  return { city: SITE_CITY, kind: t?.kind ?? "residencial", type: t?.slug ?? null, minBedrooms: p.bedrooms, maxRentReais: p.maxBudgetCents ? p.maxBudgetCents / 100 : null };
+  const minBedrooms = Math.max(p.bedrooms ?? 0, p.rules?.minBedrooms ?? 0) || null;
+  const cap = [p.maxBudgetCents, p.rules?.priceCapCents].filter((x): x is number => !!x);
+  return { city: SITE_CITY, kind: t?.kind ?? "residencial", type: t?.slug ?? null, minBedrooms, maxRentReais: cap.length ? Math.min(...cap) / 100 : null };
 }
 
 /**
@@ -195,6 +211,16 @@ export async function findSimilarOnSite(p: SearchProfile, opts: { fetchImpl?: ty
     seen.add(it.code);
     const reasons: string[] = [];
     let score = 0;
+    // o que já ficou "fora do perfil" deste cliente
+    const r = p.rules;
+    if (r) {
+      const priceNow = it.totalCents ?? it.rentCents;
+      if (r.priceCapCents && priceNow && priceNow > r.priceCapCents) continue;
+      if (r.avoidAreas?.length && it.neighborhood && r.avoidAreas.some((a) => normText(a) === normText(it.neighborhood!))) continue;
+      if (r.avoidCategories?.length && it.category && r.avoidCategories.some((c) => normText(c) === normText(it.category!))) continue;
+      if (r.minBedrooms && it.bedrooms != null && it.bedrooms < r.minBedrooms) continue;
+      if (r.needsGarage && it.parking === 0) continue;
+    }
     if (t?.words.length) {
       const cat = normText(it.category ?? "");
       if (!t.words.some((w) => new RegExp(`\\b${w}\\b`).test(cat))) continue;
@@ -225,3 +251,52 @@ export async function findSimilarOnSite(p: SearchProfile, opts: { fetchImpl?: ty
     .map(({ score: _score, ...rest }) => rest);
   return { items, error, moreUrl: siteSearchUrl(origin, { ...base, area: areas.length === 1 ? areas[0] : null }), searched: true };
 }
+
+// ─────────────── "Fora do perfil": aprender com a opção recusada ───────────────
+
+export { REJECT_REASONS, type RejectReason };
+export type RejectedListing = { code: string; category: string | null; neighborhood: string | null; bedrooms: number | null; priceCents: number | null };
+
+const brlShort = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+
+/** Ajusta as regras do cliente pelo motivo; devolve as regras novas e uma frase do que mudou (ou null). */
+export function learnFromRejection(rules: LearnedRules | null | undefined, reason: RejectReason, l: RejectedListing): { rules: LearnedRules; learned: string | null } {
+  const r: LearnedRules = { ...(rules ?? {}) };
+  const add = (list: string[] | undefined, v: string) => [...new Set([...(list ?? []), v])].slice(0, 20);
+  if (reason === "PRICE" && l.priceCents) {
+    const cap = l.priceCents - 100; // abaixo do valor recusado
+    r.priceCapCents = r.priceCapCents ? Math.min(r.priceCapCents, cap) : cap;
+    return { rules: r, learned: `só até ${brlShort(r.priceCapCents)}` };
+  }
+  if (reason === "AREA" && l.neighborhood) {
+    r.avoidAreas = add(r.avoidAreas, l.neighborhood);
+    return { rules: r, learned: `sem imóveis no ${l.neighborhood}` };
+  }
+  if (reason === "TYPE" && l.category) {
+    r.avoidCategories = add(r.avoidCategories, l.category);
+    return { rules: r, learned: `sem ${l.category.toLowerCase()}` };
+  }
+  if (reason === "SMALL" && l.bedrooms) {
+    r.minBedrooms = Math.max(r.minBedrooms ?? 0, l.bedrooms + 1);
+    return { rules: r, learned: `com ${r.minBedrooms}+ quartos` };
+  }
+  if (reason === "GARAGE") {
+    r.needsGarage = true;
+    return { rules: r, learned: "com vaga de garagem" };
+  }
+  return { rules: r, learned: null };
+}
+
+/** Resumo do que o app aprendeu (para mostrar na tela). */
+export function describeRules(rules: LearnedRules | null | undefined) {
+  if (!rules) return [];
+  return [
+    rules.priceCapCents ? `até ${brlShort(rules.priceCapCents)}` : null,
+    rules.minBedrooms ? `${rules.minBedrooms}+ quartos` : null,
+    rules.needsGarage ? "com garagem" : null,
+    ...(rules.avoidAreas ?? []).map((a) => `sem ${a}`),
+    ...(rules.avoidCategories ?? []).map((c) => `sem ${c.toLowerCase()}`),
+  ].filter((x): x is string => !!x);
+}
+
+export const listingLine = (l: RejectedListing) => [l.category, l.neighborhood, l.bedrooms ? `${l.bedrooms} quartos` : null, l.priceCents ? brlShort(l.priceCents) : null].filter(Boolean).join(" · ");

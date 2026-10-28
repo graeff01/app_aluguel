@@ -2,7 +2,8 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { optionsSentAction } from "@/app/actions/radar";
+import { optionsSentAction, rejectSuggestionAction } from "@/app/actions/radar";
+import { REJECT_REASONS, type RejectReason } from "@/lib/reject-reasons";
 import { optionsMessage, whatsappUrl, type OptionItem } from "@/lib/options-message";
 import { cx } from "./ui";
 
@@ -17,6 +18,7 @@ const brl = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency"
 export function SiteSuggestions({ kind, id, items, phone, clientName, senderName }: { kind: "radar" | "search"; id: string; items: Suggestion[]; phone: string | null; clientName: string; senderName: string }) {
   const [picked, setPicked] = useState<string[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [rejecting, setRejecting] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const router = useRouter();
   const chosen = items.filter((i) => picked.includes(i.code));
@@ -71,7 +73,13 @@ export function SiteSuggestions({ kind, id, items, phone, clientName, senderName
                   <a href={it.url} target="_blank" rel="noopener noreferrer" className="press inline-flex min-h-9 items-center rounded-full border border-line-strong px-3 text-[13px] font-semibold">
                     Ver anúncio ↗
                   </a>
+                  {rejecting !== it.code && (
+                    <button type="button" onClick={() => setRejecting(it.code)} className="press inline-flex min-h-9 items-center rounded-full px-3 text-[13px] font-semibold text-ink-3 hover:bg-tint hover:text-ink">
+                      Fora do perfil
+                    </button>
+                  )}
                 </div>
+                {rejecting === it.code && <RejectForm kind={kind} id={id} item={it} onDone={(text) => { setRejecting(null); setMsg({ ok: true, text }); setPicked((p) => p.filter((c) => c !== it.code)); router.refresh(); }} onCancel={() => setRejecting(null)} />}
               </div>
             </li>
           );
@@ -99,6 +107,48 @@ export function SiteSuggestions({ kind, id, items, phone, clientName, senderName
           {msg.text}
         </p>
       )}
+    </div>
+  );
+}
+
+/** Motivo de "fora do perfil": tira a opção deste cliente e ajusta as próximas sugestões. */
+function RejectForm({ kind, id, item, onDone, onCancel }: { kind: "radar" | "search"; id: string; item: Suggestion; onDone: (text: string) => void; onCancel: () => void }) {
+  const [reason, setReason] = useState<RejectReason | "">("");
+  const [note, setNote] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const save = () =>
+    start(async () => {
+      const r = await rejectSuggestionAction(kind, id, {
+        reason,
+        note,
+        listing: { code: item.code, category: item.category, neighborhood: item.neighborhood, bedrooms: item.bedrooms, priceCents: item.totalCents ?? item.rentCents },
+      });
+      if (r.ok) onDone(r.message ?? "Fora do perfil.");
+      else setErr(r.fieldErrors?.note ?? r.fieldErrors?.reason ?? r.message ?? "Não foi possível salvar.");
+    });
+  return (
+    <div className="mt-3 rounded-xl border border-line bg-surface-2 p-3">
+      <p className="mb-2 text-[13px] font-semibold">Por que não serve para este cliente?</p>
+      <div className="flex flex-wrap gap-1.5">
+        {(Object.keys(REJECT_REASONS) as RejectReason[]).map((k) => (
+          <button key={k} type="button" onClick={() => setReason(k)} aria-pressed={reason === k} className={cx("press min-h-9 rounded-full border px-3 text-[12px] font-semibold", reason === k ? "border-accent bg-accent-soft text-accent-strong" : "border-line-strong")}>
+            {REJECT_REASONS[k]}
+          </button>
+        ))}
+      </div>
+      {reason && (
+        <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder={reason === "OTHER" ? "Qual o motivo? (obrigatório)" : "Observação (opcional)"} className="mt-2 block min-h-10 w-full rounded-xl border border-line-strong bg-surface px-3 text-[14px]" />
+      )}
+      {err && <p className="mt-2 text-[13px] font-semibold text-bad">{err}</p>}
+      <div className="mt-2 flex gap-2">
+        <button type="button" disabled={!reason || pending} onClick={save} className="press min-h-9 rounded-full bg-primary px-4 text-[13px] font-semibold text-on-primary disabled:opacity-40">
+          Salvar
+        </button>
+        <button type="button" onClick={onCancel} className="press min-h-9 rounded-full px-3 text-[13px] font-semibold text-ink-2">
+          Voltar
+        </button>
+      </div>
     </div>
   );
 }

@@ -11,6 +11,7 @@
  * pré-análise depois de encerrado. Notificações não levam dados do cliente.
  */
 import { z } from "zod";
+import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { AppError, notFound } from "@/lib/errors";
@@ -23,7 +24,7 @@ import { log } from "@/lib/log";
 import { addDays, dateOnlyFromKey, dateOnlyKey, dayKey } from "@/lib/time";
 import { clientByPhone, phoneHash } from "./client-links";
 import { parseProfile } from "./client-search";
-import { findSimilarOnSite } from "./site-search";
+import { findSimilarOnSite, learnFromRejection, listingLine, REJECT_REASONS, type LearnedRules, type RejectReason, type RejectedListing } from "./site-search";
 import type { RadarStatus } from "@/generated/prisma/enums";
 
 const DAY = 86400_000;
@@ -227,11 +228,11 @@ export async function runRadarRetention(now = new Date()) {
 /** Imóveis do site parecidos com o perfil do pedido (ver findSimilarOnSite). */
 export async function similarOnSite(
   actor: AuthzActor,
-  radar: { maxBudgetCents: number | null; areas: string[]; propertyType: string | null; bedrooms: number | null; foundCodes: string[] },
+  radar: { maxBudgetCents: number | null; areas: string[]; propertyType: string | null; bedrooms: number | null; foundCodes: string[]; rejectedCodes?: string[]; siteRules?: unknown },
   opts: { fetchImpl?: typeof fetch; origin?: string; limit?: number } = {},
 ) {
   assert(canUseRadar(actor));
-  return findSimilarOnSite({ ...radar, exclude: radar.foundCodes }, opts);
+  return findSimilarOnSite({ ...radar, exclude: [...radar.foundCodes, ...(radar.rejectedCodes ?? [])], rules: radar.siteRules as LearnedRules | null }, opts);
 }
 
 /** Indica ao pedido um imóvel sugerido (fica nos imóveis achados e no histórico). */
@@ -282,4 +283,36 @@ export async function captureFound(actor: AuthzActor, id: string, input: { codes
   });
   const pre = await db.user.findMany({ where: { role: "PRE_SERVICE", active: true }, select: { id: true } });
   for (const u of pre) await notify(u.id, { title: "A captação achou imóvel para o radar", body: `${codes.length === 1 ? `Imóvel ${codes[0]}` : `Imóveis ${codes.join(", ")}`} para o pedido: ${profileLine(r)}. Toque para oferecer ao cliente.`, url: `/radar/${id}`, tag: `radar-achou-${id}` }).catch(() => undefined);
+}
+
+// ─────────────── "Fora do perfil" ───────────────
+
+/** A opção do site não serve: sai das sugestões e o motivo ajusta as próximas (teto de valor, bairro, tipo…). */
+export async function rejectRadarSuggestion(actor: AuthzActor, id: string, input: { reason: string; note?: string; listing: RejectedListing }, now = new Date()) {
+  assert(canUseRadar(actor));
+  if (!(input.reason in REJECT_REASONS)) throw new AppError("VALIDATION", "Escolha o motivo.", { reason: "Obrigatório." });
+  const reason = input.reason as RejectReason;
+  const note = (input.note ?? "").trim().slice(0, 300);
+  if (reason === "OTHER" && !note) throw new AppError("VALIDATION", "Conte o motivo.", { note: "Obrigatório quando o motivo é Outro." });
+  if (!/^[\w-]{2,40}$/.test(input.listing.code)) throw new AppError("VALIDATION", "Código inválido.");
+  const r = await db.clientRadar.findUnique({ where: { id } });
+  if (!r) throw notFound();
+  const { rules, learned } = learnFromRejection(r.siteRules as LearnedRules | null, reason, input.listing);
+  await db.$transaction(async (tx) => {
+    await tx.clientRadar.update({
+      where: { id },
+      data: { rejectedCodes: [...new Set([...r.rejectedCodes, input.listing.code])].slice(-200), siteRules: rules, siteNewCodes: r.siteNewCodes.filter((c) => c !== input.listing.code) },
+    });
+    await tx.radarEvent.create({
+      data: { radarId: id, authorId: actor.id, createdAt: now, note: [`Fora do perfil: imóvel ${input.listing.code} (${listingLine(input.listing)}) — ${REJECT_REASONS[reason]}`, note, learned ? `Próximas sugestões: ${learned}.` : ""].filter(Boolean).join(" — ").slice(0, 2000) },
+    });
+    await audit(tx, { actorId: actor.id, action: "radar.suggestion_rejected", entityType: "ClientRadar", entityId: id, changes: { imovel: input.listing.code, motivo: reason } });
+  });
+  return { learned };
+}
+
+/** Desfaz os ajustes aprendidos (as opções recusadas continuam fora). */
+export async function resetRadarRules(actor: AuthzActor, id: string) {
+  assert(canUseRadar(actor));
+  await db.clientRadar.update({ where: { id }, data: { siteRules: Prisma.DbNull } });
 }

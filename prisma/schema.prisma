@@ -1184,6 +1184,9 @@ model ClientSearch {
   siteNewCodes   String[]           @default([])
   siteCheckedAt  DateTime?
   sentCodes      String[]           @default([])
+  /// opções do site marcadas "fora do perfil" e o que o app aprendeu com elas (LearnedRules)
+  rejectedCodes  String[]           @default([])
+  siteRules      Json?
 
   @@index([consultantId, status])
   @@index([clientId, status])
@@ -1240,6 +1243,9 @@ model ClientRadar {
   siteSeenCodes   String[]      @default([])
   siteNewCodes    String[]      @default([])
   siteCheckedAt   DateTime?
+  /// opções do site marcadas "fora do perfil" e o que o app aprendeu com elas (LearnedRules)
+  rejectedCodes   String[]      @default([])
+  siteRules       Json?
   events          RadarEvent[]
 
   @@index([status, followUpOn])

@@ -197,3 +197,43 @@ describe("demonstração pública da captação", () => {
     expect(fb.some((f) => f.name === "Gerente Captação" && f.text === "Queria filtrar pedidos por bairro")).toBe(true);
   });
 });
+
+describe("fora do perfil", () => {
+  it("a opção recusada sai das sugestões e o motivo ajusta as próximas (valor, bairro, garagem); dá para desfazer", async () => {
+    const { similarOnSite, rejectRadarSuggestion, resetRadarRules } = await import("@/server/radar");
+    const { learnFromRejection, describeRules } = await import("@/server/site-search");
+    expect(learnFromRejection(null, "PRICE", { code: "1", category: null, neighborhood: null, bedrooms: null, priceCents: 156800 })).toEqual({ rules: { priceCapCents: 156700 }, learned: "só até R$\u00a01.567" });
+    expect(learnFromRejection({ minBedrooms: 2 }, "SMALL", { code: "1", category: null, neighborhood: null, bedrooms: 2, priceCents: null }).rules.minBedrooms).toBe(3);
+    expect(learnFromRejection(null, "OFFERED", { code: "1", category: null, neighborhood: null, bedrooms: null, priceCents: null }).learned).toBeNull();
+
+    const withParking = (codigo: string, cat: string, dorm: string, total: number, bairro: string, vagas: string) => ({ ...item(codigo, cat, dorm, total, total, bairro), vagas });
+    const list = [
+      withParking("844975", "Apartamento", "2", 1568, "Nossa Senhora das Graças", "1"),
+      withParking("700001", "Apartamento", "2", 1400, "Centro", "0"),
+      withParking("700002", "Apartamento", "2", 1450, "Centro", "1"),
+      withParking("700003", "Apartamento", "2", 1300, "Fátima", "1"),
+    ];
+    const site = fakeSite(() => list);
+    const r = await createRadar(jasmin, { clientName: "Cliente Teste", phone: "(51) 99876-1111", wants: "apto 2 quartos", propertyType: "Apartamento", bedrooms: "2", maxBudget: "1.500" }, NOW);
+    const load = async () => db.clientRadar.findUniqueOrThrow({ where: { id: r.id } });
+    const codes = async () => (await similarOnSite(jasmin, await load(), { fetchImpl: site, origin: ORIGIN })).items.map((i) => i.code);
+    expect(await codes()).toEqual(["700003", "700001", "700002", "844975"]);
+
+    await expect(rejectRadarSuggestion(jasmin, r.id, { reason: "OTHER", listing: { code: "700003", category: "Apartamento", neighborhood: "Fátima", bedrooms: 2, priceCents: 130000 } })).rejects.toMatchObject({ code: "VALIDATION" });
+    // valor: 844975 (R$ 1.568) era "um pouco acima"; com o teto, saem ele e os acima de R$ 1.567
+    const a = await rejectRadarSuggestion(jasmin, r.id, { reason: "PRICE", listing: { code: "844975", category: "Apartamento", neighborhood: "Nossa Senhora das Graças", bedrooms: 2, priceCents: 156800 } });
+    expect(a.learned).toBe("só até R$\u00a01.567");
+    expect(await codes()).toEqual(["700003", "700001", "700002"]);
+    // bairro e garagem
+    await rejectRadarSuggestion(jasmin, r.id, { reason: "AREA", listing: { code: "700003", category: "Apartamento", neighborhood: "Fátima", bedrooms: 2, priceCents: 130000 } });
+    await rejectRadarSuggestion(jasmin, r.id, { reason: "GARAGE", listing: { code: "700001", category: "Apartamento", neighborhood: "Centro", bedrooms: 2, priceCents: 140000 } });
+    expect(await codes()).toEqual(["700002"]);
+    const saved = await load();
+    expect(saved.rejectedCodes).toEqual(["844975", "700003", "700001"]);
+    expect(describeRules(saved.siteRules as never)).toEqual(["até R$\u00a01.567", "com garagem", "sem Fátima"]);
+    expect(await db.radarEvent.count({ where: { radarId: r.id, note: { startsWith: "Fora do perfil: imóvel 844975" } } })).toBe(1);
+    // desfazer ajustes: as regras saem, as recusadas continuam fora
+    await resetRadarRules(jasmin, r.id);
+    expect(await codes()).toEqual(["700002"]);
+  });
+});

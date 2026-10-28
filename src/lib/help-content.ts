@@ -212,6 +212,7 @@ export const HELP: HelpTopic[] = [
       "Com o perfil preenchido, o pedido mostra “Opções parecidas no site”. Escolha até 3 e toque em “Enviar pelo WhatsApp”: a mensagem vai pronta com os links e fica no histórico.",
       "Todo dia o app confere o site: imóvel novo com o perfil aparece em “Novos no site” e você recebe um aviso.",
       "Quando a captação achar um imóvel para o pedido, você recebe um aviso e o pedido aparece em “Cobrar hoje”.",
+      "Uma opção não serve? Toque em “Fora do perfil” e diga o motivo: ela some e as próximas sugestões ficam mais certeiras (dá para desfazer os ajustes).",
     ],
   },
   {

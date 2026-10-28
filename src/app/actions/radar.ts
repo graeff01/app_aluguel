@@ -2,8 +2,9 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { runAction, str, type ActionState } from "@/lib/action";
-import { captureFound, closeRadar, createRadar, radarOptionsSent, reopenRadar, updateRadar } from "@/server/radar";
-import { searchOptionsSent } from "@/server/client-search";
+import { captureFound, closeRadar, createRadar, radarOptionsSent, rejectRadarSuggestion, reopenRadar, resetRadarRules, updateRadar } from "@/server/radar";
+import { rejectSearchSuggestion, resetSearchRules, searchOptionsSent } from "@/server/client-search";
+import type { RejectedListing } from "@/server/site-search";
 
 export async function createRadarAction(_: ActionState, fd: FormData): Promise<ActionState> {
   let id = "";
@@ -74,6 +75,27 @@ export async function captureFoundAction(_: ActionState, fd: FormData): Promise<
   const s = await runAction(async (a) => {
     await captureFound(a, str(fd, "id"), { codes: str(fd, "codes"), note: str(fd, "note") });
     return "Enviado ao pré-atendimento. Ela foi avisada para oferecer ao cliente.";
+  });
+  if (s.ok) revalidatePath("/", "layout");
+  return s;
+}
+
+/** Opção do site "fora do perfil" (radar ou cliente em busca), com o motivo. */
+export async function rejectSuggestionAction(kind: "radar" | "search", id: string, input: { reason: string; note?: string; listing: RejectedListing }): Promise<ActionState> {
+  const s = await runAction(async (a) => {
+    const r = kind === "radar" ? await rejectRadarSuggestion(a, id, input) : await rejectSearchSuggestion(a, id, input);
+    return r.learned ? `Fora do perfil. Próximas sugestões: ${r.learned}.` : "Fora do perfil: não aparece mais para este cliente.";
+  });
+  if (s.ok) revalidatePath("/", "layout");
+  return s;
+}
+
+/** Desfaz os ajustes aprendidos com as opções recusadas. */
+export async function resetRulesAction(kind: "radar" | "search", id: string): Promise<ActionState> {
+  const s = await runAction(async (a) => {
+    if (kind === "radar") await resetRadarRules(a, id);
+    else await resetSearchRules(a, id);
+    return "Ajustes desfeitos: as sugestões voltam a seguir só o perfil.";
   });
   if (s.ok) revalidatePath("/", "layout");
   return s;

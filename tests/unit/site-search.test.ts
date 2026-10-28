@@ -22,7 +22,7 @@ describe("busca no site da imobiliária", () => {
     const r = parseSearchPage(page([item("722136", "Apartamento", "2", 2500, 3148, "Centro"), { codigo: "<script>" }], 600), ORIGIN);
     expect(r.total).toBe(600);
     expect(r.items).toEqual([
-      { code: "722136", category: "Apartamento", bedrooms: 2, rentCents: 250000, totalCents: 314800, neighborhood: "Centro", city: "Canoas", photoUrl: "https://gestor.auxiliadorapredial.com.br/rest/image/722136.jpg", url: `${ORIGIN}/imovel/aluguel/722136/x` },
+      { code: "722136", category: "Apartamento", bedrooms: 2, parking: null, rentCents: 250000, totalCents: 314800, neighborhood: "Centro", city: "Canoas", photoUrl: "https://gestor.auxiliadorapredial.com.br/rest/image/722136.jpg", url: `${ORIGIN}/imovel/aluguel/722136/x` },
     ]);
     expect(parseSearchPage("<html>mudou tudo</html>", ORIGIN)).toEqual({ items: [], total: null });
   });

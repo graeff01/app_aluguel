@@ -12,6 +12,13 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-29",
+    title: "Opção fora do perfil",
+    changes: [
+      { text: "Nas opções do site (Radar e Clientes em busca), “Fora do perfil”: diga o motivo (valor, bairro, tipo, tamanho, garagem, já oferecido…) e o imóvel sai das sugestões daquele cliente. O motivo ajusta as próximas: valor alto baixa o teto, bairro e tipo deixam de aparecer, “pequeno” pede mais quartos.", who: ["PRE_SERVICE", "CONSULTANT", "MANAGER"] },
+    ],
+  },
+  {
     id: "2026-10-28-c",
     title: "Perfil Captação",
     changes: [
