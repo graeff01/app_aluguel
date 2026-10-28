@@ -46,7 +46,32 @@ async function Gaps({ actor, segments, days }: { actor: AuthzActor; segments: De
   const brief = captureBrief(days, rows);
   return (
     <>
-      <div className="overflow-x-auto">
+      {/* celular: um cartão por perfil */}
+      <ul className="space-y-2 sm:hidden">
+        {rows.map((r) => (
+          <li key={`${r.area}|${r.type}`} className="rounded-2xl border border-line p-3">
+            <p className="font-semibold">
+              {r.type ?? "Qualquer tipo"} · {r.area}
+            </p>
+            <p className="text-[12px] text-ink-3">{[r.bedrooms ? `${r.bedrooms}+ quartos` : null, r.budgetCents ? `até ${brl(r.budgetCents)}` : null].filter(Boolean).join(" · ") || "—"}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px]">
+              <span>
+                <strong className="num">{r.demand}</strong> cliente{r.demand === 1 ? "" : "s"}
+              </span>
+              <span className="text-ink-3">·</span>
+              {r.supply == null ? (
+                <span className="text-ink-3">site não respondeu</span>
+              ) : (
+                <a href={r.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                  <strong className="num">{r.supply}</strong> no site
+                </a>
+              )}
+              {r.gap && <span className={cx("ml-auto inline-flex rounded-full px-2.5 py-0.5 text-[12px] font-bold", GAP[r.gap].cls)}>{GAP[r.gap].label}</span>}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto sm:block">
         <table className="w-full min-w-[560px] text-left text-[14px]">
           <thead>
             <tr className="border-b border-line text-[12px] tracking-wide text-ink-3 uppercase">

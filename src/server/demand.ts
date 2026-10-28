@@ -24,7 +24,15 @@ export const BUDGET_BUCKETS = [
 type Row = { source: "radar" | "busca"; areas: string[]; propertyType: string | null; bedrooms: number | null; maxBudgetCents: number | null; open: boolean };
 type Count = { label: string; count: number };
 
-const titleCase = (s: string) => s.replace(/\s+/g, " ").trim().replace(/(^|\s)(\p{L})/gu, (_, sp: string, c: string) => sp + c.toUpperCase());
+const SMALL = new Set(["de", "da", "do", "das", "dos", "e"]);
+/** "moinhos de vento" → "Moinhos de Vento" */
+const titleCase = (s: string) =>
+  s
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .map((w, i) => (i > 0 && SMALL.has(w.toLowerCase()) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(" ");
 
 function tally(values: string[]): Count[] {
   const m = new Map<string, { label: string; count: number }>();
