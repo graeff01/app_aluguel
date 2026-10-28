@@ -8,9 +8,10 @@ describe("O que mudou", () => {
     // ids em ordem (a mais nova primeiro) e únicos
     expect([...CHANGELOG.map((e) => e.id)].sort().reverse()).toEqual(CHANGELOG.map((e) => e.id));
     expect(new Set(CHANGELOG.map((e) => e.id)).size).toBe(CHANGELOG.length);
-    // nunca viu: só a mais recente
-    expect(unseenChanges("CONSULTANT", null).map((e) => e.id)).toEqual([LATEST_CHANGE]);
+    // nunca viu: só a mais recente (a gestão vê todas as novidades da equipe)
+    expect(unseenChanges("MANAGER", null).map((e) => e.id)).toEqual([LATEST_CHANGE]);
     // já viu a última: nada
+    expect(unseenChanges("MANAGER", LATEST_CHANGE)).toEqual([]);
     expect(unseenChanges("CONSULTANT", LATEST_CHANGE)).toEqual([]);
     // viu uma antiga: as mais novas que ela
     const old = CHANGELOG[CHANGELOG.length - 1].id;
