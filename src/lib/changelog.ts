@@ -12,6 +12,14 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-29-c",
+    title: "Avisos que não se perdem",
+    changes: [
+      { text: "Novo sino no topo do app: tudo o que a captação atualiza (achou imóvel, parecer, leitura de mercado) chega como aviso e fica numa faixa em destaque até você abrir. A lista completa fica em “Avisos”.", who: ["PRE_SERVICE", "CONSULTANT", "MANAGER"], href: "/avisos" },
+      { text: "Pedido novo, atualizado, encerrado ou reaberto pelo atendimento chega como aviso no sino e na faixa do topo, e fica até você abrir. Pedido encerrado: pode parar a busca.", who: ["CAPTURE"], href: "/avisos" },
+    ],
+  },
+  {
     id: "2026-10-29-b",
     title: "Leitura de mercado da captação",
     changes: [

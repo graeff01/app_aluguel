@@ -65,6 +65,7 @@ model User {
   oppEvents        OpportunityEvent[]
   auditLogs        AuditLog[]
   pushSubscriptions PushSubscription[]
+  alerts           Alert[]
   reminderLogs     ReminderLog[]
   syncRuns         SyncRun[]
   googleConnection GoogleConnection[]
@@ -1298,4 +1299,20 @@ model MarketNote {
   updatedAt  DateTime @updatedAt
 
   @@unique([areaKey, typeKey])
+}
+
+/** Aviso que fica no app até a pessoa abrir (além da notificação no celular): troca entre captação e atendimento. */
+model Alert {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  url       String
+  /// mesmo assunto ainda não lido: atualiza o aviso em vez de repetir
+  tag       String
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  @@index([userId, readAt])
 }

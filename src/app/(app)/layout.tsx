@@ -28,6 +28,8 @@ import { countOpenFor } from "@/server/pre-analysis";
 import { countNewProposalsFor } from "@/server/proposals";
 import { Onboarding } from "@/components/onboarding";
 import { UpdateBanner } from "@/components/update-banner";
+import { AlertBanner, AlertBell } from "@/components/alert-bar";
+import { countUnreadAlerts, latestUnreadAlert } from "@/server/alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +55,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     global ? db.reason.count({ where: { kind: "LEASE_AGENT", active: true } }) : Promise.resolve(1),
     countDueRadar(actor, now),
   ]);
-  const captureOpen = capture ? await countCaptureOpen(actor) : 0;
+  const [captureOpen, alerts, latestAlert] = await Promise.all([capture ? countCaptureOpen(actor) : Promise.resolve(0), countUnreadAlerts(actor), latestUnreadAlert(actor)]);
+  const alertBanner = <AlertBanner count={alerts} latest={latestAlert} />;
   const [pending, health, reviewCount] = await Promise.all([
     db.visit.count({
       // "para registrar": já terminou ou já começou (em andamento)
@@ -229,7 +232,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <OfflineBanner />
         <RefreshOnFocus />
         <UpdateBanner />
-        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew : marketing ? toPost : capture ? captureOpen : pending} />
+        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew + alerts : marketing ? toPost : capture ? captureOpen + alerts : pending + alerts} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-2.5">
             <Link href="/minhas" className="flex items-center gap-2">
@@ -243,10 +246,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   <span className="sr-only">{health.message}</span>
                 </span>
               )}
+              <AlertBell count={alerts} />
               <UserMenu name={actor.name} email={actor.email} role={actor.role} showProfile={global} simpleMobile={actor.simpleMobile} pushKey={pushConfig()?.publicKey ?? null} />
             </div>
           </div>
         </header>
+        {alertBanner}
         {agendaBanner}
         {expiryBanner}
         {agentsBanner}
@@ -267,7 +272,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <OfflineBanner />
         <RefreshOnFocus />
         <UpdateBanner />
-        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew : marketing ? toPost : capture ? captureOpen : pending} />
+        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew + alerts : marketing ? toPost : capture ? captureOpen + alerts : pending + alerts} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 md:px-8">
             <Link href="/" className="flex items-center gap-2 md:hidden">
@@ -289,10 +294,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   <span className="sr-only md:hidden">{health.message}</span>
                 </>
               )}
+              <AlertBell count={alerts} />
               <UserMenu name={actor.name} email={actor.email} role={actor.role} showProfile={global} simpleMobile={actor.simpleMobile} pushKey={pushConfig()?.publicKey ?? null} />
             </div>
           </div>
         </header>
+        {alertBanner}
         {agendaBanner}
         {expiryBanner}
         {agentsBanner}

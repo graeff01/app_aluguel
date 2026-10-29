@@ -12,6 +12,8 @@ import { AppError, notFound } from "@/lib/errors";
 import { assert, hasGlobalView, isCapture, type AuthzActor } from "@/lib/authz";
 import { MARKET_TAGS, type MarketTag } from "@/lib/market-tags";
 import { notifyUser } from "./notify";
+import { sendAlerts, usersWithRole } from "./alerts";
+import { alertRadarTeam } from "./radar";
 import { parseMoney } from "./pre-analysis";
 import { normText } from "./site-search";
 
@@ -47,12 +49,11 @@ export async function setRadarMarketNote(actor: AuthzActor, radarId: string, inp
     await tx.radarEvent.create({ data: { radarId, authorId: actor.id, createdAt: now, note: `Parecer da captação: ${marketLine(n)}` } });
     await audit(tx, { actorId: actor.id, action: "radar.market_note", entityType: "ClientRadar", entityId: radarId, changes: { leitura: n.tag } });
   });
-  const pre = await db.user.findMany({ where: { role: "PRE_SERVICE", active: true }, select: { id: true } });
-  for (const u of pre) await notify(u.id, { title: "Parecer da captação em um pedido", body: `${MARKET_TAGS[n.tag]}. Toque para ver e conversar com o cliente.`, url: `/radar/${radarId}`, tag: `radar-parecer-${radarId}` }).catch(() => undefined);
+  await alertRadarTeam(r, { title: "Parecer da captação em um pedido", body: `${MARKET_TAGS[n.tag]}. Toque para ver e conversar com o cliente.`, tag: `radar-parecer-${radarId}` }, actor.id, notify);
 }
 
 /** Leitura de mercado de um perfil (bairro + tipo); grava ou atualiza. */
-export async function upsertMarketNote(actor: AuthzActor, input: Input & { area: string; type?: string | null }) {
+export async function upsertMarketNote(actor: AuthzActor, input: Input & { area: string; type?: string | null }, notify: typeof notifyUser = notifyUser) {
   assert(canWriteMarket(actor));
   const n = parseInput(input);
   const area = input.area.trim().replace(/\s+/g, " ").slice(0, 60);
@@ -63,6 +64,25 @@ export async function upsertMarketNote(actor: AuthzActor, input: Input & { area:
     const row = await tx.marketNote.upsert({ where: { areaKey_typeKey: key }, update: { tag: n.tag, text: n.text, cents: n.cents, authorId: actor.id, area, type }, create: { ...key, area, type, tag: n.tag, text: n.text, cents: n.cents, authorId: actor.id } });
     await audit(tx, { actorId: actor.id, action: "market_note.saved", entityType: "MarketNote", entityId: row.id, changes: { bairro: area, tipo: type, leitura: n.tag } });
   });
+  await alertProfileTeams(actor, { ...key, area, type, tag: n.tag }, notify);
+}
+
+/**
+ * Leitura nova de um perfil: avisa as consultoras com cliente em busca nesse perfil e o pré-atendimento (e quem
+ * cadastrou) com pedido do radar em aberto nesse perfil.
+ */
+async function alertProfileTeams(actor: AuthzActor, n: { areaKey: string; typeKey: string; area: string; type: string | null; tag: MarketTag }, notify: typeof notifyUser) {
+  const fits = (p: { areas: string[]; propertyType: string | null }) => p.areas.some((a) => normText(a) === n.areaKey) && (n.typeKey === "" || (!!p.propertyType && normText(p.propertyType) === n.typeKey));
+  const searches = (await db.clientSearch.findMany({ where: { status: "ACTIVE" }, select: { id: true, consultantId: true, areas: true, propertyType: true } })).filter(fits);
+  const radars = (await db.clientRadar.findMany({ where: { status: { in: ["SEARCHING", "FOUND"] } }, select: { id: true, createdById: true, areas: true, propertyType: true } })).filter(fits);
+  const body = `${n.type ?? "Qualquer tipo"} · ${n.area}: ${MARKET_TAGS[n.tag]}. Use na conversa com o cliente.`;
+  const tag = `mercado-${n.areaKey}-${n.typeKey}`;
+  const byConsultant = new Map<string, string[]>();
+  for (const s of searches) byConsultant.set(s.consultantId, [...(byConsultant.get(s.consultantId) ?? []), s.id]);
+  for (const [uid, ids] of byConsultant)
+    await sendAlerts([uid], { title: "Leitura de mercado da captação para seu cliente em busca", body, url: ids.length === 1 ? `/em-busca/${ids[0]}` : "/em-busca", tag }, { exclude: actor.id, notify });
+  if (radars.length)
+    await sendAlerts([...radars.map((r) => r.createdById), ...(await usersWithRole("PRE_SERVICE"))], { title: "Leitura de mercado da captação para pedidos do radar", body, url: radars.length === 1 ? `/radar/${radars[0].id}` : "/radar", tag }, { exclude: actor.id, notify });
 }
 
 export async function deleteMarketNote(actor: AuthzActor, id: string) {

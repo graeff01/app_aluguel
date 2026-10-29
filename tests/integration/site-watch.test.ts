@@ -265,3 +265,48 @@ describe("leitura de mercado da captação", () => {
     expect(brief).toContain("   → Captação: Nesse valor, só com menos quartos — Até 2.300 só 1 quarto.");
   });
 });
+
+describe("avisos entre captação e atendimento", () => {
+  it("o que um lado atualiza vira aviso que fica no app para o outro até ser aberto (sem dados do cliente)", async () => {
+    const { updateRadar, closeRadar, captureFound } = await import("@/server/radar");
+    const { upsertMarketNote } = await import("@/server/market");
+    const { listAlerts, countUnreadAlerts, openAlert, markAllAlertsRead, latestUnreadAlert } = await import("@/server/alerts");
+    const cap = await db.user.create({ data: { name: "Carla Captadora", email: "captacao@exemplo.test", role: "CAPTURE" } });
+    const captador = { id: cap.id, role: "CAPTURE" as const };
+    const r = await createRadar(jasmin, { clientName: "Rita Secreta", phone: "(51) 99876-1111", wants: "Casa com pátio", areas: "Centro", propertyType: "Casa", bedrooms: "2", maxBudget: "2.500" }, NOW);
+
+    // pedido novo → captação
+    expect(await countUnreadAlerts(captador)).toBe(1);
+    // atualização do atendimento: mesmo pedido, um aviso só (atualizado), sem o texto da conversa
+    await updateRadar(jasmin, r.id, { note: "Rita disse que aceita 2.700", followUpDays: 2 }, NOW);
+    let mine = await listAlerts(captador);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ title: "Pedido atualizado pelo atendimento", url: "/demanda/pedidos" });
+    expect(JSON.stringify(mine)).not.toContain("Rita");
+
+    // captação acha imóvel → atendimento (quem fez a ação não recebe)
+    await captureFound(captador, r.id, { codes: "734999" }, NOW);
+    expect(await countUnreadAlerts(jasmin)).toBe(1);
+    expect((await latestUnreadAlert(jasmin))?.url).toBe(`/radar/${r.id}`);
+    expect(await countUnreadAlerts(captador)).toBe(1);
+
+    // abrir: marca lido e leva ao assunto; aviso de outra pessoa não abre
+    await expect(openAlert(captador, (await latestUnreadAlert(jasmin))!.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(await openAlert(jasmin, (await latestUnreadAlert(jasmin))!.id)).toBe(`/radar/${r.id}`);
+    expect(await countUnreadAlerts(jasmin)).toBe(0);
+
+    // encerrado: a captação sabe que pode parar
+    await markAllAlertsRead(captador);
+    await closeRadar(jasmin, r.id, { reason: "Alugou conosco" }, NOW);
+    mine = await listAlerts(captador);
+    expect(mine.filter((a) => !a.readAt).map((a) => [a.title, a.body])).toEqual([["Pedido encerrado: pode parar a busca", "Casa · 2+ quartos · Centro · até R$ 2.500 — Alugou conosco"]]);
+
+    // leitura de mercado → consultora com cliente em busca nesse perfil (e só ela)
+    const client = await db.client.create({ data: { name: "Bruno" } });
+    const s = await db.clientSearch.create({ data: { clientId: client.id, consultantId: u.a.id, createdById: u.a.id, areas: ["Centro"], propertyType: "Casa" } });
+    await db.clientSearch.create({ data: { clientId: (await db.client.create({ data: { name: "Outra" } })).id, consultantId: u.b.id, createdById: u.b.id, areas: ["Igara"], propertyType: "Casa" } });
+    await upsertMarketNote(captador, { tag: "ABOVE", area: "Centro", type: "Casa" });
+    expect((await latestUnreadAlert(u.a))?.url).toBe(`/em-busca/${s.id}`);
+    expect(await countUnreadAlerts(u.b)).toBe(0);
+  });
+});
