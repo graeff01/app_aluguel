@@ -30,6 +30,7 @@ const SMALL = new Set(["de", "da", "do", "das", "dos", "e"]);
 const titleCase = (s: string) =>
   s
     .replace(/\s+/g, " ")
+    .replace(/[\s.,;:!]+$/, "")
     .trim()
     .split(" ")
     .map((w, i) => (i > 0 && SMALL.has(w.toLowerCase()) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1)))
@@ -64,7 +65,7 @@ export async function demandMap(actor: AuthzActor, f: { days: number }, now = ne
   assert(canSeeDemand(actor));
   const since = new Date(now.getTime() - f.days * DAY);
   const [radars, searches, radarClosed] = await Promise.all([
-    db.clientRadar.findMany({ where: { OR: [{ createdAt: { gte: since } }, { status: { in: ["SEARCHING", "FOUND"] } }] }, select: { areas: true, propertyType: true, bedrooms: true, maxBudgetCents: true, status: true, createdAt: true } }),
+    db.clientRadar.findMany({ where: { searchId: null, OR: [{ createdAt: { gte: since } }, { status: { in: ["SEARCHING", "FOUND"] } }] }, select: { areas: true, propertyType: true, bedrooms: true, maxBudgetCents: true, status: true, createdAt: true } }),
     db.clientSearch.findMany({ where: { OR: [{ startedAt: { gte: since } }, { status: "ACTIVE" }] }, select: { areas: true, propertyType: true, bedrooms: true, maxBudgetCents: true, status: true } }),
     db.clientRadar.findMany({ where: { status: "CLOSED", closedAt: { gte: since } }, select: { closeReason: true, createdAt: true, closedAt: true } }),
   ]);
@@ -189,18 +190,35 @@ export type SegmentNote = { areaKey: string; typeKey: string; tag: string; text:
 // ─────────────── Pedidos para a captação ───────────────
 
 /**
- * Pedidos do radar passados à captação e ainda em aberto, sem dados pessoais do cliente (nem nome, nem telefone):
- * o que procura, o perfil e há quanto tempo.
+ * Pedidos passados à captação (do radar e das consultoras): os em aberto e os encerrados nos últimos 30 dias com
+ * imóvel indicado (para o captador ver como terminou). Sem dados pessoais do cliente (nem nome, nem telefone): o
+ * perfil, há quanto tempo, quem está buscando e o retorno de cada imóvel indicado.
  */
 export async function captureRequests(actor: AuthzActor, now = new Date()) {
   assert(canSeeDemand(actor));
   const rows = await db.clientRadar.findMany({
-    where: { status: { in: ["SEARCHING", "FOUND"] }, sentToCaptureAt: { not: null } },
+    where: {
+      sentToCaptureAt: { not: null },
+      OR: [{ status: { in: ["SEARCHING", "FOUND"] } }, { status: "CLOSED", closedAt: { gte: new Date(now.getTime() - 30 * DAY) }, foundCodes: { isEmpty: false } }],
+    },
     orderBy: { sentToCaptureAt: "asc" },
-    select: { id: true, wants: true, maxBudgetCents: true, areas: true, propertyType: true, bedrooms: true, sentToCaptureAt: true, foundCodes: true, status: true, marketTag: true, marketNote: true, marketCents: true, createdBy: { select: { name: true } } },
+    select: {
+      id: true, wants: true, maxBudgetCents: true, areas: true, propertyType: true, bedrooms: true, sentToCaptureAt: true, foundCodes: true, rejectedCodes: true, clientId: true, status: true, closeReason: true, closedAt: true, searchId: true,
+      marketTag: true, marketNote: true, marketCents: true,
+      captureOwnerId: true, captureOwner: { select: { name: true } },
+      createdBy: { select: { name: true, role: true } },
+      indications: { select: { code: true, createdAt: true }, orderBy: { createdAt: "asc" } },
+    },
     take: 300,
   });
-  return rows.map((r) => ({ ...r, days: Math.max(0, Math.floor((now.getTime() - r.sentToCaptureAt!.getTime()) / DAY)) }));
+  const { outcomesFor } = await import("./capture");
+  const outs = await outcomesFor(rows.flatMap((r) => r.indications.map((i) => ({ radarId: r.id, code: i.code, clientId: r.clientId, rejectedCodes: r.rejectedCodes, since: i.createdAt }))));
+  return rows.map(({ clientId: _c, rejectedCodes: _r, ...r }) => ({
+    ...r,
+    days: Math.max(0, Math.floor((now.getTime() - r.sentToCaptureAt!.getTime()) / DAY)),
+    // imóveis indicados pela captação com o retorno; os indicados antes do registro (só o código) ficam como "oferecido"
+    results: r.foundCodes.map((code) => ({ code, ...(outs.get(`${r.id}|${code}`) ?? { outcome: "OFFERED" as const, detail: null }) })),
+  }));
 }
 
 /** Pedidos com a captação ainda sem nenhum imóvel indicado (número no menu da captação). */

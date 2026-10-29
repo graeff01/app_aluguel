@@ -157,7 +157,7 @@ export const clearSiteCache = () => cache.clear();
 
 // ─────────────── Imóveis parecidos com um perfil ───────────────
 
-export const normText = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+export const normText = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[\s.,;:!]+$/, "");
 
 /** Tipo do perfil → filtro do site (quando o site tem) e palavras da categoria do anúncio. */
 export const TYPE_SEARCH: Record<string, { slug: string | null; kind: "residencial" | "comercial"; words: string[] }> = {

@@ -55,7 +55,7 @@ export function parseProfile(input: SearchProfileInput): Prisma.ClientSearchUpda
     }
   }
   if (p.areas !== undefined)
-    out.areas = [...new Set(p.areas.split(/[,;\n]/).map((a) => a.trim().replace(/\s+/g, " ")).filter(Boolean))].slice(0, 8).map((a) => a.slice(0, 40));
+    out.areas = [...new Set(p.areas.split(/[,;\n]/).map((a) => a.trim().replace(/\s+/g, " ").replace(/[\s.,;:!]+$/, "")).filter(Boolean))].slice(0, 8).map((a) => a.slice(0, 40));
   if (p.propertyType !== undefined) out.propertyType = (PROPERTY_TYPES as readonly string[]).includes(p.propertyType) ? p.propertyType : null;
   if (p.bedrooms !== undefined) {
     const n = Number(p.bedrooms);
@@ -158,7 +158,9 @@ export async function updateSearchProfile(actor: AuthzActor, id: string, profile
   const s = await loadManaged(actor, id);
   if (s.status !== "ACTIVE") throw new AppError("INVALID_STATE", "Esta busca já foi encerrada.");
   await db.$transaction(async (tx) => {
-    await tx.clientSearch.update({ where: { id }, data: parseProfile(profile) });
+    const row = await tx.clientSearch.update({ where: { id }, data: parseProfile(profile) });
+    // pedido à captação em aberto acompanha o perfil
+    await tx.clientRadar.updateMany({ where: { searchId: id, status: { in: ["SEARCHING", "FOUND"] } }, data: { areas: row.areas, propertyType: row.propertyType, bedrooms: row.bedrooms, maxBudgetCents: row.maxBudgetCents } });
     await audit(tx, { actorId: actor.id, action: "client_search.profile_updated", entityType: "ClientSearch", entityId: id });
   });
 }
@@ -191,10 +193,15 @@ export async function closeClientSearch(actor: AuthzActor, id: string, outcome: 
     await tx.clientSearch.update({ where: { id }, data: { status: outcome as ClientSearchStatus, closedAt: now, closedById: actor.id, closeNote: note.trim().slice(0, 300) || null, followUpOn: null } });
     await audit(tx, { actorId: actor.id, action: "client_search.closed", entityType: "ClientSearch", entityId: id, changes: { resultado: outcome } });
   });
+  // o pedido à captação dessa busca termina junto (import tardio: capture → radar → client-search)
+  const { closeCaptureForSearch } = await import("./capture");
+  await closeCaptureForSearch(actor, id, outcome as "WON" | "LOST_ELSEWHERE" | "GAVE_UP", now);
 }
 
 /** Contrato assinado: a busca ativa do cliente termina como "Alugou conosco" (chamado dentro da transação do negócio). */
 export async function closeSearchOnWin(tx: Tx, clientId: string, actorId: string | null, now = new Date()) {
+  // pedido à captação dessa busca termina junto (o retorno "Alugou!" aparece para a captação)
+  await tx.clientRadar.updateMany({ where: { search: { clientId, status: "ACTIVE" }, status: { in: ["SEARCHING", "FOUND"] } }, data: { status: "CLOSED", closedAt: now, closedById: actorId, closeReason: "Alugou conosco", lastUpdateAt: now } });
   const r = await tx.clientSearch.updateMany({ where: { clientId, status: "ACTIVE" }, data: { status: "WON", closedAt: now, closedById: actorId, closeNote: "Contrato assinado", followUpOn: null } });
   if (r.count) await audit(tx, { actorId, action: "client_search.won", entityType: "Client", entityId: clientId });
 }

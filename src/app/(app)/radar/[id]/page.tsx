@@ -12,6 +12,7 @@ import { Suspense } from "react";
 import { RadarCloseForm, RadarReopen, RadarUpdateForm } from "./forms";
 import { SimilarOnSite } from "./similar";
 import { MarketReading } from "@/components/market-reading";
+import { OUTCOME_TONE, outcomeText, outcomesFor } from "@/server/capture";
 
 export const metadata = { title: "Radar de clientes" };
 
@@ -24,6 +25,8 @@ export default async function RadarItemPage({ params, searchParams }: { params: 
   const now = new Date();
   const closed = r.status === "CLOSED";
   const due = isRadarDue(r, now);
+  // retorno de cada imóvel indicado (visita marcada, visitou, alugou…): o mesmo que a captação vê
+  const outcomes = await outcomesFor(r.foundCodes.map((code) => ({ radarId: r.id, code, clientId: r.clientId, rejectedCodes: r.rejectedCodes, since: r.sentToCaptureAt ?? r.createdAt })));
   const profile: [string, string][] = [
     ["Tipo", r.propertyType ?? "Qualquer"],
     ["Quartos", r.bedrooms ? String(r.bedrooms) : "—"],
@@ -67,8 +70,21 @@ export default async function RadarItemPage({ params, searchParams }: { params: 
         <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4 text-[13px]">
           <span className="rounded-full bg-tint px-3 py-1">{r.sentToCaptureAt ? `Com a captação desde ${fmt.shortDate(r.sentToCaptureAt)} (${radarAgeDays(r, now)} d)` : "Ainda não passou à captação"}</span>
           {!closed && <span className={cx("rounded-full px-3 py-1 font-semibold", due ? "bg-bad-soft text-bad" : "bg-tint")}>{due ? "Cobrar hoje" : `Cobrar em ${dateOnlyKey(r.followUpOn).split("-").reverse().join("/")}`}</span>}
-          {r.foundCodes.length > 0 && <span className="rounded-full bg-good-soft px-3 py-1 font-semibold text-good">Imóveis achados: {r.foundCodes.join(", ")}</span>}
+          {r.captureOwner && !closed && <span className="rounded-full bg-accent-soft px-3 py-1 font-semibold text-accent-strong">🔎 {r.captureOwner.name.split(" ")[0]} está buscando</span>}
         </div>
+        {r.foundCodes.length > 0 && (
+          <ul className="mt-3 space-y-1.5">
+            {r.foundCodes.map((code) => {
+              const o = outcomes.get(`${r.id}|${code}`) ?? { outcome: "OFFERED" as const, detail: null };
+              return (
+                <li key={code} className="flex flex-wrap items-center gap-2 text-[14px]">
+                  <span className="num font-semibold">Imóvel {code}</span>
+                  <span className={cx("rounded-full px-2 py-0.5 text-[12px] font-semibold", { neutral: "bg-tint text-ink-2", bad: "bg-bad-soft text-bad", warn: "bg-warn-soft text-warn", good: "bg-good-soft text-good" }[OUTCOME_TONE[o.outcome]])}>{outcomeText(o)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       <MarketReading profile={r} parecer={{ tag: r.marketTag, text: r.marketNote, cents: r.marketCents, at: r.marketNoteAt }} />

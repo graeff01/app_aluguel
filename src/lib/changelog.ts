@@ -12,6 +12,17 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-29-e",
+    title: "Captação e atendimento mais perto",
+    changes: [
+      { text: "Retorno das suas indicações: cada imóvel indicado mostra o que aconteceu (visita marcada, visitou e gostou, não gostou, alugou). Os pedidos encerrados nos últimos 30 dias ficam no fim da lista.", who: ["CAPTURE"], href: "/demanda/pedidos" },
+      { text: "“Estou buscando”: pegue o pedido para ninguém buscar o mesmo em dobro. Quem pediu é avisado.", who: ["CAPTURE"], href: "/demanda/pedidos" },
+      { text: "Placar do mês no topo dos Pedidos: indicados, visitas e alugados de cada um. E todo dia às 8h um aviso de bom dia com o que tem de novo.", who: ["CAPTURE", "MANAGER"], href: "/demanda/pedidos" },
+      { text: "Cliente em busca sem opção no site? Toque em “Pedir à captação” no cliente: vai só o perfil (sem nome e telefone) e você acompanha ali quem está buscando e os imóveis indicados, com aviso a cada novidade.", who: ["CONSULTANT", "MANAGER"], href: "/em-busca" },
+      { text: "No pedido do radar, veja quem da captação está buscando e o retorno de cada imóvel indicado.", who: ["PRE_SERVICE"], href: "/radar" },
+    ],
+  },
+  {
     id: "2026-10-29-d",
     title: "Captação mais simples",
     changes: [

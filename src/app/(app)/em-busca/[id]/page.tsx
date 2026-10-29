@@ -11,6 +11,7 @@ import { Suspense } from "react";
 import { ProfileForm, ContactForm, CloseForm } from "./forms";
 import { SearchSuggestions } from "./similar";
 import { MarketReading } from "@/components/market-reading";
+import { SearchCapture } from "./capture";
 
 export const metadata = { title: "Cliente em busca" };
 const dOnly = (d: Date) => dateOnlyKey(d).split("-").reverse().join("/");
@@ -100,6 +101,8 @@ export default async function SearchPage({ params, searchParams }: { params: Pro
           </Suspense>
         </section>
       )}
+
+      {active && !s.client.anonymizedAt && <SearchCapture search={s} />}
 
       <section className="mt-6 rounded-[26px] border border-line bg-surface p-5 shadow-card sm:p-6" aria-labelledby="t-vistos">
         <h2 id="t-vistos" className="mb-3 text-[16px] font-bold">

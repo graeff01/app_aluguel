@@ -7,13 +7,15 @@ import { CaptureFoundForm } from "./found-form";
 import { MarketNoteForm } from "@/components/market-note-form";
 import { Suspense } from "react";
 import { PedidoOptions } from "./options";
+import { captureScoreboard } from "@/server/capture";
+import { CaptureOwnerButton } from "@/components/capture-owner";
 
 export const metadata = { title: "Pedidos para a captação" };
 
 export default async function CaptureRequestsPage() {
   const actor = await requireActor({ capture: true });
   if (!canSeeDemand(actor)) notFound();
-  const rows = await captureRequests(actor);
+  const [rows, board] = await Promise.all([captureRequests(actor), captureScoreboard(actor)]);
   return (
     <>
       {actor.role !== "CAPTURE" && (
@@ -23,6 +25,9 @@ export default async function CaptureRequestsPage() {
       )}
       <CaptureRequestsView
         rows={rows}
+        actorId={actor.id}
+        board={board}
+        renderOwner={(r) => (actor.role === "CAPTURE" ? <CaptureOwnerButton id={r.id} mine={r.captureOwnerId === actor.id} taken={!!r.captureOwnerId} /> : null)}
         renderFound={(id) => <CaptureFoundForm id={id} />}
         renderMarket={(r) => <MarketNoteForm hidden={{ radarId: r.id }} label={r.marketTag ? "Editar parecer" : "+ Parecer de mercado"} initial={{ tag: r.marketTag, text: r.marketNote, cents: r.marketCents }} compact />}
         renderOptions={(r) => (

@@ -41,7 +41,7 @@ export async function watchDemandOnSite(now = new Date(), opts: Opts = {}) {
   const day = dayKey(now);
 
   // radar (pré-atendimento)
-  const radars = await db.clientRadar.findMany({ where: { status: { in: ["SEARCHING", "FOUND"] }, ...pending }, orderBy: { createdAt: "asc" }, take: limit });
+  const radars = await db.clientRadar.findMany({ where: { searchId: null, status: { in: ["SEARCHING", "FOUND"] }, ...pending }, orderBy: { createdAt: "asc" }, take: limit });
   let radarWithNew = 0;
   for (const r of radars) {
     if (!hasProfile(r)) {

@@ -96,9 +96,10 @@ function Segment({ r, notes, write, pedidos }: { r: SupplyRow; notes: SegmentNot
   );
 }
 
-async function Gaps({ loadRows, days, notes, write, pedidos }: { loadRows: () => Promise<SupplyRow[]>; days: number; notes: SegmentNote[]; write: boolean; pedidos: MapPedido[] }) {
+async function Gaps({ loadRows, days, notes, write, pedidos, showBrief }: { loadRows: () => Promise<SupplyRow[]>; days: number; notes: SegmentNote[]; write: boolean; pedidos: MapPedido[]; showBrief: boolean }) {
   const rows = await loadRows();
-  const brief = captureBrief(days, rows, notes);
+  // resumo para a gestão mandar à equipe de captação (para o próprio captador não faz sentido)
+  const brief = showBrief ? captureBrief(days, rows, notes) : null;
   return (
     <>
       <ul className="grid items-start gap-2.5 lg:grid-cols-2">
@@ -120,7 +121,7 @@ async function Gaps({ loadRows, days, notes, write, pedidos }: { loadRows: () =>
 }
 
 /** Mapa da demanda: período, números do período, onde falta imóvel (com os imóveis do site) e gráficos. */
-export function DemandView({ d, days, basePath, loadRows, notes = [], write = false, pedidos = [], requestsLink = false }: { d: DemandData; days: number; basePath: string; loadRows: () => Promise<SupplyRow[]>; notes?: SegmentNote[]; write?: boolean; pedidos?: MapPedido[]; requestsLink?: boolean }) {
+export function DemandView({ d, days, basePath, loadRows, notes = [], write = false, pedidos = [], requestsLink = false, showBrief = false }: { d: DemandData; days: number; basePath: string; loadRows: () => Promise<SupplyRow[]>; notes?: SegmentNote[]; write?: boolean; pedidos?: MapPedido[]; requestsLink?: boolean; showBrief?: boolean }) {
   const c = d.capture;
   const stats: [string, string, string][] = [
     [String(d.total), "clientes", `${d.radar} do radar · ${d.searches} das consultoras`],
@@ -160,7 +161,7 @@ export function DemandView({ d, days, basePath, loadRows, notes = [], write = fa
               <p className="text-[14px] text-ink-3">Os pedidos do período ainda não têm bairro.</p>
             ) : (
               <Suspense fallback={<p className="text-[14px] text-ink-3">Conferindo o site…</p>}>
-                <Gaps loadRows={loadRows} days={days} notes={notes} write={write} pedidos={pedidos} />
+                <Gaps loadRows={loadRows} days={days} notes={notes} write={write} pedidos={pedidos} showBrief={showBrief} />
               </Suspense>
             )}
           </section>

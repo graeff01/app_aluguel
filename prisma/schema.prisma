@@ -83,6 +83,8 @@ model User {
   proposalsAssigned   Proposal[]    @relation("ProposalConsultant")
   proposalsUpdated    Proposal[]    @relation("ProposalStatusBy")
   radarCreated        ClientRadar[] @relation("RadarCreatedBy")
+  radarCaptureOwned   ClientRadar[] @relation("RadarCaptureOwner")
+  captureIndications  CaptureIndication[]
   radarClosed         ClientRadar[] @relation("RadarClosedBy")
   radarEvents         RadarEvent[]
 }
@@ -1188,6 +1190,8 @@ model ClientSearch {
   /// opções do site marcadas "fora do perfil" e o que o app aprendeu com elas (LearnedRules)
   rejectedCodes  String[]           @default([])
   siteRules      Json?
+  /// pedido à captação feito a partir desta busca
+  captureRequest ClientRadar?
 
   @@index([consultantId, status])
   @@index([clientId, status])
@@ -1253,7 +1257,15 @@ model ClientRadar {
   marketCents     Int?
   marketNoteAt    DateTime?
   marketNoteById  String?
+  /// pedido feito pela consultora a partir de um cliente em busca (null = do pré-atendimento)
+  searchId        String?       @unique
+  search          ClientSearch? @relation(fields: [searchId], references: [id], onDelete: SetNull)
+  /// captador que está buscando ("Estou buscando")
+  captureOwnerId  String?
+  captureOwner    User?         @relation("RadarCaptureOwner", fields: [captureOwnerId], references: [id], onDelete: SetNull)
+  captureOwnerAt  DateTime?
   events          RadarEvent[]
+  indications     CaptureIndication[]
 
   @@index([status, followUpOn])
 }
@@ -1315,4 +1327,20 @@ model Alert {
   readAt    DateTime?
 
   @@index([userId, readAt])
+}
+
+/** Imóvel que a captação indicou a um pedido: base do retorno (visitou, alugou…) e do placar. */
+model CaptureIndication {
+  id          String      @id @default(cuid())
+  radarId     String
+  radar       ClientRadar @relation(fields: [radarId], references: [id], onDelete: Cascade)
+  code        String
+  byId        String
+  by          User        @relation(fields: [byId], references: [id])
+  createdAt   DateTime    @default(now())
+  /// último retorno já avisado ao captador (OFFERED, VISIT_SCHEDULED, VISITED_*, REJECTED, RENTED)
+  lastOutcome String?
+
+  @@unique([radarId, code])
+  @@index([byId, createdAt])
 }

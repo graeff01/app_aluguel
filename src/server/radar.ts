@@ -109,6 +109,8 @@ export async function listRadar(actor: AuthzActor, f: { tab: RadarTab; q?: strin
   const q = f.q?.trim();
   return db.clientRadar.findMany({
     where: {
+      // pedidos das consultoras (a partir do cliente em busca) ficam com elas, não no radar do pré-atendimento
+      searchId: null,
       ...(f.tab === "encerrados" ? { status: "CLOSED" as const } : { status: { in: OPEN_RADAR } }),
       ...(f.tab === "cobrar" ? { followUpOn: { lte: today } } : {}),
       ...(f.tab === "novos" ? { siteNewCodes: { isEmpty: false } } : {}),
@@ -123,14 +125,14 @@ export async function listRadar(actor: AuthzActor, f: { tab: RadarTab; q?: strin
 /** Quantos pedidos do radar vencem hoje (ou já venceram): número no menu. */
 export async function countDueRadar(actor: AuthzActor, now = new Date()) {
   if (!canUseRadar(actor)) return 0;
-  return db.clientRadar.count({ where: { status: { in: OPEN_RADAR }, followUpOn: { lte: dateOnlyFromKey(dayKey(now)) } } });
+  return db.clientRadar.count({ where: { searchId: null, status: { in: OPEN_RADAR }, followUpOn: { lte: dateOnlyFromKey(dayKey(now)) } } });
 }
 
 export async function radarDetail(actor: AuthzActor, id: string) {
   assert(canUseRadar(actor));
   const r = await db.clientRadar.findUnique({
     where: { id },
-    include: { createdBy: { select: { name: true } }, closedBy: { select: { name: true } }, events: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true } } } } },
+    include: { createdBy: { select: { name: true } }, closedBy: { select: { name: true } }, captureOwner: { select: { name: true } }, events: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true } } } } },
   });
   if (!r) throw notFound();
   let phone: string | null = null;
@@ -186,13 +188,21 @@ async function alertCapture(radarId: string, r: Parameters<typeof profileLine>[0
   await sendAlerts(await usersWithRole("CAPTURE"), { title, body: `${profileLine(r)} — ${what}`, url: "/demanda/pedidos", tag: `captacao-${radarId}` }, { exclude, notify });
 }
 
-/** Avisa quem atende o pedido (quem cadastrou e o pré-atendimento) sobre algo da captação. */
-export async function alertRadarTeam(r: { id: string; createdById: string }, p: { title: string; body: string; tag: string }, exclude?: string, notify?: typeof notifyUser) {
+/**
+ * Avisa quem atende o pedido sobre algo da captação: pedido da consultora → só ela (no cliente em busca); pedido do
+ * radar → quem cadastrou e o pré-atendimento.
+ */
+export async function alertRadarTeam(r: { id: string; createdById: string; searchId?: string | null }, p: { title: string; body: string; tag: string }, exclude?: string, notify?: typeof notifyUser) {
+  if (r.searchId) return void (await sendAlerts([r.createdById], { ...p, url: `/em-busca/${r.searchId}` }, { exclude, notify }));
   await sendAlerts([r.createdById, ...(await usersWithRole("PRE_SERVICE"))], { ...p, url: `/radar/${r.id}` }, { exclude, notify });
 }
 
 export async function closeRadar(actor: AuthzActor, id: string, input: { reason: string; note?: string }, now = new Date()) {
-  assert(canUseRadar(actor));
+  if (!canUseRadar(actor)) {
+    // a consultora encerra o pedido que ela fez à captação
+    const own = await db.clientRadar.findUnique({ where: { id }, select: { searchId: true, createdById: true } });
+    assert(!!own?.searchId && own.createdById === actor.id);
+  }
   if (!(RADAR_CLOSE_REASONS as readonly string[]).includes(input.reason)) throw new AppError("VALIDATION", "Escolha como terminou.", { reason: "Obrigatório." });
   const note = (input.note ?? "").trim().slice(0, 1000) || null;
   const r = await db.$transaction(async (tx) => {
@@ -296,6 +306,9 @@ export async function captureFound(actor: AuthzActor, id: string, input: { codes
       data: { foundCodes: [...new Set([...r.foundCodes, ...codes])].slice(0, 12), status: "FOUND", siteNewCodes: r.siteNewCodes.filter((c) => !codes.includes(c)), followUpOn: dateOnlyFromKey(dayKey(now)), lastUpdateAt: now },
     });
     await tx.radarEvent.create({ data: { radarId: id, note: [`Captação achou: ${codes.join(", ")}.`, note].filter(Boolean).join(" — "), authorId: actor.id, createdAt: now } });
+    // cada indicação conta no placar e recebe o retorno (visitou, alugou…)
+    await tx.captureIndication.createMany({ data: codes.map((code) => ({ radarId: id, code, byId: actor.id, createdAt: now, lastOutcome: "OFFERED" })), skipDuplicates: true });
+    if (!r.captureOwnerId && isCapture(actor)) await tx.clientRadar.update({ where: { id }, data: { captureOwnerId: actor.id, captureOwnerAt: now } });
     await audit(tx, { actorId: actor.id, action: "radar.capture_found", entityType: "ClientRadar", entityId: id, changes: { imoveis: codes } });
   });
   await alertRadarTeam(r, { title: "A captação achou imóvel para o radar", body: `${codes.length === 1 ? `Imóvel ${codes[0]}` : `Imóveis ${codes.join(", ")}`} para o pedido: ${profileLine(r)}. Toque para oferecer ao cliente.`, tag: `radar-achou-${id}` }, actor.id, notify);
