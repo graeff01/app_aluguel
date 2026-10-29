@@ -85,7 +85,6 @@ model User {
   radarCreated        ClientRadar[] @relation("RadarCreatedBy")
   radarCaptureOwned   ClientRadar[] @relation("RadarCaptureOwner")
   captureIndications  CaptureIndication[]
-  ownerLeadsOwned     OwnerLead[]   @relation("OwnerLeadHandler")
   radarClosed         ClientRadar[] @relation("RadarClosedBy")
   radarEvents         RadarEvent[]
 }
@@ -1354,38 +1353,6 @@ model AreaGeo {
   lat        Float?
   lng        Float?
   geocodedAt DateTime @default(now())
-}
-
-/**
- * Proprietário que pediu a estimativa em "Quanto rende o seu imóvel?" (página pública) e deixou o contato:
- * vai para a captação. Telefone cifrado; dados apagados no prazo da LGPD depois de encerrado.
- */
-model OwnerLead {
-  id            String    @id @default(cuid())
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  name          String
-  phoneEnc      String?
-  phoneHash     String?
-  area          String
-  propertyType  String
-  bedrooms      Int?
-  /// o que o dono espera receber e o que o app estimou (centavos)
-  wantedCents   Int?
-  estimateCents Int?
-  /// clientes procurando esse perfil no momento do pedido
-  demand        Int       @default(0)
-  message       String?
-  /// NEW, CONTACTED, VISITED, CAPTURED, LOST
-  status        String    @default("NEW")
-  handlerId     String?
-  handler       User?     @relation("OwnerLeadHandler", fields: [handlerId], references: [id], onDelete: SetNull)
-  note          String?
-  closedAt      DateTime?
-  purgedAt      DateTime?
-  consentAt     DateTime
-
-  @@index([status, createdAt])
 }
 
 /** Imóveis de aluguel da Auxiliadora em Canoas lidos do site (uma vez por dia): base do "Mapa de Canoas". */

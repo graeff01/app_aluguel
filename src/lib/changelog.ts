@@ -13,11 +13,9 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 export const CHANGELOG: ChangelogEntry[] = [
   {
     id: "2026-10-30",
-    title: "Mapa de Canoas e proprietários chegando sozinhos",
+    title: "Mapa de Canoas",
     changes: [
       { text: "Mapa de Canoas (novo atalho no menu): a procura dos clientes em manchas de calor e, em cada bairro, quantos imóveis nossos há no site. Vermelho = procura sem imóvel nosso. Toque no bairro para ver o que procuram e nossos imóveis dali.", who: ["CAPTURE", "MANAGER"], href: "/demanda/mapa" },
-      { text: "Nova página pública “Quanto rende o seu imóvel?”: o proprietário vê o aluguel estimado e quantos clientes nossos procuram um imóvel como o dele, e pede contato. Divulgue o link em Proprietários.", who: ["CAPTURE", "MANAGER"], href: "/demanda/proprietarios" },
-      { text: "Proprietários: cada dono que pede contato chega com aviso, com WhatsApp e mensagem pronta (já dizendo quantos clientes procuram). Marque “Vou atender”, “Avaliei”, “Captado!” ou “Não fechou”.", who: ["CAPTURE", "MANAGER"], href: "/demanda/proprietarios" },
     ],
   },
   {

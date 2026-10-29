@@ -40,11 +40,6 @@ export default async function PrivacyPage() {
           <strong className="text-ink">Pré-análise para locação</strong> (antes de agendar a visita, a pedido do cliente): nome completo, CPF, data de nascimento, e-mail, telefone e
           salário do titular do CPF, e o resultado da análise. Esses dados ficam criptografados e são vistos só pelo pré-atendimento, pela gestão e pela consultora responsável.
         </li>
-        <li>
-          <strong className="text-ink">Proprietários que pedem contato em “Quanto rende o seu imóvel?”:</strong> nome, WhatsApp, bairro, tipo e quartos do imóvel, o valor
-          esperado e a mensagem, com a autorização dada no envio. Usados só para a captação falar sobre a locação do imóvel; vistos apenas pela equipe de captação e
-          pela gestão.
-        </li>
         <li>Fora da pré-análise não são coletados documentos (CPF, RG), dados financeiros nem dados sensíveis. As observações das visitas não devem conter esse tipo de informação.</li>
       </ul>
 
@@ -71,9 +66,7 @@ export default async function PrivacyPage() {
           <>Os dados são mantidos enquanto necessários ao atendimento e excluídos a pedido do titular.</>
         )}{" "}
         Na pré-análise, CPF, data de nascimento, e-mail, telefone e salário são apagados automaticamente <strong className="text-ink">{preDays} dias</strong> após o resultado;
-        ficam apenas o nome, a faixa de renda e o resultado, para os indicadores. Contatos de proprietários encerrados têm nome, WhatsApp e mensagem apagados{" "}
-        <strong className="text-ink">{preDays} dias</strong> após o encerramento.
-      </p>
+        ficam apenas o nome, a faixa de renda e o resultado, para os indicadores.      </p>
 
       <h2 className={h2}>Direitos do titular</h2>
       <p>
