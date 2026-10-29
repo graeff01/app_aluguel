@@ -24,6 +24,8 @@ import { runProposalRetention } from "@/server/proposals";
 import { runRadarRetention } from "@/server/radar";
 import { runAlertRetention } from "@/server/alerts";
 import { sendCaptureMorning } from "@/server/capture";
+import { refreshAreaGeocodes } from "@/server/area-geo";
+import { runOwnerLeadRetention } from "@/server/owner-leads";
 import { checkVisitListings, watchDemandOnSite } from "@/server/site-watch";
 
 const TICK_MS = Number(process.env.WORKER_TICK_MS ?? 15_000);
@@ -102,6 +104,9 @@ async function main() {
         await runRadarRetention().catch((e) => log.error("radar_retention.failed", { code: errorCode(e) }));
         await runAlertRetention().catch((e) => log.error("alert_retention.failed", { code: errorCode(e) }));
         await sendCaptureMorning().catch((e) => log.error("capture_morning.failed", { code: errorCode(e) }));
+        await runOwnerLeadRetention().catch((e) => log.error("owner_lead_retention.failed", { code: errorCode(e) }));
+        // mapa animado da demanda: localiza aos poucos os bairros pedidos (1 consulta por segundo no serviço público)
+        await refreshAreaGeocodes().catch((e) => log.error("geo.areas_failed", { code: errorCode(e) }));
         // site da imobiliária: imóveis novos para o radar/clientes em busca e anúncios que saíram antes da visita
         await watchDemandOnSite().catch((e) => log.error("site_watch.demand_failed", { code: errorCode(e) }));
         await checkVisitListings().catch((e) => log.error("site_watch.listings_failed", { code: errorCode(e) }));

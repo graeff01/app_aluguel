@@ -30,6 +30,7 @@ import { Onboarding } from "@/components/onboarding";
 import { UpdateBanner } from "@/components/update-banner";
 import { AlertBanner, AlertBell } from "@/components/alert-bar";
 import { countUnreadAlerts, latestUnreadAlert } from "@/server/alerts";
+import { countNewOwnerLeads } from "@/server/owner-leads";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     global ? db.reason.count({ where: { kind: "LEASE_AGENT", active: true } }) : Promise.resolve(1),
     countDueRadar(actor, now),
   ]);
-  const [captureOpen, alerts, latestAlert] = await Promise.all([capture ? countCaptureOpen(actor) : Promise.resolve(0), countUnreadAlerts(actor), latestUnreadAlert(actor)]);
+  const [captureOpen, alerts, latestAlert, ownersNew] = await Promise.all([capture ? countCaptureOpen(actor) : Promise.resolve(0), countUnreadAlerts(actor), latestUnreadAlert(actor), capture || global ? countNewOwnerLeads(actor) : Promise.resolve(0)]);
   const alertBanner = <AlertBanner count={alerts} latest={latestAlert} />;
   const [pending, health, reviewCount] = await Promise.all([
     db.visit.count({
@@ -96,6 +97,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             { href: "/propostas", label: "Propostas", icon: "pipeline", badge: propNew },
             { href: "/radar", label: "Radar de clientes", icon: "pulse", badge: radarDue },
             { href: "/demanda", label: "Mapa da demanda", icon: "dashboard" },
+            { href: "/demanda/proprietarios", label: "Proprietários", icon: "owner", badge: ownersNew },
             { href: "/hoje", label: "Hoje", icon: "today" },
             { href: "/pendencias", label: "Pendências", icon: "pending", badge: pending },
             { href: "/revisao", label: "Revisão", icon: "review", badge: reviewCount },
@@ -165,6 +167,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const captureNav: NavItem[] = [
     { href: "/demanda", label: "Mapa da demanda", icon: "dashboard" },
     { href: "/demanda/pedidos", label: "Pedidos", icon: "list", badge: captureOpen },
+    { href: "/demanda/proprietarios", label: "Proprietários", icon: "owner", badge: ownersNew },
   ];
   // marketing: só as locações para postar
   const marketingNav: NavItem[] = [{ href: "/marketing", label: "Para postar", icon: "home", badge: toPost }];
@@ -232,7 +235,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <OfflineBanner />
         <RefreshOnFocus />
         <UpdateBanner />
-        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew + alerts : marketing ? toPost : capture ? captureOpen + alerts : pending + alerts} />
+        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew + alerts : marketing ? toPost : capture ? captureOpen + ownersNew + alerts : pending + alerts} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-2.5">
             <Link href="/minhas" className="flex items-center gap-2">
@@ -272,7 +275,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <OfflineBanner />
         <RefreshOnFocus />
         <UpdateBanner />
-        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew + alerts : marketing ? toPost : capture ? captureOpen + alerts : pending + alerts} />
+        <AppBadge count={actor.role === "CONSULTANT" ? pending + preOpen + propNew + alerts : marketing ? toPost : capture ? captureOpen + ownersNew + alerts : pending + alerts} />
         <header className="sticky top-0 z-10 border-b border-line/70 bg-bg/80 backdrop-blur-xl">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 md:px-8">
             <Link href="/" className="flex items-center gap-2 md:hidden">

@@ -12,6 +12,15 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-30",
+    title: "Radar da demanda e proprietários chegando sozinhos",
+    changes: [
+      { text: "Radar da demanda: no topo do Mapa da demanda, um mapa de Canoas com manchas de calor por bairro que andam semana a semana, como a previsão do tempo. Toque no play e veja onde a procura cresce.", who: ["CAPTURE", "MANAGER"], href: "/demanda" },
+      { text: "Nova página pública “Quanto rende o seu imóvel?”: o proprietário vê o aluguel estimado e quantos clientes nossos procuram um imóvel como o dele, e pede contato. Divulgue o link em Proprietários.", who: ["CAPTURE", "MANAGER"], href: "/demanda/proprietarios" },
+      { text: "Proprietários: cada dono que pede contato chega com aviso, com WhatsApp e mensagem pronta (já dizendo quantos clientes procuram). Marque “Vou atender”, “Avaliei”, “Captado!” ou “Não fechou”.", who: ["CAPTURE", "MANAGER"], href: "/demanda/proprietarios" },
+    ],
+  },
+  {
     id: "2026-10-29-e",
     title: "Captação e atendimento mais perto",
     changes: [
