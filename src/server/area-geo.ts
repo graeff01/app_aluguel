@@ -50,11 +50,13 @@ export async function ensureAreaCoords(areas: string[], opts: { maxCalls?: numbe
   return found;
 }
 
-/** Worker: bairros dos pedidos em aberto e das buscas ativas. */
+/** Worker: bairros dos pedidos em aberto, das buscas ativas e dos nossos imóveis no site. */
 export async function refreshAreaGeocodes(opts: { limit?: number; fetchImpl?: typeof fetch; now?: Date } = {}) {
-  const [radars, searches] = await Promise.all([
+  const [radars, searches, inventory] = await Promise.all([
     db.clientRadar.findMany({ where: { status: { in: ["SEARCHING", "FOUND"] } }, select: { areas: true }, take: 500 }),
     db.clientSearch.findMany({ where: { status: "ACTIVE" }, select: { areas: true }, take: 500 }),
+    db.siteInventory.findMany({ where: { goneAt: null, neighborhood: { not: null } }, distinct: ["areaKey"], select: { neighborhood: true } }),
   ]);
-  return ensureAreaCoords([...radars, ...searches].flatMap((r) => r.areas), { maxCalls: opts.limit ?? 5, fetchImpl: opts.fetchImpl, now: opts.now });
+  const names = [...[...radars, ...searches].flatMap((r) => r.areas), ...inventory.map((i) => i.neighborhood!)];
+  return ensureAreaCoords(names, { maxCalls: opts.limit ?? 5, fetchImpl: opts.fetchImpl, now: opts.now });
 }

@@ -322,12 +322,15 @@ body::after {
   .fc-route-dot { offset-distance: 100%; }
 }
 
-/* ── Radar da demanda ── */
-.dr-label-wrap { background: none; border: 0; }
-.dr-label {
-  transform: translate(-50%, -50%); white-space: nowrap; width: max-content;
-  padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 18px;
-  color: var(--ink); background: color-mix(in srgb, var(--surface) 88%, transparent);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+/* ── Mapa de Canoas ── */
+.cm-badge-wrap { background: none; border: 0; }
+.cm-badge {
+  transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; width: max-content;
+  padding: 2px 9px 2px 2px; border-radius: 999px; border: 0; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; line-height: 20px;
+  color: var(--ink); background: color-mix(in srgb, var(--surface) 90%, transparent);
+  box-shadow: 0 1px 5px rgb(0 0 0 / 0.22); transition: transform 0.15s ease;
 }
-.dr-label b { font-variant-numeric: tabular-nums; }
+.cm-badge b { display: grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 999px; background: var(--c); color: #fff; font-variant-numeric: tabular-nums; }
+.cm-badge.is-sel { transform: translate(-50%, -50%) scale(1.15); outline: 2px solid var(--c); }
+.cm-compact .cm-badge:not(.is-sel) { padding-right: 2px; }
+.cm-compact .cm-badge:not(.is-sel) span { display: none; }

@@ -97,6 +97,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             { href: "/propostas", label: "Propostas", icon: "pipeline", badge: propNew },
             { href: "/radar", label: "Radar de clientes", icon: "pulse", badge: radarDue },
             { href: "/demanda", label: "Mapa da demanda", icon: "dashboard" },
+            { href: "/demanda/mapa", label: "Mapa de Canoas", icon: "map" },
             { href: "/demanda/proprietarios", label: "Proprietários", icon: "owner", badge: ownersNew },
             { href: "/hoje", label: "Hoje", icon: "today" },
             { href: "/pendencias", label: "Pendências", icon: "pending", badge: pending },
@@ -165,7 +166,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ];
   // captação: o que os clientes procuram
   const captureNav: NavItem[] = [
-    { href: "/demanda", label: "Mapa da demanda", icon: "dashboard" },
+    { href: "/demanda", label: "Demanda", icon: "dashboard" },
+    { href: "/demanda/mapa", label: "Mapa", icon: "map" },
     { href: "/demanda/pedidos", label: "Pedidos", icon: "list", badge: captureOpen },
     { href: "/demanda/proprietarios", label: "Proprietários", icon: "owner", badge: ownersNew },
   ];

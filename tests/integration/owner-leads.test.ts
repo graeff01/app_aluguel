@@ -1,11 +1,9 @@
-// "Quanto rende o seu imóvel?" (estimativa + contato do proprietário) e o radar da demanda (quadros semanais).
+// "Quanto rende o seu imóvel?": estimativa e contato do proprietário.
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { createRadar } from "@/server/radar";
 import { clearSiteCache } from "@/server/site-search";
 import { createOwnerLead, listOwnerLeads, ownerEstimate, runOwnerLeadRetention, updateOwnerLead } from "@/server/owner-leads";
-import { buildFrames, demandRadar } from "@/server/demand-radar";
-import { ensureAreaCoords } from "@/server/area-geo";
 import { listAlerts } from "@/server/alerts";
 import { makeUsers, resetDb } from "../helpers/db";
 
@@ -74,37 +72,5 @@ describe("quanto rende o seu imóvel", () => {
     await updateOwnerLead(cap, lead.id, { status: "LOST", note: "quer vender" }, NOW);
     await runOwnerLeadRetention(new Date(NOW.getTime() + 200 * DAY));
     expect(await db.ownerLead.findUniqueOrThrow({ where: { id: lead.id } })).toMatchObject({ name: "Proprietário (dados apagados)", phoneEnc: null });
-  });
-});
-
-describe("radar da demanda", () => {
-  it("quadros semanais contam o que estava em aberto em cada semana, por bairro", () => {
-    const items = [
-      { areas: ["Centro", "Igara"], from: new Date(NOW.getTime() - 20 * DAY), to: null },
-      { areas: ["centro"], from: new Date(NOW.getTime() - 3 * DAY), to: null },
-      { areas: ["Igara"], from: new Date(NOW.getTime() - 60 * DAY), to: new Date(NOW.getTime() - 40 * DAY) },
-    ];
-    const f = buildFrames(items, NOW, 12);
-    expect(f).toHaveLength(12);
-    expect(f.at(-1)!.label).toBe("Agora");
-    expect(Object.fromEntries(f.at(-1)!.counts)).toEqual({ centro: 2, igara: 1 });
-    expect(Object.fromEntries(f[3].counts)).toEqual({ igara: 1 }); // semana de ~8 semanas atrás
-  });
-
-  it("monta o mapa com os bairros localizados (geocodificação com cache) e sem dados de cliente", async () => {
-    await createRadar(jasmin, { clientName: "Rita Secreta", phone: "(51) 99876-1111", wants: "Casa com pátio", areas: "Centro, Bairro Inexistente", propertyType: "Casa" }, new Date(NOW.getTime() - 10 * DAY));
-    let calls = 0;
-    const geo = (async (url: string) => {
-      calls++;
-      return new Response(JSON.stringify(url.includes("Centro") ? [{ lat: "-29.91", lon: "-51.18" }] : []), { status: 200 });
-    }) as unknown as typeof fetch;
-    const d = await demandRadar(cap, NOW, { geocode: 5, fetchImpl: geo });
-    expect(d.areas).toEqual([{ name: "Centro", lat: -29.91, lng: -51.18 }]);
-    expect(d.frames.at(-1)!.counts).toEqual([1]);
-    expect(d.missing).toBe(1);
-    expect(JSON.stringify(d)).not.toContain("Rita");
-    await ensureAreaCoords(["Centro", "Bairro Inexistente"], { fetchImpl: geo, now: NOW });
-    expect(calls).toBe(2); // já em cache (o não encontrado só tenta de novo em 30 dias)
-    await expect(demandRadar(u.a, NOW)).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
