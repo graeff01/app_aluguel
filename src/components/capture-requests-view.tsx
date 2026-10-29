@@ -1,152 +1,95 @@
-import type { ReactNode } from "react";
+import Link from "next/link";
 import type { captureRequests } from "@/server/demand";
-import type { captureScoreboard } from "@/server/capture";
-import { OUTCOME_TONE, outcomeText } from "@/server/capture";
-import { marketLine } from "@/server/market";
-import { fmt } from "@/lib/time";
-import { Empty, PageHeader, cx } from "@/components/ui";
+import type { captureScoreboard, Outcome } from "@/server/capture";
+import { Empty, PageHeader, Segmented, cx } from "@/components/ui";
 
 const brl = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-const ROLE_SHORT: Record<string, string> = { PRE_SERVICE: "pré-atendimento", CONSULTANT: "consultora", MANAGER: "gestão", ADMIN: "gestão" };
-const TONE_CLS = { neutral: "bg-tint text-ink-2", bad: "bg-bad-soft text-bad", warn: "bg-warn-soft text-warn", good: "bg-good-soft text-good" } as const;
 
 export type CaptureRow = Awaited<ReturnType<typeof captureRequests>>[number];
 type Board = Awaited<ReturnType<typeof captureScoreboard>>;
+export type CaptureTab = "buscar" | "meus" | "indicados" | "encerrados";
 
-/** Placar do mês: indicados → chegaram a visita → alugados, por captador. */
-function Scoreboard({ board, actorId }: { board: Board; actorId: string }) {
-  if (!board.people.length) return null;
-  return (
-    <section aria-label={`Placar de ${board.label}`} className="mb-6 rounded-2xl border border-line bg-surface p-3.5 shadow-card">
-      <p className="mb-2 text-[14px] font-bold">Placar de {board.label}</p>
-      <table className="w-full text-[13px]">
-        <thead>
-          <tr className="text-[11px] tracking-wide text-ink-3 uppercase">
-            <th className="pb-1 text-left font-semibold">Quem</th>
-            <th className="pb-1 text-right font-semibold">Indicados</th>
-            <th className="pb-1 text-right font-semibold">Visitas</th>
-            <th className="pb-1 text-right font-semibold">Alugados</th>
-          </tr>
-        </thead>
-        <tbody>
-          {board.people.map((p) => (
-            <tr key={p.id} className={cx("border-t border-line", p.id === actorId && "font-bold")}>
-              <td className="py-1.5">{p.id === actorId ? "Você" : p.name.split(" ")[0]}</td>
-              <td className="num py-1.5 text-right">{p.indicated}</td>
-              <td className="num py-1.5 text-right">{p.visits}</td>
-              <td className="num py-1.5 text-right">{p.rented}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
-  );
+export const pedidoTitle = (r: Pick<CaptureRow, "propertyType" | "bedrooms" | "maxBudgetCents">) =>
+  [r.propertyType ?? "Imóvel", r.bedrooms ? `${r.bedrooms}+ qtos` : null, r.maxBudgetCents ? `até ${brl(r.maxBudgetCents)}` : null].filter(Boolean).join(" · ");
+
+const STEP_TONE = { bad: "text-bad", warn: "text-warn", good: "text-good", accent: "text-accent-strong", neutral: "text-ink-2" } as const;
+const DOT = { bad: "bg-bad", warn: "bg-warn", good: "bg-good", accent: "bg-accent", neutral: "bg-ink-3" } as const;
+const RANK: Record<Outcome, number> = { RENTED: 0, VISIT_SCHEDULED: 1, VISITED_LIKED: 2, VISITED_UNDECIDED: 3, VISITED_DISLIKED: 4, REJECTED: 5, OFFERED: 6 };
+
+/** O próximo passo do pedido em uma frase (o que o captador precisa saber na lista). */
+export function nextStep(r: CaptureRow, actorId: string, options: number | null): { text: string; tone: keyof typeof STEP_TONE } {
+  if (r.status === "CLOSED") return { text: r.closeReason ?? "Encerrado", tone: "neutral" };
+  if (r.status === "FOUND" && r.results.length) {
+    const best = [...r.results].sort((a, b) => RANK[a.outcome] - RANK[b.outcome])[0];
+    if (best.outcome === "RENTED") return { text: `${best.code}: alugou! 🎉`, tone: "good" };
+    if (best.outcome === "VISIT_SCHEDULED") return { text: `${best.code}: visita marcada${best.detail ? ` ${best.detail}` : ""}`, tone: "good" };
+    if (best.outcome === "VISITED_LIKED") return { text: `${best.code}: visitou e gostou`, tone: "good" };
+    if (best.outcome === "VISITED_UNDECIDED") return { text: `${best.code}: visitou, está decidindo`, tone: "warn" };
+    if (best.outcome === "VISITED_DISLIKED") return { text: `Não gostou de ${best.code}${best.detail ? ` (${best.detail.toLowerCase()})` : ""}: indique outro`, tone: "bad" };
+    if (best.outcome === "REJECTED") return { text: "Fora do perfil: indique outro", tone: "bad" };
+    return { text: `Indicado ${r.results.map((x) => x.code).join(", ")}: aguardando o cliente`, tone: "neutral" };
+  }
+  const opt = options ? ` · ${options} opç${options === 1 ? "ão" : "ões"} no site` : "";
+  if (r.captureOwnerId === actorId) return { text: `Você está buscando${opt}`, tone: "accent" };
+  if (r.captureOwner) return { text: `${r.captureOwner.name.split(" ")[0]} está buscando${opt}`, tone: "neutral" };
+  return { text: `Ninguém buscando${opt}`, tone: "bad" };
 }
 
-/**
- * Pedidos para a captação: o que precisa de imóvel primeiro (com as opções do site para indicar), o que já foi
- * indicado (com o retorno de cada imóvel) e o que terminou nos últimos 30 dias. Sem nome nem telefone do cliente.
- */
-export function CaptureRequestsView({ rows, actorId, board, renderFound, renderMarket, renderOptions, renderOwner }: { rows: CaptureRow[]; actorId: string; board: Board; renderFound: (id: string) => ReactNode; renderMarket: (r: CaptureRow) => ReactNode; renderOptions: (r: CaptureRow) => ReactNode; renderOwner: (r: CaptureRow) => ReactNode }) {
-  const waiting = rows.filter((r) => r.status === "SEARCHING");
-  const found = rows.filter((r) => r.status === "FOUND");
-  const closed = rows.filter((r) => r.status === "CLOSED");
-  const results = (r: CaptureRow) =>
-    r.results.length > 0 && (
-      <ul className="mt-2 space-y-1">
-        {r.results.map((x) => (
-          <li key={x.code} className="flex flex-wrap items-center gap-2 text-[13px]">
-            <span className="num font-semibold">{x.code}</span>
-            <span className={cx("rounded-full px-2 py-0.5 text-[12px] font-semibold", TONE_CLS[OUTCOME_TONE[x.outcome]])}>{outcomeText(x)}</span>
-          </li>
-        ))}
-      </ul>
-    );
-  const title = (r: CaptureRow) => [r.propertyType ?? "Imóvel", r.bedrooms ? `${r.bedrooms}+ qtos` : null, r.maxBudgetCents ? `até ${brl(r.maxBudgetCents)}` : null].filter(Boolean).join(" · ");
-  const card = (r: CaptureRow) => {
-    const late = r.status === "SEARCHING" && r.days >= 15;
-    const mine = r.captureOwnerId === actorId;
-    return (
-      <li key={r.id} className={cx("min-w-0 rounded-3xl border bg-surface p-4 shadow-card", late ? "border-bad/40" : "border-line")}>
-        <div className="flex items-center justify-between gap-2">
-          {r.status === "FOUND" ? (
-            <span className="rounded-full bg-good-soft px-2.5 py-0.5 text-[12px] font-bold text-good">Imóvel indicado</span>
-          ) : (
-            <span className={cx("rounded-full px-2.5 py-0.5 text-[12px] font-bold", late ? "bg-bad-soft text-bad" : "bg-accent-soft text-accent-strong")}>Precisa de imóvel</span>
-          )}
-          <span className={cx("text-[12px]", late ? "font-semibold text-bad" : "text-ink-3")}>{r.days === 0 ? "hoje" : `há ${r.days} dia${r.days === 1 ? "" : "s"}`}</span>
-        </div>
-        <p className="mt-2 text-[16px] font-bold">{title(r)}</p>
-        {r.areas.length > 0 && <p className="text-[14px] text-ink-2">{r.areas.join(", ")}</p>}
-        <p className="mt-0.5 text-[12px] text-ink-3">
-          Pedido de {r.createdBy.name.split(" ")[0]} ({ROLE_SHORT[r.createdBy.role] ?? "atendimento"}) · {fmt.shortDate(r.sentToCaptureAt!).replace(".", "")}
-        </p>
-        {r.captureOwner && <p className={cx("mt-1 text-[13px] font-semibold", mine ? "text-accent-strong" : "text-ink-2")}>🔎 {mine ? "Você está buscando" : `${r.captureOwner.name.split(" ")[0]} está buscando`}</p>}
-        <details className="group mt-2">
-          <summary className="cursor-pointer list-none rounded-xl bg-tint px-3 py-2 text-[13px] text-ink-2">
-            <span className="line-clamp-2 group-open:line-clamp-none">“{r.wants}”</span>
-          </summary>
-        </details>
-        {r.marketTag && (
-          <p className="mt-2 text-[12px] text-ink-2">
-            <strong>Parecer:</strong> {marketLine({ tag: r.marketTag, text: r.marketNote, cents: r.marketCents })}
-          </p>
-        )}
-        {results(r)}
-        {r.status === "SEARCHING" && <div className="mt-3">{renderOptions(r)}</div>}
-        <div className="flex flex-wrap items-start gap-x-3">
-          {renderOwner(r)}
-          {renderFound(r.id)}
-          {renderMarket(r)}
-        </div>
-      </li>
-    );
-  };
+export function tabOf(r: CaptureRow, actorId: string): CaptureTab {
+  if (r.status === "CLOSED") return "encerrados";
+  if (r.status === "FOUND") return "indicados";
+  return r.captureOwnerId === actorId ? "meus" : "buscar";
+}
+
+/** Lista enxuta: abas pelo que fazer, um cartão de duas linhas e o próximo passo. O resto fica na tela do pedido. */
+export function CaptureRequestsView({ rows, actorId, board, tab, options, showMine }: { rows: CaptureRow[]; actorId: string; board: Board; tab: CaptureTab; options: Map<string, number>; showMine: boolean }) {
+  const groups: Record<CaptureTab, CaptureRow[]> = { buscar: [], meus: [], indicados: [], encerrados: [] };
+  for (const r of rows) groups[showMine ? tabOf(r, actorId) : tabOf(r, actorId) === "meus" ? "buscar" : tabOf(r, actorId)].push(r);
+  const tabs: [CaptureTab, string][] = [["buscar", "Para buscar"], ...(showMine ? ([["meus", "Meus"]] as [CaptureTab, string][]) : []), ["indicados", "Indicados"], ["encerrados", "Encerrados"]];
+  const list = groups[tab];
+  const me = board.people.find((p) => p.id === actorId);
+  const score = me ?? board.total;
   return (
     <>
-      <PageHeader title="Pedidos" subtitle="Clientes que o atendimento ainda não conseguiu atender. Indique um imóvel e quem pediu é avisado." />
-      <Scoreboard board={board} actorId={actorId} />
-      {rows.length === 0 ? (
-        <Empty title="Nenhum pedido em aberto" icon="✓">
-          Quando o atendimento passar um pedido, ele aparece aqui e você recebe um aviso.
+      <PageHeader title="Pedidos" />
+      {(score.indicated > 0 || board.people.length > 0) && (
+        <p className="-mt-4 mb-4 text-[13px] text-ink-2">
+          <span className="font-semibold capitalize">{board.label}</span>
+          {me ? "" : " (equipe)"}: <span className="num font-semibold">{score.indicated}</span> indicado{score.indicated === 1 ? "" : "s"} · <span className="num font-semibold">{score.visits}</span> visita{score.visits === 1 ? "" : "s"} ·{" "}
+          <span className="num font-semibold">{score.rented}</span> alugado{score.rented === 1 ? "" : "s"}
+        </p>
+      )}
+      <div className="mb-4">
+        <Segmented label="Pedidos" items={tabs.map(([k, label]) => ({ href: `/demanda/pedidos?aba=${k}`, label: `${label} ${groups[k].length ? groups[k].length : ""}`.trim(), active: tab === k }))} />
+      </div>
+      {list.length === 0 ? (
+        <Empty title={tab === "buscar" ? "Nada para buscar agora" : tab === "meus" ? "Você não está buscando nenhum pedido" : tab === "indicados" ? "Nenhum pedido com imóvel indicado" : "Nenhum pedido encerrado nos últimos 30 dias"} icon="✓">
+          {tab === "buscar" ? "Quando o atendimento passar um pedido, ele aparece aqui e você recebe um aviso." : tab === "meus" ? "Abra um pedido em “Para buscar” e toque em “Estou buscando”." : null}
         </Empty>
       ) : (
-        <>
-          <h2 className="mb-3 text-[15px] font-bold">
-            Precisam de imóvel <span className="font-medium text-ink-3">· {waiting.length}</span>
-          </h2>
-          {waiting.length === 0 ? <p className="mb-6 text-[14px] text-ink-3">Nada pendente: todos já têm imóvel indicado.</p> : <ul className="mb-8 grid items-start gap-3 lg:grid-cols-2">{waiting.map(card)}</ul>}
-          {found.length > 0 && (
-            <>
-              <h2 className="mb-1 text-[15px] font-bold">
-                Já indicados <span className="font-medium text-ink-3">· {found.length}</span>
-              </h2>
-              <p className="mb-3 text-[13px] text-ink-3">O retorno de cada imóvel aparece aqui (visita marcada, visitou, alugou). Achou outro? Indique também.</p>
-              <ul className="mb-8 grid items-start gap-3 lg:grid-cols-2">{found.map(card)}</ul>
-            </>
-          )}
-          {closed.length > 0 && (
-            <details className="group">
-              <summary className="mb-3 cursor-pointer list-none text-[15px] font-bold">
-                Encerrados nos últimos 30 dias <span className="font-medium text-ink-3">· {closed.length}</span> <span className="text-ink-3 transition group-open:rotate-90">›</span>
-              </summary>
-              <ul className="grid items-start gap-2 lg:grid-cols-2">
-                {closed.map((r) => (
-                  <li key={r.id} className="min-w-0 rounded-2xl border border-line bg-surface p-3.5">
-                    <p className="text-[14px] font-bold">{title(r)}</p>
-                    <p className="text-[13px] text-ink-2">
-                      {r.areas.join(", ")}
-                      {r.closeReason ? ` · ${r.closeReason}` : ""}
-                    </p>
-                    {results(r)}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-        </>
+        <ul className="grid gap-2.5 lg:grid-cols-2">
+          {list.map((r) => {
+            const step = nextStep(r, actorId, options.get(r.id) ?? null);
+            const late = r.status === "SEARCHING" && r.days >= 15;
+            return (
+              <li key={r.id} className="min-w-0">
+                <Link href={`/demanda/pedidos/${r.id}`} className={cx("press block rounded-2xl border bg-surface p-3.5 shadow-card", late ? "border-bad/40" : "border-line")}>
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className="truncate text-[15px] font-bold">{pedidoTitle(r)}</span>
+                    <span className={cx("shrink-0 text-[12px]", late ? "font-semibold text-bad" : "text-ink-3")}>{r.days === 0 ? "hoje" : `há ${r.days} d`}</span>
+                  </span>
+                  <span className="block truncate text-[13px] text-ink-2">{r.areas.join(", ") || "Sem bairro"}</span>
+                  <span className={cx("mt-1.5 flex items-center gap-1.5 text-[13px] font-semibold", STEP_TONE[step.tone])}>
+                    <span aria-hidden className={cx("size-2 shrink-0 rounded-full", DOT[step.tone])} />
+                    <span className="min-w-0 flex-1 truncate">{step.text}</span>
+                    <span aria-hidden className="text-ink-3">›</span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       )}
-      <p className="mt-6 text-[12px] text-ink-3">Nome e telefone do cliente não aparecem para a captação (proteção de dados).</p>
     </>
   );
 }

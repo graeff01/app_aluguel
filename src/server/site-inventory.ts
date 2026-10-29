@@ -6,7 +6,7 @@
 import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 import { dayKey, TZ } from "@/lib/time";
-import { normText, parseSearchPage, siteOrigin, siteSearchUrl, SITE_CITY, type SiteListing } from "./site-search";
+import { normText, parseSearchPage, siteOrigin, siteSearchUrl, SITE_CITY, TYPE_SEARCH, type SiteListing } from "./site-search";
 
 const HOUR = 3600_000;
 const MAX_PAGES = 80;
@@ -88,4 +88,33 @@ export async function inventoryByArea() {
 export async function inventoryAreaNames() {
   const rows = await db.siteInventory.findMany({ where: { goneAt: null, neighborhood: { not: null } }, distinct: ["areaKey"], select: { areaKey: true, neighborhood: true } });
   return rows.map((r) => r.neighborhood!);
+}
+
+/**
+ * Quantos imóveis nossos no site servem para cada perfil (bairro, tipo, quartos mínimos e total até 10% acima do
+ * valor). Usa o inventário do dia: rápido o bastante para a lista de pedidos.
+ */
+export async function inventoryMatchCounts(profiles: { id: string; areas: string[]; propertyType: string | null; bedrooms: number | null; maxBudgetCents: number | null; exclude?: string[] }[]) {
+  const out = new Map<string, number>();
+  const keys = [...new Set(profiles.flatMap((p) => p.areas.map(normText)).filter(Boolean))];
+  if (!keys.length) return out;
+  const rows = await db.siteInventory.findMany({ where: { goneAt: null, areaKey: { in: keys } }, select: { code: true, areaKey: true, kind: true, category: true, bedrooms: true, rentCents: true, totalCents: true } });
+  for (const p of profiles) {
+    const areas = new Set(p.areas.map(normText));
+    const t = p.propertyType ? TYPE_SEARCH[p.propertyType] : undefined;
+    const skip = new Set(p.exclude ?? []);
+    out.set(
+      p.id,
+      rows.filter((r) => {
+        if (!areas.has(r.areaKey!) || skip.has(r.code)) return false;
+        if (t?.kind && r.kind !== t.kind) return false;
+        if (t?.words.length && !t.words.some((w) => new RegExp(`\b${w}\b`).test(normText(r.category ?? "")))) return false;
+        if (p.bedrooms && r.bedrooms != null && r.bedrooms < p.bedrooms) return false;
+        const price = r.totalCents ?? r.rentCents;
+        if (p.maxBudgetCents && (!price || price > p.maxBudgetCents * 1.1)) return false;
+        return true;
+      }).length,
+    );
+  }
+  return out;
 }

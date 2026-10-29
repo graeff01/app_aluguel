@@ -12,6 +12,14 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-30-b",
+    title: "Pedidos mais simples",
+    changes: [
+      { text: "Pedidos em abas (Para buscar, Meus, Indicados, Encerrados) e cada um em duas linhas com o próximo passo: “Ninguém buscando”, “Visita marcada”, “Não gostou: indique outro”…", who: ["CAPTURE", "MANAGER"], href: "/demanda/pedidos" },
+      { text: "Toque no pedido para ver tudo: o que o cliente procura, as opções do site para indicar, o retorno do que já foi indicado e o parecer. “Estou buscando” fica sempre à mão, embaixo.", who: ["CAPTURE"], href: "/demanda/pedidos" },
+    ],
+  },
+  {
     id: "2026-10-30",
     title: "Mapa de Canoas",
     changes: [
