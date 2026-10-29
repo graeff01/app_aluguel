@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { captureRequests } from "@/server/demand";
 import type { captureScoreboard, Outcome } from "@/server/capture";
-import { Empty, PageHeader, Segmented, cx } from "@/components/ui";
+import { Empty, PageHeader, cx } from "@/components/ui";
 
 const brl = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
@@ -59,9 +59,23 @@ export function CaptureRequestsView({ rows, actorId, board, tab, options, showMi
           <span className="num font-semibold">{score.rented}</span> alugado{score.rented === 1 ? "" : "s"}
         </p>
       )}
-      <div className="mb-4">
-        <Segmented label="Pedidos" items={tabs.map(([k, label]) => ({ href: `/demanda/pedidos?aba=${k}`, label: `${label} ${groups[k].length ? groups[k].length : ""}`.trim(), active: tab === k }))} />
-      </div>
+      {/* abas fixas (sem rolagem): dividem a largura por igual, número embaixo do nome */}
+      <nav aria-label="Pedidos" className="mb-4">
+        <ul className={cx("grid gap-1 rounded-2xl border border-line bg-surface p-1 shadow-card", tabs.length === 4 ? "grid-cols-4" : "grid-cols-3", "lg:max-w-xl")}>
+          {tabs.map(([k, label]) => (
+            <li key={k} className="min-w-0">
+              <Link
+                href={`/demanda/pedidos?aba=${k}`}
+                aria-current={tab === k ? "page" : undefined}
+                className={cx("flex min-h-12 flex-col items-center justify-center rounded-xl px-1 text-center leading-tight transition-colors", tab === k ? "bg-primary text-on-primary" : "text-ink-2 hover:bg-tint hover:text-ink")}
+              >
+                <span className="w-full truncate text-[13px] font-semibold">{label}</span>
+                <span className={cx("num text-[12px]", tab === k ? "opacity-80" : "text-ink-3")}>{groups[k].length}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
       {list.length === 0 ? (
         <Empty title={tab === "buscar" ? "Nada para buscar agora" : tab === "meus" ? "Você não está buscando nenhum pedido" : tab === "indicados" ? "Nenhum pedido com imóvel indicado" : "Nenhum pedido encerrado nos últimos 30 dias"} icon="✓">
           {tab === "buscar" ? "Quando o atendimento passar um pedido, ele aparece aqui e você recebe um aviso." : tab === "meus" ? "Abra um pedido em “Para buscar” e toque em “Estou buscando”." : null}
