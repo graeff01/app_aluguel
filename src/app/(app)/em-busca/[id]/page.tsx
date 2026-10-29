@@ -10,6 +10,7 @@ import { PropertyThumb } from "@/components/property-thumb";
 import { Suspense } from "react";
 import { ProfileForm, ContactForm, CloseForm } from "./forms";
 import { SearchSuggestions } from "./similar";
+import { MarketReading } from "@/components/market-reading";
 
 export const metadata = { title: "Cliente em busca" };
 const dOnly = (d: Date) => dateOnlyKey(d).split("-").reverse().join("/");
@@ -82,6 +83,8 @@ export default async function SearchPage({ params, searchParams }: { params: Pro
           <p className="text-[14px] whitespace-pre-wrap text-ink-2">{s.note ?? "—"}</p>
         )}
       </section>
+
+      {active && <MarketReading profile={s} className="mt-6" />}
 
       {active && !s.client.anonymizedAt && (
         <section className="mt-6 rounded-[26px] border border-line bg-surface p-5 shadow-card sm:p-6" aria-labelledby="t-site">

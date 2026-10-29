@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { assert, hasGlobalView, isCapture, type AuthzActor } from "@/lib/authz";
 import { RADAR_CLOSE_REASONS } from "./radar";
 import { countOnSite, normText, profileQuery, siteOrigin, siteSearchUrl } from "./site-search";
+import { marketLine, noteForSegment } from "./market";
 
 const DAY = 86400_000;
 /** Mapa da demanda e pedidos: captação e gestão (o pré-atendimento e as consultoras não precisam). */
@@ -168,13 +169,20 @@ export async function supplyForSegments(segments: DemandSegment[], opts: { fetch
 const brl = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 /** Texto pronto para mandar à captação (WhatsApp/e-mail): onde falta imóvel. */
-export function captureBrief(days: number, rows: Awaited<ReturnType<typeof segmentSupply>>) {
+export function captureBrief(days: number, rows: Awaited<ReturnType<typeof segmentSupply>>, notes: SegmentNote[] = []) {
   const lines = rows
     .filter((r) => r.gap === "none" || r.gap === "low")
-    .map((r) => `• ${[r.type ?? "Imóvel", r.area, r.bedrooms ? `${r.bedrooms}+ quartos` : null, r.budgetCents ? `até ${brl(r.budgetCents)}` : null].filter(Boolean).join(" · ")} — ${r.demand} cliente${r.demand > 1 ? "s" : ""} procurando, ${r.supply === 0 ? "nenhum no site" : `só ${r.supply} no site`}`);
+    .flatMap((r) => {
+      const line = `• ${[r.type ?? "Imóvel", r.area, r.bedrooms ? `${r.bedrooms}+ quartos` : null, r.budgetCents ? `até ${brl(r.budgetCents)}` : null].filter(Boolean).join(" · ")} — ${r.demand} cliente${r.demand > 1 ? "s" : ""} procurando, ${r.supply === 0 ? "nenhum no site" : `só ${r.supply} no site`}`;
+      const n = noteForSegment(notes, r.area, r.type);
+      return n ? [line, `   → Captação: ${marketLine(n)}`] : [line];
+    });
   if (!lines.length) return null;
   return [`Mapa da demanda (últimos ${days} dias) — onde falta imóvel:`, "", ...lines, "", "Fonte: pedidos do pré-atendimento e clientes em busca das consultoras (app Visitas Locação)."].join("\n");
 }
+
+/** Leitura de mercado da captação para um perfil (bairro + tipo), como aparece no mapa. */
+export type SegmentNote = { areaKey: string; typeKey: string; tag: string; text: string | null; cents: number | null; author?: string | null };
 
 // ─────────────── Pedidos para a captação ───────────────
 
@@ -187,7 +195,7 @@ export async function captureRequests(actor: AuthzActor, now = new Date()) {
   const rows = await db.clientRadar.findMany({
     where: { status: { in: ["SEARCHING", "FOUND"] }, sentToCaptureAt: { not: null } },
     orderBy: { sentToCaptureAt: "asc" },
-    select: { id: true, wants: true, maxBudgetCents: true, areas: true, propertyType: true, bedrooms: true, sentToCaptureAt: true, foundCodes: true, status: true, createdBy: { select: { name: true } } },
+    select: { id: true, wants: true, maxBudgetCents: true, areas: true, propertyType: true, bedrooms: true, sentToCaptureAt: true, foundCodes: true, status: true, marketTag: true, marketNote: true, marketCents: true, createdBy: { select: { name: true } } },
     take: 300,
   });
   return rows.map((r) => ({ ...r, days: Math.max(0, Math.floor((now.getTime() - r.sentToCaptureAt!.getTime()) / DAY)) }));

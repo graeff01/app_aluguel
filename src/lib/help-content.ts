@@ -190,6 +190,7 @@ export const HELP: HelpTopic[] = [
       "Use “Copiar resumo” ou “Enviar pelo WhatsApp” para levar a lista para a equipe.",
       "Em “Pedidos”, cada pedido do pré-atendimento mostra o que o cliente procura (sem nome nem telefone).",
       "Achou um imóvel? Toque em “Achei imóvel”, informe o código e uma observação. O pré-atendimento é avisado na hora.",
+      "Conhece o mercado daquele perfil? Toque em “Escrever parecer” no pedido (ex.: “tem, mas acima desse valor”, com o valor realista). No Mapa, “Escrever leitura de mercado” vale para o bairro + tipo inteiro e entra no resumo.",
     ],
     tips: ["Você recebe um aviso no celular a cada pedido novo passado para a captação."],
   },
@@ -213,6 +214,7 @@ export const HELP: HelpTopic[] = [
       "Todo dia o app confere o site: imóvel novo com o perfil aparece em “Novos no site” e você recebe um aviso.",
       "Quando a captação achar um imóvel para o pedido, você recebe um aviso e o pedido aparece em “Cobrar hoje”.",
       "Uma opção não serve? Toque em “Fora do perfil” e diga o motivo: ela some e as próximas sugestões ficam mais certeiras (dá para desfazer os ajustes).",
+      "Quando a captação der um parecer de mercado (“nesse valor, só com menos quartos”…), ele aparece no pedido e você recebe um aviso: use na conversa com o cliente.",
     ],
   },
   {

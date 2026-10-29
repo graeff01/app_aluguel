@@ -12,6 +12,16 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-29-b",
+    title: "Leitura de mercado da captação",
+    changes: [
+      { text: "Em cada pedido, “Escrever parecer”: diga o que o mercado oferece (“tem, mas acima desse valor”, “nesse valor, só com menos quartos”…), o valor realista e uma observação. O pré-atendimento é avisado na hora.", who: ["CAPTURE", "MANAGER"], href: "/demanda/pedidos" },
+      { text: "No Mapa da demanda, escreva a leitura de cada perfil (bairro + tipo). Ela entra no resumo do WhatsApp e aparece para quem atende clientes com esse perfil.", who: ["CAPTURE", "MANAGER"], href: "/demanda" },
+      { text: "Parecer da captação no pedido do radar: o que o mercado oferece para o perfil, para usar na conversa com o cliente (ajustar valor, quartos ou bairro). Você recebe um aviso quando chega.", who: ["PRE_SERVICE"], href: "/radar" },
+      { text: "Clientes em busca: quando a captação tiver uma leitura de mercado para o bairro e tipo do cliente, ela aparece no cliente. Bom argumento para ajustar o valor ou os quartos.", who: ["CONSULTANT"], href: "/em-busca" },
+    ],
+  },
+  {
     id: "2026-10-29",
     title: "Opção fora do perfil",
     changes: [

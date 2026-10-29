@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import type { captureRequests } from "@/server/demand";
 import { brl } from "@/server/proposals";
+import { marketLine } from "@/server/market";
 import { fmt } from "@/lib/time";
 import { Empty, PageHeader, cx } from "@/components/ui";
 
 export type CaptureRow = Awaited<ReturnType<typeof captureRequests>>[number];
 
 /** Pedidos em aberto para a captação (o mesmo na tela real e na demonstração). */
-export function CaptureRequestsView({ rows, renderFound }: { rows: CaptureRow[]; renderFound: (id: string) => ReactNode }) {
+export function CaptureRequestsView({ rows, renderFound, renderMarket }: { rows: CaptureRow[]; renderFound: (id: string) => ReactNode; renderMarket: (r: CaptureRow) => ReactNode }) {
   const waiting = rows.filter((r) => r.status === "SEARCHING");
   const found = rows.filter((r) => r.status === "FOUND");
   const card = (r: (typeof rows)[number]) => (
@@ -27,7 +28,15 @@ export function CaptureRequestsView({ rows, renderFound }: { rows: CaptureRow[];
         Pedido de {r.createdBy.name.split(" ")[0]} · passado à captação em {fmt.shortDate(r.sentToCaptureAt!)}
         {r.foundCodes.length ? ` · já indicados: ${r.foundCodes.join(", ")}` : ""}
       </p>
-      {renderFound(r.id)}
+      {r.marketTag && (
+        <p className="mt-2 rounded-xl border border-line bg-surface-2 px-3 py-2 text-[13px]">
+          <strong>Parecer da captação:</strong> {marketLine({ tag: r.marketTag, text: r.marketNote, cents: r.marketCents })}
+        </p>
+      )}
+      <div className="flex flex-wrap items-start gap-2">
+        {renderFound(r.id)}
+        {renderMarket(r)}
+      </div>
     </li>
   );
   return (

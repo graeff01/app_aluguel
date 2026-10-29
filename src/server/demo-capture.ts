@@ -9,6 +9,7 @@ import { hitRateLimit } from "@/lib/ratelimit";
 import { assert, hasGlobalView, type AuthzActor } from "@/lib/authz";
 import { buildDemand, type DemandInput } from "./demand";
 import type { CaptureRow } from "@/components/capture-requests-view";
+import type { SegmentNote } from "./demand";
 
 const DAY = 86400_000;
 type P = [wants: string, areas: string[], type: string | null, bedrooms: number | null, maxReais: number | null, daysAgo: number, found?: string[]];
@@ -57,6 +58,12 @@ export function demoDemandInput(now = new Date()): DemandInput {
 
 export const demoDemand = (days: number, now = new Date()) => buildDemand(demoDemandInput(now), days, now);
 
+/** Leituras de mercado de exemplo (perfil bairro + tipo). */
+export const demoMarketNotes: SegmentNote[] = [
+  { areaKey: "centro", typeKey: "casa", tag: "ABOVE", text: "Casa com pátio no Centro costuma passar de R$ 2.800; até R$ 2.500 só sem garagem.", cents: 280000, author: "Carla Captação" },
+  { areaKey: "marechal rondon", typeKey: "casa", tag: "FEWER_ROOMS", text: "Até R$ 2.300 aparecem casas de 1 quarto; 2 quartos a partir de R$ 2.600.", cents: 260000, author: "Carla Captação" },
+];
+
 export function demoRequests(now = new Date()): CaptureRow[] {
   return OPEN.map(([wants, areas, propertyType, bedrooms, max, ago, found], i) => ({
     id: `demo-${i + 1}`,
@@ -67,6 +74,9 @@ export function demoRequests(now = new Date()): CaptureRow[] {
     maxBudgetCents: max ? max * 100 : null,
     sentToCaptureAt: new Date(now.getTime() - ago * DAY),
     foundCodes: found ?? [],
+    marketTag: i === 0 ? "ABOVE" : i === 4 ? "FEWER_ROOMS" : null,
+    marketNote: i === 0 ? "Casa com pátio nesses bairros costuma passar de R$ 2.800." : i === 4 ? "Até R$ 2.300 aparecem casas térreas de 1 quarto." : null,
+    marketCents: i === 0 ? 280000 : null,
     status: found?.length ? ("FOUND" as const) : ("SEARCHING" as const),
     createdBy: { name: "Jasmin" },
     days: ago,

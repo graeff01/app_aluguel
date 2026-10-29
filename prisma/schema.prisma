@@ -1246,6 +1246,12 @@ model ClientRadar {
   /// opções do site marcadas "fora do perfil" e o que o app aprendeu com elas (LearnedRules)
   rejectedCodes   String[]      @default([])
   siteRules       Json?
+  /// parecer da captação sobre o pedido (ex.: "tem, mas acima do valor"): tag de MARKET_TAGS, texto e valor realista
+  marketTag       String?
+  marketNote      String?
+  marketCents     Int?
+  marketNoteAt    DateTime?
+  marketNoteById  String?
   events          RadarEvent[]
 
   @@index([status, followUpOn])
@@ -1273,4 +1279,23 @@ model DemoFeedback {
   createdAt DateTime @default(now())
 
   @@index([demo, createdAt])
+}
+
+/// Leitura de mercado da captação por perfil (bairro + tipo): aparece no mapa, nos pedidos e para as consultoras.
+model MarketNote {
+  id         String   @id @default(cuid())
+  /// bairro e tipo normalizados (sem acento, minúsculo; tipo "" = qualquer)
+  areaKey    String
+  typeKey    String   @default("")
+  area       String
+  type       String?
+  tag        String
+  text       String
+  /// valor realista para esse perfil, em centavos (opcional)
+  cents      Int?
+  authorId   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([areaKey, typeKey])
 }

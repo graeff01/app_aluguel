@@ -11,6 +11,7 @@ import { ContactButtons } from "@/components/contact-buttons";
 import { Suspense } from "react";
 import { RadarCloseForm, RadarReopen, RadarUpdateForm } from "./forms";
 import { SimilarOnSite } from "./similar";
+import { MarketReading } from "@/components/market-reading";
 
 export const metadata = { title: "Radar de clientes" };
 
@@ -69,6 +70,8 @@ export default async function RadarItemPage({ params, searchParams }: { params: 
           {r.foundCodes.length > 0 && <span className="rounded-full bg-good-soft px-3 py-1 font-semibold text-good">Imóveis achados: {r.foundCodes.join(", ")}</span>}
         </div>
       </section>
+
+      <MarketReading profile={r} parecer={{ tag: r.marketTag, text: r.marketNote, cents: r.marketCents, at: r.marketNoteAt }} />
 
       {!closed ? (
         <>

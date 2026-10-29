@@ -1,6 +1,9 @@
 import { Suspense } from "react";
 import type { demandMap, segmentSupply } from "@/server/demand";
-import { captureBrief } from "@/server/demand";
+import { captureBrief, type SegmentNote } from "@/server/demand";
+import { marketLine, noteForSegment } from "@/server/market";
+import { MARKET_TONE, type MarketTag } from "@/lib/market-tags";
+import { MarketNoteForm } from "./market-note-form";
 import { brl } from "@/server/proposals";
 import { Empty, Segmented, cx } from "@/components/ui";
 import { BriefActions } from "./brief-actions";
@@ -40,9 +43,35 @@ const GAP = {
   ok: { label: "Tem no site · ofereça", cls: "bg-good-soft text-good" },
 } as const;
 
-async function Gaps({ loadRows, days }: { loadRows: () => Promise<SupplyRow[]>; days: number }) {
+const TONE = { bad: "border-bad/30 bg-bad-soft", warn: "border-warn/30 bg-warn-soft", good: "border-good/30 bg-good-soft" } as const;
+
+/** Leitura de mercado da captação para o perfil da linha (+ formulário para escrever/atualizar). */
+function SegmentMarket({ r, notes, write }: { r: SupplyRow; notes: SegmentNote[]; write: "app" | "demo" | null }) {
+  const n = noteForSegment(notes, r.area, r.type);
+  if (!n && !write) return null;
+  return (
+    <div className="mt-2">
+      {n && (
+        <p className={cx("rounded-xl border px-2.5 py-1.5 text-[12px] text-ink-2", TONE[MARKET_TONE[n.tag as MarketTag] ?? "warn"])}>
+          <strong>Leitura da captação:</strong> {marketLine(n)}
+          {n.author ? <span className="text-ink-3"> · {n.author}</span> : null}
+        </p>
+      )}
+      {write && (
+        <MarketNoteForm
+          hidden={{ area: r.area, type: r.type ?? "" }}
+          label={n ? "Atualizar leitura de mercado" : "Escrever leitura de mercado"}
+          initial={n ? { tag: n.tag, text: n.text, cents: n.cents } : undefined}
+          demo={write === "demo"}
+        />
+      )}
+    </div>
+  );
+}
+
+async function Gaps({ loadRows, days, notes, write }: { loadRows: () => Promise<SupplyRow[]>; days: number; notes: SegmentNote[]; write: "app" | "demo" | null }) {
   const rows = await loadRows();
-  const brief = captureBrief(days, rows);
+  const brief = captureBrief(days, rows, notes);
   return (
     <>
       {/* celular: um cartão por perfil */}
@@ -67,6 +96,7 @@ async function Gaps({ loadRows, days }: { loadRows: () => Promise<SupplyRow[]>; 
               )}
               {r.gap && <span className={cx("ml-auto inline-flex rounded-full px-2.5 py-0.5 text-[12px] font-bold", GAP[r.gap].cls)}>{GAP[r.gap].label}</span>}
             </div>
+            <SegmentMarket r={r} notes={notes} write={write} />
           </li>
         ))}
       </ul>
@@ -88,6 +118,7 @@ async function Gaps({ loadRows, days }: { loadRows: () => Promise<SupplyRow[]>; 
                     {r.type ?? "Qualquer tipo"} · {r.area}
                   </p>
                   <p className="text-[12px] text-ink-3">{[r.bedrooms ? `${r.bedrooms}+ quartos` : null, r.budgetCents ? `até ${brl(r.budgetCents)}` : null, r.open ? `${r.open} em aberto` : null].filter(Boolean).join(" · ") || "—"}</p>
+                  <SegmentMarket r={r} notes={notes} write={write} />
                 </td>
                 <td className="num py-2.5 pr-3 text-right font-bold">{r.demand}</td>
                 <td className="num py-2.5 pr-3 text-right">
@@ -105,7 +136,7 @@ async function Gaps({ loadRows, days }: { loadRows: () => Promise<SupplyRow[]>; 
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-[12px] text-ink-3">“No site hoje”: imóveis no site com o mesmo bairro, tipo, quartos mínimos e aluguel até o valor mais pedido. Toque no número para ver a busca no site.</p>
+      <p className="mt-2 text-[12px] text-ink-3">“No site hoje”: imóveis no site com o mesmo bairro, tipo, quartos mínimos e aluguel até o valor mais pedido. Toque no número para ver a busca no site.{write ? " A leitura de mercado que a captação escreve aparece no resumo, nos pedidos e para as consultoras com clientes desse perfil." : ""}</p>
       {brief && (
         <div className="mt-4 rounded-2xl border border-line bg-surface-2 p-4">
           <p className="mb-2 text-[14px] font-bold">Resumo para a captação</p>
@@ -120,7 +151,7 @@ async function Gaps({ loadRows, days }: { loadRows: () => Promise<SupplyRow[]>; 
 }
 
 /** Mapa da demanda (o mesmo para a captação e para a demonstração): período, resumo, onde falta imóvel e gráficos. */
-export function DemandView({ d, days, basePath, loadRows }: { d: DemandData; days: number; basePath: string; loadRows: () => Promise<SupplyRow[]> }) {
+export function DemandView({ d, days, basePath, loadRows, notes = [], write = null }: { d: DemandData; days: number; basePath: string; loadRows: () => Promise<SupplyRow[]>; notes?: SegmentNote[]; write?: "app" | "demo" | null }) {
   const c = d.capture;
   const tiles: [string, string, string][] = [
     ["Clientes procurando", String(d.total), `${d.radar} do radar · ${d.searches} em busca`],
@@ -163,7 +194,7 @@ export function DemandView({ d, days, basePath, loadRows }: { d: DemandData; day
               <p className="text-[14px] text-ink-3">Os pedidos do período ainda não têm bairro preenchido.</p>
             ) : (
               <Suspense fallback={<p className="text-[14px] text-ink-3">Conferindo a oferta no site…</p>}>
-                <Gaps loadRows={loadRows} days={days} />
+                <Gaps loadRows={loadRows} days={days} notes={notes} write={write} />
               </Suspense>
             )}
           </section>

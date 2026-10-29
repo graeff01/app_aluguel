@@ -237,3 +237,45 @@ describe("fora do perfil", () => {
     expect(await codes()).toEqual(["700002"]);
   });
 });
+
+describe("leitura de mercado da captação", () => {
+  it("parecer no pedido: só captação/gestão; avisa o pré-atendimento sem dados do cliente e fica no histórico", async () => {
+    const { setRadarMarketNote } = await import("@/server/market");
+    const cap = await db.user.create({ data: { name: "Carla Captadora", email: "captacao@exemplo.test", role: "CAPTURE" } });
+    const captador = { id: cap.id, role: "CAPTURE" as const };
+    const r = await createRadar(jasmin, { clientName: "Rita Secreta", phone: "(51) 99876-1111", wants: "Casa com pátio", areas: "Centro", propertyType: "Casa", bedrooms: "2", maxBudget: "2.500" }, NOW);
+    const sent: { uid: string; body: string; url: string }[] = [];
+    const notify = async (uid: string, p: { body: string; url: string }) => void sent.push({ uid, body: p.body, url: p.url });
+
+    await expect(setRadarMarketNote(jasmin, r.id, { tag: "ABOVE" }, NOW, notify)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(setRadarMarketNote(captador, r.id, { tag: "XYZ" }, NOW, notify)).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(setRadarMarketNote(captador, r.id, { tag: "ABOVE", realistic: "abc" }, NOW, notify)).rejects.toMatchObject({ code: "VALIDATION" });
+    await setRadarMarketNote(captador, r.id, { tag: "ABOVE", realistic: "2.800", text: "Com pátio costuma passar disso." }, NOW, notify);
+
+    expect(await db.clientRadar.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({ marketTag: "ABOVE", marketCents: 280000, marketNote: "Com pátio costuma passar disso.", marketNoteById: cap.id });
+    expect(sent).toEqual([{ uid: jasmin.id, body: "Tem, mas acima desse valor. Toque para ver e conversar com o cliente.", url: `/radar/${r.id}` }]);
+    expect(JSON.stringify(sent)).not.toContain("Rita");
+    const ev = await db.radarEvent.findFirstOrThrow({ where: { radarId: r.id, note: { startsWith: "Parecer da captação" } } });
+    expect(ev.note).toBe("Parecer da captação: Tem, mas acima desse valor — valor realista: R$ 2.800 — Com pátio costuma passar disso.");
+  });
+
+  it("leitura por perfil: grava/atualiza por bairro + tipo, vale para os pedidos com esse perfil e entra no resumo", async () => {
+    const { listMarketNotes, noteForSegment, notesForProfile, upsertMarketNote } = await import("@/server/market");
+    const cap = await db.user.create({ data: { name: "Carla Captadora", email: "captacao@exemplo.test", role: "CAPTURE" } });
+    const captador = { id: cap.id, role: "CAPTURE" as const };
+    await expect(upsertMarketNote(u.a, { tag: "HARD", area: "Centro", type: "Casa" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await upsertMarketNote(captador, { tag: "HARD", area: "Centro", type: "Casa" });
+    await upsertMarketNote(captador, { tag: "FEWER_ROOMS", text: "Até 2.300 só 1 quarto.", area: " centro ", type: "Casa" }); // mesmo perfil: atualiza
+    await upsertMarketNote(captador, { tag: "NEARBY", area: "São José", type: null });
+
+    const notes = await listMarketNotes();
+    expect(notes).toHaveLength(2);
+    expect(notes.find((n) => n.areaKey === "centro")).toMatchObject({ tag: "FEWER_ROOMS", author: "Carla Captadora" });
+    expect(notesForProfile(notes, { areas: ["Centro"], propertyType: "Apartamento" })).toEqual([]);
+    expect(notesForProfile(notes, { areas: ["Sao Jose", "Centro"], propertyType: "Casa" }).map((n) => n.tag).sort()).toEqual(["FEWER_ROOMS", "NEARBY"]);
+    expect(noteForSegment(notes, "São José", "Kitnet / studio")?.tag).toBe("NEARBY");
+
+    const brief = captureBrief(90, [{ area: "Centro", type: "Casa", bedrooms: 2, budgetCents: 230000, demand: 3, open: 3, supply: 0, gap: "none", url: "" }], notes)!;
+    expect(brief).toContain("   → Captação: Nesse valor, só com menos quartos — Até 2.300 só 1 quarto.");
+  });
+});
