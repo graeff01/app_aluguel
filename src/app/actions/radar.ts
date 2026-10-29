@@ -80,6 +80,16 @@ export async function captureFoundAction(_: ActionState, fd: FormData): Promise<
   return s;
 }
 
+/** Captação indica ao pedido um imóvel que viu nas opções do site (um toque). */
+export async function captureIndicateAction(id: string, code: string): Promise<ActionState> {
+  const s = await runAction(async (a) => {
+    await captureFound(a, id, { codes: code, note: "Indicado pelas opções do site" });
+    return `Imóvel ${code} indicado. O pré-atendimento foi avisado.`;
+  });
+  if (s.ok) revalidatePath("/", "layout");
+  return s;
+}
+
 /** Opção do site "fora do perfil" (radar ou cliente em busca), com o motivo. */
 export async function rejectSuggestionAction(kind: "radar" | "search", id: string, input: { reason: string; note?: string; listing: RejectedListing }): Promise<ActionState> {
   const s = await runAction(async (a) => {

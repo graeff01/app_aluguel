@@ -6,7 +6,7 @@
 import { db } from "@/lib/db";
 import { assert, hasGlobalView, isCapture, type AuthzActor } from "@/lib/authz";
 import { RADAR_CLOSE_REASONS } from "./radar";
-import { countOnSite, normText, profileQuery, siteOrigin, siteSearchUrl } from "./site-search";
+import { normText, profileQuery, searchSitePage, siteOrigin, siteSearchUrl } from "./site-search";
 import { marketLine, noteForSegment } from "./market";
 
 const DAY = 86400_000;
@@ -159,9 +159,11 @@ export async function supplyForSegments(segments: DemandSegment[], opts: { fetch
   return Promise.all(
     segments.map(async (s) => {
       const q = { ...profileQuery({ propertyType: s.type, bedrooms: s.bedrooms, maxBudgetCents: s.budgetCents, areas: [] }), area: s.area };
-      const supply = await countOnSite(q, { ...opts, origin });
+      const page = await searchSitePage(q, { ...opts, origin });
+      const supply = page ? (page.total ?? page.items.length) : null;
       const gap = supply == null ? null : supply === 0 ? "none" : supply < s.demand ? "low" : "ok";
-      return { ...s, supply, gap: gap as "none" | "low" | "ok" | null, url: siteSearchUrl(origin, q) };
+      // os primeiros imóveis, para a captação ver no app (foto, valor) sem ir ao site
+      return { ...s, supply, gap: gap as "none" | "low" | "ok" | null, url: siteSearchUrl(origin, q), items: (page?.items ?? []).slice(0, 8) };
     }),
   );
 }

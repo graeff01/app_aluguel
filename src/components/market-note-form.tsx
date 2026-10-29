@@ -9,12 +9,12 @@ import { cx } from "./ui";
  * Leitura de mercado da captação (parecer do pedido ou leitura do perfil): uma opção rápida, o valor realista e um
  * texto livre.
  */
-export function MarketNoteForm({ hidden, label, initial }: { hidden: Record<string, string>; label: string; initial?: { tag?: string | null; text?: string | null; cents?: number | null } }) {
+export function MarketNoteForm({ hidden, label, initial, compact }: { hidden: Record<string, string>; label: string; initial?: { tag?: string | null; text?: string | null; cents?: number | null }; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [tag, setTag] = useState<string>(initial?.tag ?? "");
   if (!open)
     return (
-      <button type="button" onClick={() => setOpen(true)} className="press mt-3 inline-flex min-h-10 items-center rounded-full border border-line-strong px-4 text-[13px] font-semibold">
+      <button type="button" onClick={() => setOpen(true)} className={cx("press inline-flex items-center text-[13px] font-semibold", compact ? "mt-1 min-h-9 text-ink-2 hover:text-ink" : "mt-3 min-h-10 rounded-full border border-line-strong px-4")}>
         {label}
       </button>
     );

@@ -189,7 +189,7 @@ export const HELP: HelpTopic[] = [
       "Em “Mapa da demanda”, veja os perfis mais procurados e quantos imóveis assim existem hoje no site. “Sem oferta · captar” mostra onde buscar primeiro.",
       "Use “Copiar resumo” ou “Enviar pelo WhatsApp” para levar a lista para a equipe.",
       "Em “Pedidos”, cada pedido do pré-atendimento mostra o que o cliente procura (sem nome nem telefone).",
-      "Achou um imóvel? Toque em “Achei imóvel”, informe o código e uma observação. O pré-atendimento é avisado na hora.",
+      "Cada pedido mostra as opções do site com foto e valor: toque em “Indicar”. Imóvel que não está no site? Use “+ Indicar pelo código”. O pré-atendimento é avisado na hora.",
       "Conhece o mercado daquele perfil? Toque em “Escrever parecer” no pedido (ex.: “tem, mas acima desse valor”, com o valor realista). No Mapa, “Escrever leitura de mercado” vale para o bairro + tipo inteiro e entra no resumo.",
     ],
     tips: ["Você recebe um aviso no celular a cada pedido novo passado para a captação."],

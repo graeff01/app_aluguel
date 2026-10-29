@@ -4,17 +4,17 @@ import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Input } from "@/components/ui";
 import { captureFoundAction } from "@/app/actions/radar";
 
-/** "Achei imóvel": código(s) e uma observação; vai para o pré-atendimento. */
+/** Indicar pelo código (imóvel que ainda não está no site, por exemplo): código(s) e uma observação; vai para o pré-atendimento. */
 export function CaptureFoundForm({ id }: { id: string }) {
   const [open, setOpen] = useState(false);
   if (!open)
     return (
-      <button type="button" onClick={() => setOpen(true)} className="press mt-3 inline-flex min-h-10 items-center rounded-full bg-primary px-4 text-[13px] font-semibold text-on-primary">
-        Achei imóvel
+      <button type="button" onClick={() => setOpen(true)} className="press mt-1 inline-flex min-h-9 items-center text-[13px] font-semibold text-ink-2 hover:text-ink">
+        + Indicar pelo código
       </button>
     );
   return (
-    <ActionForm action={captureFoundAction} resetOnSuccess className="mt-3 rounded-2xl border border-line bg-surface-2 p-3">
+    <ActionForm action={captureFoundAction} resetOnSuccess className="mt-3 basis-full rounded-2xl border border-line bg-surface-2 p-3">
       {(s) => (
         <>
           <input type="hidden" name="id" value={id} />

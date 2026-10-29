@@ -23,7 +23,7 @@ const HOWTO: Record<"consultant" | "manager" | "pre" | "marketing" | "capture", 
   capture: [
     { icon: "dashboard", title: "Onde falta imóvel", text: "O mapa mostra o que os clientes mais procuram e quantos imóveis assim existem hoje no site." },
     { icon: "list", title: "Pedidos em aberto", text: "Cada pedido do pré-atendimento com o perfil do cliente (sem dados pessoais): bairro, tipo, quartos e valor." },
-    { icon: "check", title: "Achou? Indique", text: "Toque em “Achei imóvel” e informe o código: o pré-atendimento é avisado na hora para oferecer ao cliente." },
+    { icon: "check", title: "Achou? Indique", text: "Cada pedido mostra as opções do site com foto: toque em “Indicar” (ou indique pelo código). O pré-atendimento é avisado na hora." },
   ],
   marketing: [
     { icon: "home", title: "Locação fechada", text: "Quando um contrato é assinado, chega um aviso com o imóvel, o diferencial e o agenciador." },

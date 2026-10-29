@@ -261,7 +261,7 @@ describe("leitura de mercado da captação", () => {
     expect(notesForProfile(notes, { areas: ["Sao Jose", "Centro"], propertyType: "Casa" }).map((n) => n.tag).sort()).toEqual(["FEWER_ROOMS", "NEARBY"]);
     expect(noteForSegment(notes, "São José", "Kitnet / studio")?.tag).toBe("NEARBY");
 
-    const brief = captureBrief(90, [{ area: "Centro", type: "Casa", bedrooms: 2, budgetCents: 230000, demand: 3, open: 3, supply: 0, gap: "none", url: "" }], notes)!;
+    const brief = captureBrief(90, [{ area: "Centro", type: "Casa", bedrooms: 2, budgetCents: 230000, demand: 3, open: 3, supply: 0, gap: "none", url: "", items: [] }], notes)!;
     expect(brief).toContain("   → Captação: Nesse valor, só com menos quartos — Até 2.300 só 1 quarto.");
   });
 });

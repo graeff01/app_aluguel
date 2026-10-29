@@ -128,7 +128,8 @@ export async function countOnSite(q: SiteQuery, opts: { fetchImpl?: typeof fetch
   return r ? (r.total ?? r.items.length) : null;
 }
 
-async function searchSitePage(q: SiteQuery, opts: { fetchImpl?: typeof fetch; origin?: string } = {}): Promise<{ items: SiteListing[]; total: number | null } | null> {
+/** Uma página de busca: imóveis e total. Erro → null. */
+export async function searchSitePage(q: SiteQuery, opts: { fetchImpl?: typeof fetch; origin?: string } = {}): Promise<{ items: SiteListing[]; total: number | null } | null> {
   const origin = opts.origin ?? (await siteOrigin());
   const url = siteSearchUrl(origin, q);
   const hit = cache.get(url);

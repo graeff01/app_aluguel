@@ -12,6 +12,14 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-10-29-d",
+    title: "Captação mais simples",
+    changes: [
+      { text: "Pedidos mais claros: cada um diz se precisa de imóvel ou se você já indicou, quem pediu e há quanto tempo. As opções do site aparecem com foto e valor: toque em “Indicar”.", who: ["CAPTURE", "MANAGER"], href: "/demanda/pedidos" },
+      { text: "Mapa da demanda mais enxuto: os números numa linha só e, em cada perfil, “Ver no site” mostra os imóveis dentro do app para indicar sem sair.", who: ["CAPTURE", "MANAGER"], href: "/demanda" },
+    ],
+  },
+  {
     id: "2026-10-29-c",
     title: "Avisos que não se perdem",
     changes: [
