@@ -16,7 +16,7 @@ export default async function DemandPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <PageHeader title="Mapa da demanda" subtitle="O que os clientes procuram e não encontram, cruzado com o que existe hoje no site. Mostra onde a captação deve buscar." />
-      <DemandView d={d} days={days} basePath="/demanda" loadRows={() => segmentSupply(actor, d.segments)} notes={notes} write={canWriteMarket(actor) ? "app" : null} />
+      <DemandView d={d} days={days} basePath="/demanda" loadRows={() => segmentSupply(actor, d.segments)} notes={notes} write={canWriteMarket(actor)} />
     </>
   );
 }

@@ -7,7 +7,7 @@ import { Empty, PageHeader, cx } from "@/components/ui";
 
 export type CaptureRow = Awaited<ReturnType<typeof captureRequests>>[number];
 
-/** Pedidos em aberto para a captação (o mesmo na tela real e na demonstração). */
+/** Pedidos em aberto para a captação. */
 export function CaptureRequestsView({ rows, renderFound, renderMarket }: { rows: CaptureRow[]; renderFound: (id: string) => ReactNode; renderMarket: (r: CaptureRow) => ReactNode }) {
   const waiting = rows.filter((r) => r.status === "SEARCHING");
   const found = rows.filter((r) => r.status === "FOUND");

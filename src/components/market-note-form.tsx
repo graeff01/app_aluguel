@@ -7,18 +7,11 @@ import { cx } from "./ui";
 
 /**
  * Leitura de mercado da captação (parecer do pedido ou leitura do perfil): uma opção rápida, o valor realista e um
- * texto livre. Na demonstração (demo), só mostra o que aconteceria.
+ * texto livre.
  */
-export function MarketNoteForm({ hidden, label, initial, demo }: { hidden: Record<string, string>; label: string; initial?: { tag?: string | null; text?: string | null; cents?: number | null }; demo?: boolean }) {
+export function MarketNoteForm({ hidden, label, initial }: { hidden: Record<string, string>; label: string; initial?: { tag?: string | null; text?: string | null; cents?: number | null } }) {
   const [open, setOpen] = useState(false);
   const [tag, setTag] = useState<string>(initial?.tag ?? "");
-  const [demoDone, setDemoDone] = useState(false);
-  if (demoDone)
-    return (
-      <p role="status" className="mt-3 basis-full rounded-2xl bg-good-soft px-3 py-2 text-[13px] font-semibold text-good">
-        ✓ No app de verdade: a leitura fica salva e aparece para o pré-atendimento e as consultoras. (Demonstração: nada foi gravado.)
-      </p>
-    );
   if (!open)
     return (
       <button type="button" onClick={() => setOpen(true)} className="press mt-3 inline-flex min-h-10 items-center rounded-full border border-line-strong px-4 text-[13px] font-semibold">
@@ -49,26 +42,6 @@ export function MarketNoteForm({ hidden, label, initial, demo }: { hidden: Recor
       <textarea id={`mk-t-${Object.values(hidden).join("-")}`} name="text" rows={2} maxLength={600} defaultValue={initial?.text ?? ""} placeholder="Ex.: casa com pátio no bairro costuma passar de R$ 2.800; até R$ 2.300 só com 1 quarto." className="block w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[14px]" />
     </>
   );
-  if (demo)
-    return (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (tag) setDemoDone(true);
-        }}
-        className="mt-3 basis-full rounded-2xl border border-line bg-surface-2 p-3"
-      >
-        {fields}
-        <div className="mt-3 flex gap-2">
-          <button type="submit" disabled={!tag} className="press min-h-10 rounded-full bg-primary px-4 text-[13px] font-semibold text-on-primary disabled:opacity-40">
-            Salvar leitura
-          </button>
-          <button type="button" onClick={() => setOpen(false)} className="press min-h-10 rounded-full px-3 text-[13px] font-semibold text-ink-2">
-            Voltar
-          </button>
-        </div>
-      </form>
-    );
   return (
     <ActionForm action={marketNoteAction} className="mt-3 basis-full rounded-2xl border border-line bg-surface-2 p-3">
       {(s) => (

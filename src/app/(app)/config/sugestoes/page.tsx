@@ -10,10 +10,10 @@ export default async function DemoFeedbackPage() {
   const rows = await listDemoFeedback(actor);
   return (
     <>
-      <PageHeader title="Sugestões da demonstração" subtitle="O que foi deixado na demonstração pública da captação (/demo/captacao)." />
+      <PageHeader title="Sugestões da demonstração" subtitle="O que foi deixado na demonstração pública da captação, já encerrada (a captação agora usa o app com login)." />
       {rows.length === 0 ? (
         <Empty title="Nenhuma sugestão ainda" icon="✎">
-          Envie o link da demonstração para a gerente de captação: as sugestões dela aparecem aqui.
+          A demonstração foi encerrada e não chegou nenhuma sugestão.
         </Empty>
       ) : (
         <ul className="space-y-3">

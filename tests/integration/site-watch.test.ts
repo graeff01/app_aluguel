@@ -175,26 +175,12 @@ describe("captação", () => {
   });
 });
 
-describe("demonstração pública da captação", () => {
-  it("monta o mapa e os pedidos só com dados fictícios do código; sugestões têm limite e só a gestão lê", async () => {
-    const { demoDemand, demoRequests, submitDemoFeedback, listDemoFeedback } = await import("@/server/demo-capture");
-    // nada do banco entra na demonstração
-    await createRadar(jasmin, { clientName: "Cliente Real", phone: "(51) 99876-1111", wants: "Pedido real que não pode aparecer", areas: "Niterói", propertyType: "Casa", bedrooms: "2", maxBudget: "2.500" }, NOW);
-    const d = demoDemand(90, NOW);
-    expect(d.total).toBeGreaterThan(10);
-    expect(d.byArea.map((a) => a.label)).not.toContain("Niterói");
-    const reqs = demoRequests(NOW);
-    expect(JSON.stringify(reqs)).not.toContain("Pedido real");
-    expect(reqs.some((r) => r.status === "FOUND")).toBe(true);
-
-    await expect(submitDemoFeedback({ demo: "captacao", text: "oi", ip: "1.2.3.4" })).rejects.toMatchObject({ code: "VALIDATION" });
-    await submitDemoFeedback({ demo: "captacao", name: "Gerente Captação", text: "Queria filtrar pedidos por bairro", ip: "1.2.3.4" });
-    for (let i = 0; i < 9; i++) await submitDemoFeedback({ demo: "captacao", text: `sugestão número ${i}`, ip: "1.2.3.4" });
-    await expect(submitDemoFeedback({ demo: "captacao", text: "mais uma sugestão", ip: "1.2.3.4" })).rejects.toMatchObject({ code: "RATE_LIMITED" });
+describe("sugestões da demonstração (encerrada)", () => {
+  it("as que chegaram continuam guardadas e só a gestão lê", async () => {
+    const { listDemoFeedback } = await import("@/server/demo-capture");
+    await db.demoFeedback.create({ data: { demo: "captacao", name: "Gerente Captação", text: "Queria filtrar pedidos por bairro" } });
     await expect(listDemoFeedback(jasmin)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    const fb = await listDemoFeedback(u.manager);
-    expect(fb.length).toBe(10);
-    expect(fb.some((f) => f.name === "Gerente Captação" && f.text === "Queria filtrar pedidos por bairro")).toBe(true);
+    expect((await listDemoFeedback(u.manager)).map((f) => f.text)).toEqual(["Queria filtrar pedidos por bairro"]);
   });
 });
 

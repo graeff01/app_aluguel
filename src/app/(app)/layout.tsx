@@ -110,7 +110,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             { href: "/pre-analises/painel", label: "Pré-atendimento", icon: "audit" },
             { href: "/marketing", label: "Marketing", icon: "home", badge: toPost },
             { href: "/config/motivos", label: "Listas e motivos", icon: "list" },
-            { href: "/config/sugestoes", label: "Sugestões (demo)", icon: "review" },
           ] as NavItem[],
         },
         ...(isAdmin(actor)

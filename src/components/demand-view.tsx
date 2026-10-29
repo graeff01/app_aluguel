@@ -46,7 +46,7 @@ const GAP = {
 const TONE = { bad: "border-bad/30 bg-bad-soft", warn: "border-warn/30 bg-warn-soft", good: "border-good/30 bg-good-soft" } as const;
 
 /** Leitura de mercado da captação para o perfil da linha (+ formulário para escrever/atualizar). */
-function SegmentMarket({ r, notes, write }: { r: SupplyRow; notes: SegmentNote[]; write: "app" | "demo" | null }) {
+function SegmentMarket({ r, notes, write }: { r: SupplyRow; notes: SegmentNote[]; write: boolean }) {
   const n = noteForSegment(notes, r.area, r.type);
   if (!n && !write) return null;
   return (
@@ -62,14 +62,13 @@ function SegmentMarket({ r, notes, write }: { r: SupplyRow; notes: SegmentNote[]
           hidden={{ area: r.area, type: r.type ?? "" }}
           label={n ? "Atualizar leitura de mercado" : "Escrever leitura de mercado"}
           initial={n ? { tag: n.tag, text: n.text, cents: n.cents } : undefined}
-          demo={write === "demo"}
         />
       )}
     </div>
   );
 }
 
-async function Gaps({ loadRows, days, notes, write }: { loadRows: () => Promise<SupplyRow[]>; days: number; notes: SegmentNote[]; write: "app" | "demo" | null }) {
+async function Gaps({ loadRows, days, notes, write }: { loadRows: () => Promise<SupplyRow[]>; days: number; notes: SegmentNote[]; write: boolean }) {
   const rows = await loadRows();
   const brief = captureBrief(days, rows, notes);
   return (
@@ -150,8 +149,8 @@ async function Gaps({ loadRows, days, notes, write }: { loadRows: () => Promise<
   );
 }
 
-/** Mapa da demanda (o mesmo para a captação e para a demonstração): período, resumo, onde falta imóvel e gráficos. */
-export function DemandView({ d, days, basePath, loadRows, notes = [], write = null }: { d: DemandData; days: number; basePath: string; loadRows: () => Promise<SupplyRow[]>; notes?: SegmentNote[]; write?: "app" | "demo" | null }) {
+/** Mapa da demanda: período, resumo, onde falta imóvel e gráficos. */
+export function DemandView({ d, days, basePath, loadRows, notes = [], write = false }: { d: DemandData; days: number; basePath: string; loadRows: () => Promise<SupplyRow[]>; notes?: SegmentNote[]; write?: boolean }) {
   const c = d.capture;
   const tiles: [string, string, string][] = [
     ["Clientes procurando", String(d.total), `${d.radar} do radar · ${d.searches} em busca`],
