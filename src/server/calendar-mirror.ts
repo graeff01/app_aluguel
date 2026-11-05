@@ -146,7 +146,8 @@ export async function loadMirror(actor: AuthzActor, from: Date, to: Date, opts: 
               openId: group.find((g) => g.status === "SCHEDULED")?.id ?? null,
               autoCanceled: v.autoCanceled,
               swappedTo: v.swappedTo,
-              status: v.status,
+              // imóvel trocado (ou cancelado só ele): a principal fica cancelada, mas a visita segue com os outros imóveis
+              status: v.status === "CANCELED" && group.some((g) => g.status === "SCHEDULED") ? "SCHEDULED" : v.status,
               evaluation: v.evaluation,
               confirmStatus: v.confirmStatus,
               consultantId: v.consultantId,

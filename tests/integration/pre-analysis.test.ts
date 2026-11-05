@@ -108,8 +108,7 @@ describe("pré-análise", () => {
     const q1 = await assignmentQueue(NOW);
     expect(q1.find((c) => c.isNext)?.id).toBe(u.b.id);
     expect(q1.find((c) => c.isLast)?.id).toBe(u.a.id);
-    await new Promise((r) => setTimeout(r, 5));
-    await createPreAnalysis(jasmin, valid({ consultantId: u.b.id, cpf: "168.995.350-09" }), NOW);
+    await createPreAnalysis(jasmin, valid({ consultantId: u.b.id, cpf: "168.995.350-09" }), new Date(NOW.getTime() + 60_000));
     const q2 = await assignmentQueue(NOW);
     expect(q2.find((c) => c.isNext)?.id).toBe(u.a.id);
     expect(q2.find((c) => c.isLast)?.id).toBe(u.b.id);

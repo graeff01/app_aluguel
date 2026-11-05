@@ -406,6 +406,24 @@ describe("evento com vários imóveis", () => {
     await expect(swapVisitProperty(users.manager, old.id, { newCode: "999999", reasonId: reason.id })).rejects.toMatchObject({ code: "INVALID_STATE" });
   });
 
+  it("imóvel trocado e depois mudado de horário: o Google recebe o horário novo e a sincronização não desfaz", async () => {
+    const title = (codes: string) => `Visita clt - Andressa Bastos - cod ${codes} - (51) 99876-5432`;
+    api.put(visitEvent("swap2", { start: "2026-10-07T13:00:00Z", title: title("851787"), organizer: "central@exemplo.test" }));
+    await sync();
+    const old = await db.visit.findFirstOrThrow();
+    const reason = await db.reason.findFirstOrThrow({ where: { kind: "VISIT_CANCEL" } });
+    const { newVisitId } = await swapVisitProperty(users.manager, old.id, { newCode: "845836", reasonId: reason.id }, NOW, { calendarApi: api });
+    const fresh = await db.visit.findUniqueOrThrow({ where: { id: newVisitId } });
+    const r = await staffEditVisit(users.manager, newVisitId, { expectedVersion: fresh.version, clientName: "Andressa Bastos", phoneRaw: "(51) 99876-5432", date: "2026-10-07", time: "13:30", durationMinutes: 60, consultantId: fresh.consultantId ?? users.a.id }, { calendarApi: api });
+    expect(r.google).toBe("updated");
+    // 13h30 em Brasília = 16h30 UTC
+    expect((await api.getEvent("central@exemplo.test", "swap2"))?.start?.dateTime).toBe("2026-10-07T16:30:00.000Z");
+    await sync();
+    expect((await db.visit.findUniqueOrThrow({ where: { id: newVisitId } })).scheduledStart.toISOString()).toBe("2026-10-07T16:30:00.000Z");
+    // o imóvel que saiu continua no horário em que foi trocado (histórico)
+    expect((await db.visit.findUniqueOrThrow({ where: { id: old.id } })).status).toBe("CANCELED");
+  });
+
   it("agenda do sistema: separa quem agendou e o pré-atendimento edita a visita (horário, cliente, consultora e mais um imóvel)", async () => {
     const jas = await db.user.create({ data: { name: "Jasmin Teste", email: "jas@exemplo.test", role: "PRE_SERVICE" } });
     const title = (who: string, codes: string) => `Visita clt - ${who} - cod ${codes} - (51) 99876-5432`;

@@ -1027,8 +1027,13 @@ function EventDetails({ e, color, calendar, reasons, back, nowMs, onClose, onDon
                 {visitBadge(e)}
                 {v.consultant ? ` · ${v.consultant}` : " · sem consultora"}
               </p>
-              {v.codes.length > 0 && <p className="text-[13px] text-ink-2">Imóve{v.codes.length > 1 ? "is" : "l"} {v.codes.join(", ")}</p>}
-              {v.cancelReason && <p className="text-[13px] text-ink-2">Motivo: {v.cancelReason}</p>}
+              {(v.openId ? v.openCodes : v.codes).length > 0 && (
+                <p className="text-[13px] text-ink-2">
+                  Imóve{(v.openId ? v.openCodes : v.codes).length > 1 ? "is" : "l"} {(v.openId ? v.openCodes : v.codes).join(", ")}
+                  {v.openId && v.codes.some((c) => !v.openCodes.includes(c)) && <span className="text-ink-3"> · saiu: <span className="line-through">{v.codes.filter((c) => !v.openCodes.includes(c)).join(", ")}</span></span>}
+                </p>
+              )}
+              {v.cancelReason && <p className="text-[13px] text-ink-2">{v.swappedTo ? "Imóvel trocado" : "Motivo"}: {v.cancelReason}</p>}
               <div className="mt-2 flex flex-wrap gap-2">
                 {v.openId && (
                   <Link href={`/agenda-do-dia/${v.openId}/editar`} className="inline-flex min-h-9 items-center rounded-full border border-line-strong bg-surface px-3.5 text-[13px] font-semibold">
@@ -1043,7 +1048,7 @@ function EventDetails({ e, color, calendar, reasons, back, nowMs, onClose, onDon
               </div>
               {canCancel && (
                 <div className="mt-2">
-                  <CancelVisit visitId={v.id} code={firstCode} others={v.openCodes.filter((c) => c !== firstCode)} label={`${hm(s)} · ${e.title}`} reasons={reasons} back={back} />
+                  <CancelVisit visitId={v.openId ?? v.id} code={firstCode} others={v.openCodes.filter((c) => c !== firstCode)} label={`${hm(s)} · ${e.title}`} reasons={reasons} back={back} />
                 </div>
               )}
             </div>

@@ -131,6 +131,7 @@ export async function createPreAnalysis(actor: AuthzActor, input: z.input<typeof
   const created = await db.$transaction(async (tx) => {
     const row = await tx.preAnalysis.create({
       data: {
+        createdAt: now,
         requestId: p.requestId || null,
         createdById: actor.id,
         consultantId: consultant.id,

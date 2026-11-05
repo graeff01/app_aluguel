@@ -42,7 +42,12 @@ export async function pushVisitChange(visitId: string, what: { time?: boolean; t
     if (w.reason) return w.reason;
     const ev = await buildVisitEvent(w.primaryId);
     const patch: Parameters<CalendarApi["patchEvent"]>[2] = {};
-    if (what.time) Object.assign(patch, { start: ev.v.scheduledStart, end: ev.v.scheduledEnd });
+    if (what.time) {
+      // imóvel trocado: a principal fica cancelada com o horário antigo; o horário certo é o de quem segue em aberto
+      const open = ev.v.status === "SCHEDULED" ? ev.v : await db.visit.findFirst({ where: { OR: [{ id: visitId }, { companionOfId: w.primaryId }], status: "SCHEDULED", excluded: false }, orderBy: { createdAt: "asc" }, select: { scheduledStart: true, scheduledEnd: true } });
+      const t = open ?? ev.v;
+      Object.assign(patch, { start: t.scheduledStart, end: t.scheduledEnd });
+    }
     if (what.title) Object.assign(patch, { summary: ev.title, ...(ev.location ? { location: ev.location } : {}) });
     if (what.consultant) {
       const emails = async (id: string | null) => (id ? (await db.userEmailAlias.findMany({ where: { userId: id }, select: { email: true } })).map((a) => a.email) : []);
