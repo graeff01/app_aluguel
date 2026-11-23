@@ -19,6 +19,7 @@ import type { CalendarApi } from "./sync/types";
 import { authorizedClient, canEditEvents, realCalendarApi } from "./sync/google";
 import { requestManualSync } from "./sync/runner";
 import { consultantEventColor } from "./event-colors";
+import { markGooglePending } from "./google-pending";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem 0/O/1/I
 export const LINK_CODE_RE = /\bVL-([A-HJ-NP-Z2-9]{6})\b/;
@@ -202,7 +203,16 @@ export async function calendarLinkFor(actor: AuthzActor, visitId: string) {
  * mais tocar em "Colocar na agenda". O código VL- da descrição liga o evento à visita na sincronização.
  */
 export async function createVisitEventInGoogle(actor: AuthzActor, visitId: string, opts: { calendarApi?: CalendarApi; now?: Date; extraNote?: string } = {}): Promise<"created" | "already" | "no_permission" | "error"> {
-  const { v, conn, title, details, location, cc, consultantEmail } = await calendarEventData(actor, visitId);
+  await calendarEventData(actor, visitId);
+  const r = await createVisitEventCore(visitId, opts, actor.id);
+  // agenda fora do ar: fica na fila e o app cria o evento sozinho quando a agenda voltar
+  if (r === "no_permission" || r === "error") await markGooglePending(visitId, ["create"]);
+  return r;
+}
+
+/** Cria o evento (sem checar quem pede: usado também pela fila de reenvio). */
+export async function createVisitEventCore(visitId: string, opts: { calendarApi?: CalendarApi; now?: Date; extraNote?: string } = {}, actorId: string | null = null): Promise<"created" | "already" | "no_permission" | "error"> {
+  const { v, conn, title, details, location, cc, consultantEmail } = await buildVisitEvent(visitId);
   if (v.sourceEventId || v.googleCreatedAt) return "already";
   if (!v.linkCode || !conn || conn.status !== "CONNECTED" || !conn.calendarId) return "no_permission";
   if (!opts.calendarApi && !canEditEvents(conn.scopes)) return "no_permission";
@@ -216,10 +226,10 @@ export async function createVisitEventInGoogle(actor: AuthzActor, visitId: strin
     const eventId = await api.insertEvent(conn.calendarId, { summary: title, description, location, start: v.scheduledStart, end: v.scheduledEnd, attendees, colorId });
     await db.$transaction(async (tx) => {
       await tx.visit.update({ where: { id: v.id }, data: { googleCreatedAt: opts.now ?? new Date() } });
-      await audit(tx, { actorId: actor.id, action: "google.event_created", entityType: "Visit", entityId: v.id, changes: { evento: eventId } });
+      await audit(tx, { actorId, action: "google.event_created", entityType: "Visit", entityId: v.id, changes: { evento: eventId } });
     });
     // liga o evento à visita já na próxima rodada (sem esperar os 5 minutos)
-    await requestManualSync(actor.id).catch(() => undefined);
+    if (actorId) await requestManualSync(actorId).catch(() => undefined);
     return "created";
   } catch (e) {
     log.warn("google.insert_failed", { kind: (e as { kind?: string }).kind ?? "OTHER" });

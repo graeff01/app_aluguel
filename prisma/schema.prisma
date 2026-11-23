@@ -601,6 +601,9 @@ model Visit {
   companions        Visit[]         @relation("VisitCompanions")
   /// evento criado pelo próprio app na agenda Google (sem precisar do botão "Colocar na agenda")
   googleCreatedAt   DateTime?
+  /// o que ficou para mandar à agenda Google (conexão fora): "create", "title", "time", "consultant", "cancel"; o app reenvia ao reconectar
+  googlePending   String[]  @default([])
+  googlePendingAt DateTime?
   /// código "VL-XXXXXX" levado no evento do Google criado pela consultora: liga o evento a esta visita sem duplicar
   linkCode          String?         @unique
   /// pré-análise que originou esta visita (funil pré-análise → visita → locação)
@@ -628,6 +631,7 @@ model Visit {
   @@index([consultantId, followUpOn])
   @@index([preAnalysisId])
   @@index([companionOfId])
+  @@index([googlePendingAt])
 }
 
 /// Histórico de conclusões/alterações de resultado (observações anteriores).

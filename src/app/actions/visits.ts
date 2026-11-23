@@ -223,8 +223,8 @@ const GOOGLE_REOPEN_TEXT: Record<string, string> = {
   updated: "O evento voltou ao horário com o imóvel na agenda Google.",
   not_owner: "O evento é de outra pessoa: confira o horário e o imóvel no título na agenda Google.",
   gone: "O evento não existe mais na agenda Google: crie de novo pelo app.",
-  no_permission: "Sem permissão para alterar a agenda Google: confira o evento à mão.",
-  error: "Não foi possível atualizar a agenda Google agora: confira o evento à mão.",
+  no_permission: "A agenda Google está fora agora: o app atualiza o evento sozinho quando ela voltar.",
+  error: "A agenda Google está fora agora: o app atualiza o evento sozinho quando ela voltar.",
 };
 
 export async function reopenVisitAction(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -243,8 +243,8 @@ const GOOGLE_SWAP_TEXT: Record<string, string> = {
   updated: "O título do evento na agenda Google já está com o novo imóvel.",
   not_owner: "O evento é de outra pessoa: troque o código no título na agenda Google.",
   gone: "O evento não existe mais na agenda Google.",
-  no_permission: "Sem permissão para alterar a agenda Google: troque o código no título à mão.",
-  error: "Não foi possível atualizar a agenda Google agora: troque o código no título à mão.",
+  no_permission: "A agenda Google está fora agora: o app troca o código no título sozinho quando ela voltar.",
+  error: "A agenda Google está fora agora: o app troca o código no título sozinho quando ela voltar.",
 };
 
 export async function swapPropertyAction(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -264,8 +264,8 @@ const GOOGLE_EDIT_TEXT: Record<string, string> = {
   updated: "Agenda Google atualizada.",
   not_owner: "O evento é de outra pessoa: confira o título e os convidados na agenda Google.",
   gone: "O evento não existe mais na agenda Google.",
-  no_permission: "Sem permissão para alterar a agenda Google: confira o evento à mão.",
-  error: "Não foi possível atualizar a agenda Google agora: confira o evento à mão.",
+  no_permission: "A agenda Google está fora agora: o app atualiza o evento sozinho quando ela voltar.",
+  error: "A agenda Google está fora agora: o app atualiza o evento sozinho quando ela voltar.",
 };
 
 /** Pré-atendimento edita a visita pela agenda do sistema (volta para o dia da visita). */

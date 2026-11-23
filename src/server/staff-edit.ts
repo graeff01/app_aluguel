@@ -14,6 +14,7 @@ import { fromLocalInput } from "@/lib/time";
 import { notifyUser } from "./notify";
 import type { CalendarApi } from "./sync/types";
 import { canEditInGoogle, pushVisitChange, type GoogleWrite } from "./google-write";
+import { unmarkGooglePending } from "./google-pending";
 import { resolveClient, cleanupOrphanClient } from "./clients";
 import { ensureProperty } from "./visits";
 import { assertNoOverlap } from "./reschedule";
@@ -152,7 +153,8 @@ export async function staffEditVisit(actor: AuthzActor, visitId: string, input: 
   const titleChanged = ["cliente", "telefone", "atendimento", "imóveis"].some((k) => r.changed.has(k));
   const google = await pushVisitChange(open[0]?.id ?? visit.id, { time: timeChanged, title: titleChanged, ...(consultantChanged ? { consultant: { from: before.consultantId, to: consultant.id } } : {}) }, opts.calendarApi);
   if (timeChanged && linked && google !== "updated") {
-    // não mudou no Google: volta o horário (senão a próxima leitura da agenda desfaria sozinha)
+    // não mudou no Google: volta o horário (senão a próxima leitura da agenda desfaria sozinha) e ele sai da fila
+    await unmarkGooglePending(groupId, "time");
     await db.visit.updateMany({ where: { OR: [{ id: groupId }, { companionOfId: groupId }], status: "SCHEDULED" }, data: { scheduledStart: before.start, scheduledEnd: before.end } });
     throw new AppError("INVALID_STATE", google === "not_owner" ? "O evento é da consultora: o horário precisa ser mudado na agenda dela. Os outros dados foram salvos." : "Não consegui mudar o horário na agenda Google agora. Os outros dados foram salvos; tente o horário de novo.");
   }

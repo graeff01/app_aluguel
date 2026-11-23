@@ -2,6 +2,7 @@
  * Visitas: conclusão (resultado), correção de dados, atribuição, cadastro manual e conflitos de sincronização.
  * Toda função recebe o ator autenticado e aplica src/lib/authz.ts no servidor.
  */
+import { markGooglePending } from "./google-pending";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import type { Tx } from "@/lib/db";
@@ -250,6 +251,8 @@ export async function cancelVisitByStaff(
   const titles: { before?: string; after?: string } = {};
   const times = { start: result.visit.scheduledStart, end: result.visit.scheduledEnd };
   const google = result.remaining > 0 ? await removeCodesInGoogle(result.source, result.cancelledCodes, opts.calendarApi, titles) : await moveToNightInGoogle(result.source, times, opts.calendarApi);
+  // agenda fora do ar: o app leva o cancelamento ao Google sozinho quando a agenda voltar
+  if (result.source && (google === "error" || google === "no_permission" || google === "not_in_agenda")) await markGooglePending(result.visit.id, ["cancel"]);
   // guarda o que mudou para o "Desfazer"
   const undo = await db.visitCancelUndo.create({
     data: {
@@ -495,6 +498,9 @@ async function removeCodesInGoogle(source: { calendarId: string; googleEventId: 
 
 /** Hora para onde o evento cancelado vai na agenda (o mesmo dia, 22h): continua visível e a sincronização entende como cancelada. */
 const NIGHT_HOUR = 22;
+
+/** Fila de reenvio: grupo todo cancelado → o evento vai para as 22h (como no cancelamento pelo app). */
+export const moveGroupToNight = (source: { calendarId: string; googleEventId: string }, times: { start: Date; end: Date }, injected?: CalendarApi) => moveToNightInGoogle(source, times, injected);
 
 async function moveToNightInGoogle(source: { calendarId: string; googleEventId: string } | null, times: { start: Date; end: Date }, injected?: CalendarApi): Promise<GoogleCancel> {
   if (!source) return "not_in_agenda";

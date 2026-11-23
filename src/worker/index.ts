@@ -24,6 +24,7 @@ import { runProposalRetention } from "@/server/proposals";
 import { runRadarRetention } from "@/server/radar";
 import { runAlertRetention } from "@/server/alerts";
 import { sendCaptureMorning } from "@/server/capture";
+import { flushGooglePending } from "@/server/google-pending";
 import { refreshAreaGeocodes } from "@/server/area-geo";
 import { crawlSiteInventory } from "@/server/site-inventory";
 import { checkVisitListings, watchDemandOnSite } from "@/server/site-watch";
@@ -34,6 +35,7 @@ let stopping = false;
 let lastReminderCheck = 0;
 let lastUpcomingCheck = 0;
 let lastPreviewCheck = 0;
+let lastPendingFlush = 0;
 
 async function heartbeat(startedAt: Date) {
   await db.workerHeartbeat.upsert({
@@ -78,6 +80,11 @@ async function main() {
   while (!stopping) {
     try {
       await heartbeat(startedAt);
+      // o que não chegou à agenda Google enquanto ela estava fora: reenvia ANTES de ler a agenda (no máximo 1x/min)
+      if (Date.now() - lastPendingFlush > 60_000) {
+        lastPendingFlush = Date.now();
+        await flushGooglePending().catch((e) => log.error("google_pending.failed", { code: errorCode(e) }));
+      }
       await tick();
       if (Date.now() - lastUpcomingCheck > 60_000) {
         lastUpcomingCheck = Date.now();

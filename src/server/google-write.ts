@@ -9,6 +9,7 @@ import { log } from "@/lib/log";
 import type { CalendarApi } from "./sync/types";
 import { authorizedClient, canEditEvents, realCalendarApi } from "./sync/google";
 import { buildVisitEvent } from "./reschedule";
+import { markGooglePending } from "./google-pending";
 
 export type GoogleWrite = "updated" | "not_owner" | "gone" | "no_permission" | "not_in_agenda" | "error";
 
@@ -36,7 +37,23 @@ export async function canEditInGoogle(visitId: string) {
   return !!primary?.sourceEvent && !!conn && conn.calendarId === primary.sourceEvent.calendarId && canEditEvents(conn.scopes);
 }
 
-export async function pushVisitChange(visitId: string, what: { time?: boolean; title?: boolean; consultant?: { from: string | null; to: string } }, injected?: CalendarApi): Promise<GoogleWrite> {
+export async function pushVisitChange(visitId: string, what: { time?: boolean; title?: boolean; consultant?: { from: string | null; to: string; removeOthers?: boolean } }, injected?: CalendarApi, opts: { queue?: boolean } = {}): Promise<GoogleWrite> {
+  const r = await pushVisitChangeNow(visitId, what, injected);
+  // não chegou ao Google por causa da conexão: fica na fila e vai sozinho quando a agenda voltar
+  if (opts.queue !== false && (r === "error" || r === "no_permission" || (r === "not_in_agenda" && (await hasEvent(visitId))))) {
+    await markGooglePending(visitId, [...(what.title ? (["title"] as const) : []), ...(what.time ? (["time"] as const) : []), ...(what.consultant ? (["consultant"] as const) : [])]);
+  }
+  return r;
+}
+
+/** A visita (principal do grupo) tem evento na agenda? Sem evento, "not_in_agenda" é normal (não é falta de conexão). */
+async function hasEvent(visitId: string) {
+  const v = await db.visit.findUnique({ where: { id: visitId }, select: { id: true, companionOfId: true } });
+  if (!v) return false;
+  return !!(await db.visit.findUnique({ where: { id: v.companionOfId ?? v.id }, select: { sourceEventId: true } }))?.sourceEventId;
+}
+
+async function pushVisitChangeNow(visitId: string, what: { time?: boolean; title?: boolean; consultant?: { from: string | null; to: string; removeOthers?: boolean } }, injected?: CalendarApi): Promise<GoogleWrite> {
   try {
     const w = await writable(visitId, injected);
     if (w.reason) return w.reason;
@@ -51,7 +68,9 @@ export async function pushVisitChange(visitId: string, what: { time?: boolean; t
     if (what.title) Object.assign(patch, { summary: ev.title, ...(ev.location ? { location: ev.location } : {}) });
     if (what.consultant) {
       const emails = async (id: string | null) => (id ? (await db.userEmailAlias.findMany({ where: { userId: id }, select: { email: true } })).map((a) => a.email) : []);
-      patch.swapAttendees = { remove: await emails(what.consultant.from), add: (await emails(what.consultant.to)).slice(0, 1) };
+      // reenvio da fila: tira qualquer outra consultora convidada (não se sabe quem estava antes)
+      const others = what.consultant.removeOthers ? (await db.userEmailAlias.findMany({ where: { user: { role: "CONSULTANT" }, userId: { not: what.consultant.to } }, select: { email: true } })).map((a) => a.email) : [];
+      patch.swapAttendees = { remove: [...(await emails(what.consultant.from)), ...others], add: (await emails(what.consultant.to)).slice(0, 1) };
     }
     if (Object.keys(patch).length === 0) return "updated";
     const r = await w.api.patchEvent(w.calendarId, w.eventId, patch);

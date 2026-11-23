@@ -12,6 +12,13 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-11-23",
+    title: "Agenda Google fora do ar? O app guarda e manda depois",
+    changes: [
+      { text: "Se a agenda Google cair (conexão expirada), o que você fizer no app (visita nova, imóvel adicionado ou trocado, cancelamento, visita reaberta, consultora trocada) fica guardado e vai para o Google sozinho quando a agenda for reconectada. Só a mudança de horário precisa da agenda no ar na hora.", who: ["PRE_SERVICE", "MANAGER"] },
+    ],
+  },
+  {
     id: "2026-10-30-b",
     title: "Pedidos mais simples",
     changes: [
