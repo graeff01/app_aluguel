@@ -145,7 +145,8 @@ export async function staffEditVisit(actor: AuthzActor, visitId: string, input: 
     if (changed.size) await audit(tx, { actorId: actor.id, action: "visit.staff_edited", entityType: "Visit", entityId: groupId, changes: { campos: [...changed], imoveisNovos: added } });
     return { changed, added };
   });
-  if (!r.changed.size) return { changed: [] as string[], added: [] as string[], google: "updated" as GoogleWrite };
+  // nada mudou: "Salvar" reenvia título e imóveis à agenda Google (ex.: a agenda estava desconectada na edição anterior)
+  if (!r.changed.size) return { changed: [] as string[], added: [] as string[], google: await pushVisitChange(open[0]?.id ?? visit.id, { title: true }, opts.calendarApi) };
 
   // o mesmo evento na agenda Google (pelo id de uma visita em aberto: a principal pode estar cancelada)
   const titleChanged = ["cliente", "telefone", "atendimento", "imóveis"].some((k) => r.changed.has(k));

@@ -284,7 +284,7 @@ export async function staffEditVisitAction(_: ActionState, fd: FormData): Promis
       addCodes: str(fd, "addCodes"),
       allowOverlap: str(fd, "allowOverlap") === "1",
     });
-    const msg = r.changed.length ? `Visita atualizada (${r.changed.join(", ")}). ${r.google === "not_in_agenda" ? "" : (GOOGLE_EDIT_TEXT[r.google] ?? "")}`.trim() : "Nada mudou.";
+    const msg = r.changed.length ? `Visita atualizada (${r.changed.join(", ")}). ${r.google === "not_in_agenda" ? "" : (GOOGLE_EDIT_TEXT[r.google] ?? "")}`.trim() : r.google === "updated" ? "Nada mudou nos dados: imóveis e cliente reenviados à agenda Google." : r.google === "not_in_agenda" ? "Nada mudou." : `Nada mudou. ${GOOGLE_EDIT_TEXT[r.google] ?? ""}`.trim();
     target = `/agenda-do-dia?dia=${str(fd, "date")}&editada=${encodeURIComponent(msg)}`;
     return msg;
   });

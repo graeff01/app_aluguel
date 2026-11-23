@@ -406,6 +406,25 @@ describe("evento com vários imóveis", () => {
     await expect(swapVisitProperty(users.manager, old.id, { newCode: "999999", reasonId: reason.id })).rejects.toMatchObject({ code: "INVALID_STATE" });
   });
 
+  it("imóveis adicionados com a agenda fora: salvar de novo sem mudar nada reenvia o título ao Google", async () => {
+    const title = (codes: string) => `Visita clt - Thiago Martim - cod ${codes} - (51) 99876-5432`;
+    api.put(visitEvent("resend", { start: "2026-10-07T16:30:00Z", title: title("747899"), organizer: "central@exemplo.test" }));
+    await sync();
+    const v = await db.visit.findFirstOrThrow();
+    const base = { clientName: "Thiago Martim", phoneRaw: "(51) 99876-5432", date: "2026-10-07", time: "13:30", durationMinutes: 60, consultantId: v.consultantId ?? users.a.id };
+    // agenda fora do ar na edição: os imóveis entram no app, o título não muda
+    const broken = { patchEvent: async () => Promise.reject(Object.assign(new Error("Google fora"), { kind: "AUTH" })) } as unknown as MockCalendar;
+    expect((await staffEditVisit(users.manager, v.id, { ...base, expectedVersion: v.version, addCodes: "823393;352928" }, { calendarApi: broken })).google).toBe("error");
+    expect((await api.getEvent("central@exemplo.test", "resend"))?.summary).toBe(title("747899"));
+    // agenda de volta: salvar sem mudar nada manda os três imóveis
+    const fresh = await db.visit.findUniqueOrThrow({ where: { id: v.id } });
+    const r = await staffEditVisit(users.manager, v.id, { ...base, expectedVersion: fresh.version }, { calendarApi: api });
+    expect(r).toMatchObject({ changed: [], google: "updated" });
+    expect((await api.getEvent("central@exemplo.test", "resend"))?.summary).toBe(title("747899;823393;352928"));
+    await sync();
+    expect(await db.visit.count({ where: { status: "SCHEDULED" } })).toBe(3);
+  });
+
   it("imóvel trocado e depois mudado de horário: o Google recebe o horário novo e a sincronização não desfaz", async () => {
     const title = (codes: string) => `Visita clt - Andressa Bastos - cod ${codes} - (51) 99876-5432`;
     api.put(visitEvent("swap2", { start: "2026-10-07T13:00:00Z", title: title("851787"), organizer: "central@exemplo.test" }));
