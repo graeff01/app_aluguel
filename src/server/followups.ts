@@ -22,13 +22,14 @@ export async function dueFollowUps(consultantId: string, now = new Date()) {
       scheduledStart: true,
       followUpOn: true,
       note: true,
-      opportunity: { select: { status: true } },
+      opportunity: { select: { status: true, stage: true } },
       property: { select: { photoUrl: true, neighborhood: true } },
     },
   });
   const out: typeof rows = [];
   for (const r of rows) {
-    if (r.opportunity && (r.opportunity.status === "CLOSED_WON" || r.opportunity.status === "LOST")) continue;
+    // negócio já andou (entrou numa etapa), fechou ou caiu: o cliente já decidiu
+    if (r.opportunity && (r.opportunity.status === "CLOSED_WON" || r.opportunity.status === "LOST" || r.opportunity.stage)) continue;
     if (r.clientId && (await db.visit.count({ where: { clientId: r.clientId, scheduledStart: { gt: r.scheduledStart }, status: { in: ["SCHEDULED", "DONE"] } } }))) continue;
     out.push(r);
   }

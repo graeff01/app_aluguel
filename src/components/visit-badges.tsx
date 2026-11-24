@@ -1,7 +1,8 @@
 import { Badge } from "./ui";
 import { EVALUATION_LABEL, STATUS_LABEL } from "@/lib/labels";
+import { situationLabel } from "@/lib/deal-stages";
 
-type V = { status: string; evaluation: string | null; scheduledEnd: Date; syncConflict?: string; excluded?: boolean; autoCanceled?: boolean; opportunity?: { status: string } | null };
+type V = { status: string; evaluation: string | null; scheduledEnd: Date; syncConflict?: string; excluded?: boolean; autoCanceled?: boolean; opportunity?: { status: string; stage?: string | null } | null };
 
 export function VisitStatusBadge({ v, now = new Date() }: { v: V; now?: Date }) {
   if (v.excluded) return <Badge>Fora dos indicadores</Badge>;
@@ -14,17 +15,12 @@ export function VisitStatusBadge({ v, now = new Date() }: { v: V; now?: Date }) 
       <Badge tone="info">Agendada</Badge>
     );
   }
-  // o negócio da visita já terminou: mostra como terminou (não "ainda decidindo")
-  if (v.status === "DONE" && v.evaluation !== "NEGATIVE" && v.opportunity?.status === "LOST")
+  // o negócio da visita já andou: mostra a situação dele (não "ainda decidindo")
+  const o = v.opportunity;
+  if (v.status === "DONE" && v.evaluation !== "NEGATIVE" && o && (o.status === "LOST" || o.status === "CLOSED_WON" || o.stage))
     return (
-      <Badge tone="bad" dot>
-        Caiu
-      </Badge>
-    );
-  if (v.status === "DONE" && v.opportunity?.status === "CLOSED_WON")
-    return (
-      <Badge tone="good" dot>
-        Alugou
+      <Badge tone={o.status === "LOST" ? "bad" : o.status === "CLOSED_WON" ? "good" : "info"} dot>
+        {o.status === "CLOSED_WON" ? "Alugou" : situationLabel({ stage: o.stage ?? null, status: o.status })}
       </Badge>
     );
   if (v.status === "DONE" && v.evaluation) {

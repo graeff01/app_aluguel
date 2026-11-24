@@ -44,7 +44,7 @@ export const visitListSelect = {
   followUpOn: true,
   followUpDoneAt: true,
   // negócio da visita: "ainda decidindo" que caiu ou fechou não é mais "decidindo"
-  opportunity: { select: { status: true } },
+  opportunity: { select: { status: true, stage: true } },
 } satisfies Prisma.VisitSelect;
 
 export type VisitListItem = Prisma.VisitGetPayload<{ select: typeof visitListSelect }> & { revisit?: Revisit | null; /** imóvel que o cliente alugou conosco (contrato assinado), se alugou */ rentedCode?: string | null };
@@ -151,6 +151,9 @@ export type HistoryFilter = {
 };
 
 /** Filtro do histórico (também usado na exportação). Sempre inclui o escopo do usuário. */
+/** Negócio que já saiu do "ainda decidindo": entrou numa etapa, caiu ou fechou. */
+export const DECIDED_DEAL = { OR: [{ status: { in: ["LOST", "CLOSED_WON"] } }, { stage: { not: null } }] } satisfies Prisma.OpportunityWhereInput;
+
 export function historyWhere(actor: AuthzActor, f: HistoryFilter): Prisma.VisitWhereInput {
   const where: Prisma.VisitWhereInput = { ...visitScope(actor) };
   const and: Prisma.VisitWhereInput[] = [];
@@ -171,8 +174,8 @@ export function historyWhere(actor: AuthzActor, f: HistoryFilter): Prisma.VisitW
   const statuses: VisitStatus[] = ["SCHEDULED", "DONE", "NO_SHOW", "CANCELED", "RESCHEDULED"];
   if (f.status && (statuses as string[]).includes(f.status)) and.push({ status: f.status as VisitStatus });
   if (f.status === "POSITIVE" || f.status === "NEGATIVE") and.push({ evaluation: f.status });
-  // "ainda decidindo" só enquanto o negócio está em aberto (caiu ou fechou: já decidiu)
-  if (f.status === "UNDECIDED") and.push({ evaluation: "UNDECIDED", NOT: { opportunity: { is: { status: { in: ["LOST", "CLOSED_WON"] } } } } });
+  // "ainda decidindo" só enquanto o negócio não andou: entrou numa etapa (negociação, análise…), caiu ou fechou = já decidiu
+  if (f.status === "UNDECIDED") and.push({ evaluation: "UNDECIDED", NOT: { opportunity: { is: DECIDED_DEAL } } });
   if (f.consultantId && hasGlobalView(actor)) and.push({ consultantId: f.consultantId === "none" ? null : f.consultantId });
   if (and.length) where.AND = and;
   return where;

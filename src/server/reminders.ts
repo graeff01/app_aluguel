@@ -5,6 +5,7 @@
  * Uma vez por pessoa por dia (ReminderLog único), a partir da hora configurada, exceto domingo.
  * Conteúdo: apenas contagens e nomes da equipe — nunca dados de clientes.
  */
+import { DECIDED_DEAL } from "./queries";
 import { dueAftercare } from "./aftercare";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
@@ -556,8 +557,8 @@ export async function sendOperationalAlerts(now = new Date(), opts: { send?: Sen
   if (localHour(now) >= settings.reminderHour && localWeekday(now) !== 0) {
     const due = await db.visit.groupBy({
       by: ["consultantId"],
-      // negócio que caiu ou fechou não é mais retorno (como na lista de retornos)
-      where: { ...notDemo, status: "DONE", evaluation: "UNDECIDED", excluded: false, consultantId: { not: null }, followUpOn: { lte: new Date(`${day}T00:00:00Z`) }, followUpDoneAt: null, NOT: { opportunity: { is: { status: { in: ["LOST", "CLOSED_WON"] } } } } },
+      // negócio que andou (etapa), caiu ou fechou não é mais retorno (como na lista de retornos)
+      where: { ...notDemo, status: "DONE", evaluation: "UNDECIDED", excluded: false, consultantId: { not: null }, followUpOn: { lte: new Date(`${day}T00:00:00Z`) }, followUpDoneAt: null, NOT: { opportunity: { is: DECIDED_DEAL } } },
       _count: { _all: true },
     });
     for (const g of due) {

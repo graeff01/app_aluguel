@@ -335,6 +335,11 @@ describe("ainda decidindo × negócio", () => {
     const opp = await db.opportunity.create({ data: { clientId: client.id, propertyId: property.id, status: "FOLLOW_UP", responsibleId: u.a.id, firstDoneVisitAt: at } });
     await db.visit.update({ where: { id: v.id }, data: { opportunityId: opp.id } });
     expect(await ids()).toEqual([v.id]); // negócio em aberto: segue decidindo
+    // negócio entrou numa etapa (ex.: análise de crédito): já decidiu
+    await db.opportunity.update({ where: { id: opp.id }, data: { stage: "ANALYSIS" } });
+    expect(await ids()).toEqual([]);
+    expect((await listHistory(u.manager, {})).items.find((x) => x.id === v.id)?.opportunity).toMatchObject({ stage: "ANALYSIS" });
+    await db.opportunity.update({ where: { id: opp.id }, data: { stage: null } });
     const lost = await db.reason.findFirstOrThrow({ where: { kind: "OPPORTUNITY_LOST" } });
     await db.opportunity.update({ where: { id: opp.id }, data: { status: "LOST", closedAt: NOW, lostReasonId: lost.id, lostOrigin: "LATER" } });
     expect(await ids()).toEqual([]);
