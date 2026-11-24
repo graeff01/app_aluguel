@@ -177,6 +177,8 @@ export function historyWhere(actor: AuthzActor, f: HistoryFilter): Prisma.VisitW
   // "ainda decidindo" só enquanto o negócio não andou: entrou numa etapa (negociação, análise…), caiu ou fechou = já decidiu
   if (f.status === "UNDECIDED") and.push({ evaluation: "UNDECIDED", NOT: { opportunity: { is: DECIDED_DEAL } } });
   if (f.consultantId && hasGlobalView(actor)) and.push({ consultantId: f.consultantId === "none" ? null : f.consultantId });
+  // excluídas pela gestão (duplicada, não comercial) só aparecem no filtro delas
+  and.push({ excluded: f.status === "EXCLUDED" });
   if (and.length) where.AND = and;
   return where;
 }

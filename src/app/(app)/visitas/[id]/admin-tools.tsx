@@ -26,14 +26,14 @@ export function VisitAdminTools({ visitId, consultants, currentConsultantId, exc
         </Field>
         <SubmitButton variant="secondary">Salvar atribuição</SubmitButton>
       </ActionForm>
-      <ActionForm action={excludeVisitAction} className="rounded-3xl border border-line bg-surface p-5 shadow-card" confirm={excluded ? undefined : "Excluir esta visita dos indicadores?"}>
-        <h2 className="mb-3 font-semibold">{excluded ? "Incluir de volta nos indicadores" : "Não é visita comercial?"}</h2>
+      <ActionForm action={excludeVisitAction} className="rounded-3xl border border-line bg-surface p-5 shadow-card" confirm={excluded ? undefined : "Excluir esta visita? Ela sai dos indicadores e das listas (fica só no filtro “Excluída” do Histórico)."}>
+        <h2 className="mb-3 font-semibold">{excluded ? "Incluir de volta nos indicadores" : "Visita duplicada ou não comercial?"}</h2>
         <input type="hidden" name="visitId" value={visitId} />
         <input type="hidden" name="excluded" value={excluded ? "0" : "1"} />
         <Field label="Motivo" htmlFor="excl-note">
-          <Input id="excl-note" name="note" required maxLength={300} />
+          <Input id="excl-note" name="note" required maxLength={300} placeholder="Ex.: duplicada" />
         </Field>
-        <SubmitButton variant={excluded ? "secondary" : "danger"}>{excluded ? "Incluir" : "Excluir dos indicadores"}</SubmitButton>
+        <SubmitButton variant={excluded ? "secondary" : "danger"}>{excluded ? "Incluir" : "Excluir visita"}</SubmitButton>
       </ActionForm>
     </section>
   );

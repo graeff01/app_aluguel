@@ -67,6 +67,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
               <option value="NO_SHOW">Não compareceu</option>
               <option value="CANCELED">Cancelada</option>
               <option value="RESCHEDULED">Remarcada</option>
+              <option value="EXCLUDED">Excluída (duplicada / não comercial)</option>
             </Select>
           </Field>
           {global && (
