@@ -43,6 +43,8 @@ export const visitListSelect = {
   confirmStatus: true,
   followUpOn: true,
   followUpDoneAt: true,
+  // negócio da visita: "ainda decidindo" que caiu ou fechou não é mais "decidindo"
+  opportunity: { select: { status: true } },
 } satisfies Prisma.VisitSelect;
 
 export type VisitListItem = Prisma.VisitGetPayload<{ select: typeof visitListSelect }> & { revisit?: Revisit | null; /** imóvel que o cliente alugou conosco (contrato assinado), se alugou */ rentedCode?: string | null };
@@ -168,7 +170,9 @@ export function historyWhere(actor: AuthzActor, f: HistoryFilter): Prisma.VisitW
   if (isDayKey(f.to)) and.push({ scheduledStart: { lt: endOfDayInTz(f.to) } });
   const statuses: VisitStatus[] = ["SCHEDULED", "DONE", "NO_SHOW", "CANCELED", "RESCHEDULED"];
   if (f.status && (statuses as string[]).includes(f.status)) and.push({ status: f.status as VisitStatus });
-  if (f.status === "POSITIVE" || f.status === "NEGATIVE" || f.status === "UNDECIDED") and.push({ evaluation: f.status });
+  if (f.status === "POSITIVE" || f.status === "NEGATIVE") and.push({ evaluation: f.status });
+  // "ainda decidindo" só enquanto o negócio está em aberto (caiu ou fechou: já decidiu)
+  if (f.status === "UNDECIDED") and.push({ evaluation: "UNDECIDED", NOT: { opportunity: { is: { status: { in: ["LOST", "CLOSED_WON"] } } } } });
   if (f.consultantId && hasGlobalView(actor)) and.push({ consultantId: f.consultantId === "none" ? null : f.consultantId });
   if (and.length) where.AND = and;
   return where;

@@ -323,3 +323,22 @@ describe("histórico único do cliente", () => {
     expect(h.items.find((v) => v.id === liked.id)?.rentedCode).toBe("851787");
   });
 });
+
+describe("ainda decidindo × negócio", () => {
+  it("visita 'ainda decidindo' cujo negócio caiu (ou fechou) sai do filtro", async () => {
+    const client = await db.client.create({ data: { name: "Gabriela Cardoso" } });
+    const property = await db.property.create({ data: { code: "695028" } });
+    const at = new Date("2026-11-03T13:30:00Z");
+    const v = await db.visit.create({ data: { origin: "MANUAL", assignmentStatus: "MANUAL", clientId: client.id, clientName: "Gabriela Cardoso", propertyCode: "695028", propertyId: property.id, consultantId: u.a.id, scheduledStart: at, scheduledEnd: new Date(at.getTime() + 1800_000), status: "DONE", evaluation: "UNDECIDED", note: "vai pensar", concludedAt: at } });
+    const ids = async () => (await listHistory(u.manager, { status: "UNDECIDED" })).items.map((x) => x.id);
+    expect(await ids()).toEqual([v.id]);
+    const opp = await db.opportunity.create({ data: { clientId: client.id, propertyId: property.id, status: "FOLLOW_UP", responsibleId: u.a.id, firstDoneVisitAt: at } });
+    await db.visit.update({ where: { id: v.id }, data: { opportunityId: opp.id } });
+    expect(await ids()).toEqual([v.id]); // negócio em aberto: segue decidindo
+    const lost = await db.reason.findFirstOrThrow({ where: { kind: "OPPORTUNITY_LOST" } });
+    await db.opportunity.update({ where: { id: opp.id }, data: { status: "LOST", closedAt: NOW, lostReasonId: lost.id, lostOrigin: "LATER" } });
+    expect(await ids()).toEqual([]);
+    // no Histórico sem filtro ela continua, com o negócio para a etiqueta "Caiu"
+    expect((await listHistory(u.manager, {})).items.find((x) => x.id === v.id)?.opportunity?.status).toBe("LOST");
+  });
+});

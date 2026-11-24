@@ -556,7 +556,8 @@ export async function sendOperationalAlerts(now = new Date(), opts: { send?: Sen
   if (localHour(now) >= settings.reminderHour && localWeekday(now) !== 0) {
     const due = await db.visit.groupBy({
       by: ["consultantId"],
-      where: { ...notDemo, status: "DONE", evaluation: "UNDECIDED", excluded: false, consultantId: { not: null }, followUpOn: { lte: new Date(`${day}T00:00:00Z`) }, followUpDoneAt: null },
+      // negócio que caiu ou fechou não é mais retorno (como na lista de retornos)
+      where: { ...notDemo, status: "DONE", evaluation: "UNDECIDED", excluded: false, consultantId: { not: null }, followUpOn: { lte: new Date(`${day}T00:00:00Z`) }, followUpDoneAt: null, NOT: { opportunity: { is: { status: { in: ["LOST", "CLOSED_WON"] } } } } },
       _count: { _all: true },
     });
     for (const g of due) {
