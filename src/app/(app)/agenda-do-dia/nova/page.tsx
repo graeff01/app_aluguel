@@ -10,7 +10,7 @@ import { StaffVisitForm } from "./form";
 
 export const metadata = { title: "Nova visita" };
 
-export default async function NewStaffVisitPage({ searchParams }: { searchParams: Promise<{ data?: string; hora?: string; duracao?: string; volta?: string }> }) {
+export default async function NewStaffVisitPage({ searchParams }: { searchParams: Promise<{ data?: string; hora?: string; duracao?: string; volta?: string; de?: string }> }) {
   const sp = await searchParams;
   const actor = await requireActor({ preService: true });
   if (!isPreService(actor) && !hasGlobalView(actor)) notFound();
@@ -18,15 +18,27 @@ export default async function NewStaffVisitPage({ searchParams }: { searchParams
   const consultants = await db.user.findMany({ where: { role: "CONSULTANT", active: true }, select: { id: true, name: true, awayUntil: true }, orderBy: { name: "asc" } });
   const counts = await db.visit.groupBy({ by: ["consultantId"], where: { excluded: false, status: "SCHEDULED", scheduledStart: { gte: startOfDayInTz(today), lt: endOfDayInTz(today) } }, _count: { _all: true } });
   const byId = new Map(counts.map((c) => [c.consultantId, c._count._all]));
+  // remarcar a partir de uma visita (remarcada / não compareceu / cancelada): já vem com cliente, imóveis e consultora
+  const prev = sp.de ? await db.visit.findUnique({ where: { id: sp.de }, include: { companions: { where: { excluded: false }, select: { propertyCode: true, status: true } } } }) : null;
+  const from = prev
+    ? {
+        id: prev.id,
+        clientName: prev.clientName ?? "",
+        externalRef: prev.externalRef ?? "",
+        phoneRaw: prev.phoneRaw ?? "",
+        codes: [prev.propertyCode, ...prev.companions.filter((c) => c.status === prev.status).map((c) => c.propertyCode)].filter(Boolean).join(";"),
+        consultantId: prev.consultantId ?? "",
+      }
+    : undefined;
   return (
     <>
       <Link href={sp.volta === "google" ? `/agenda-google${sp.data ? `?ref=${sp.data}` : ""}` : "/agenda-do-dia"} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
         ← {sp.volta === "google" ? "Agenda Google" : "Visitas"}
       </Link>
-      <PageHeader title="Nova visita" subtitle="O app cria a visita e o evento na agenda Google já no padrão, com a consultora convidada." />
+      <PageHeader title={from ? `Remarcar visita de ${from.clientName.split(" ")[0] || "cliente"}` : "Nova visita"} subtitle={from ? "Cliente, telefone e imóvel já vêm da visita anterior. Escolha o dia, o horário e a consultora (pode trocar)." : "O app cria a visita e o evento na agenda Google já no padrão, com a consultora convidada."} />
       <StaffVisitForm
         today={today}
-        initial={{ date: /^\d{4}-\d{2}-\d{2}$/.test(sp.data ?? "") && sp.data! >= today ? sp.data! : today, time: /^\d{2}:\d{2}$/.test(sp.hora ?? "") ? sp.hora! : "", duration: ["30", "45", "60", "90", "120"].includes(sp.duracao ?? "") ? sp.duracao! : "60", back: sp.volta === "google" ? "google" : "" }}
+        initial={{ date: /^\d{4}-\d{2}-\d{2}$/.test(sp.data ?? "") && sp.data! >= today ? sp.data! : today, time: /^\d{2}:\d{2}$/.test(sp.hora ?? "") ? sp.hora! : "", duration: ["30", "45", "60", "90", "120"].includes(sp.duracao ?? "") ? sp.duracao! : "60", back: sp.volta === "google" ? "google" : "", from }}
         consultants={consultants.map((c) => ({ id: c.id, name: c.name, away: isAway(c.awayUntil) ? c.awayUntil!.toISOString().slice(0, 10).split("-").reverse().slice(0, 2).join("/") : null, today: byId.get(c.id) ?? 0 }))}
       />
     </>

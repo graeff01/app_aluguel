@@ -22,8 +22,8 @@ function readPasted(text: string) {
   };
 }
 
-export function StaffVisitForm({ consultants, today, initial }: { consultants: Consultant[]; today: string; initial?: { date: string; time: string; duration: string; back: string } }) {
-  const [chosen, setChosen] = useState("");
+export function StaffVisitForm({ consultants, today, initial }: { consultants: Consultant[]; today: string; initial?: { date: string; time: string; duration: string; back: string; /** remarcação: dados da visita anterior */ from?: { id: string; clientName: string; externalRef: string; phoneRaw: string; codes: string; consultantId: string } } }) {
+  const [chosen, setChosen] = useState(initial?.from?.consultantId ?? "");
   const [pasted, setPasted] = useState("");
   const [filled, setFilled] = useState<string[] | null>(null);
   const requestId = useMemo(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`), []);
@@ -49,6 +49,7 @@ export function StaffVisitForm({ consultants, today, initial }: { consultants: C
         <>
           <input type="hidden" name="requestId" value={requestId} />
           {initial?.back && <input type="hidden" name="volta" value={initial.back} />}
+          {initial?.from && <input type="hidden" name="fromVisitId" value={initial.from.id} />}
           <details className="group mb-5 rounded-2xl border border-line bg-surface-2">
             <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 text-[14px] font-semibold">
               Colar a mensagem ou o título e preencher sozinho
@@ -66,16 +67,16 @@ export function StaffVisitForm({ consultants, today, initial }: { consultants: C
           </details>
           <div className="grid gap-x-4 sm:grid-cols-2">
             <Field label="Nome do cliente" htmlFor="clientName" error={st.fieldErrors?.clientName}>
-              <Input id="clientName" name="clientName" autoComplete="off" required />
+              <Input id="clientName" name="clientName" autoComplete="off" required defaultValue={initial?.from?.clientName} />
             </Field>
             <Field label="Nº do atendimento (CRM)" htmlFor="externalRef" hint="Opcional. Vai no título, como já é usado na agenda.">
-              <Input id="externalRef" name="externalRef" inputMode="numeric" autoComplete="off" />
+              <Input id="externalRef" name="externalRef" inputMode="numeric" autoComplete="off" defaultValue={initial?.from?.externalRef} />
             </Field>
             <Field label="Telefone" htmlFor="phoneRaw" error={st.fieldErrors?.phoneRaw}>
-              <Input id="phoneRaw" name="phoneRaw" type="tel" inputMode="tel" placeholder="51 99999-9999" autoComplete="off" />
+              <Input id="phoneRaw" name="phoneRaw" type="tel" inputMode="tel" placeholder="51 99999-9999" autoComplete="off" defaultValue={initial?.from?.phoneRaw} />
             </Field>
             <Field label="Imóvel(is)" htmlFor="propertyCodes" error={st.fieldErrors?.propertyCodes} hint="Vários: separe com ; (um cartão para cada imóvel).">
-              <Input id="propertyCodes" name="propertyCodes" placeholder="339541;835840" autoComplete="off" required />
+              <Input id="propertyCodes" name="propertyCodes" placeholder="339541;835840" autoComplete="off" required defaultValue={initial?.from?.codes} />
             </Field>
             <Field label="Dia" htmlFor="date">
               <Input id="date" name="date" type="date" defaultValue={initial?.date ?? today} min={today} required />

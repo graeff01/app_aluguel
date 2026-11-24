@@ -319,6 +319,7 @@ export async function createStaffVisitAction(_: ActionState, fd: FormData): Prom
       durationMinutes: Number(str(fd, "duration")) || 60,
       note: str(fd, "note"),
       allowOverlap: str(fd, "allowOverlap") === "1",
+      fromVisitId: str(fd, "fromVisitId") || undefined,
     });
     // veio da Agenda Google: volta para ela (no dia da visita)
     target = str(fd, "volta") === "google" ? `/agenda-google?ref=${str(fd, "date")}&criada=${r.visit.id}&g=${r.google}` : `/agenda-do-dia?dia=${str(fd, "date")}&criada=${r.visit.id}&g=${r.google}`;

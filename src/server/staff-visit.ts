@@ -25,6 +25,8 @@ export type StaffVisitInput = {
   durationMinutes: number;
   note?: string;
   allowOverlap?: boolean;
+  /** remarcação de uma visita que não aconteceu (remarcada, não compareceu ou cancelada) */
+  fromVisitId?: string;
 };
 
 export async function createStaffVisit(actor: AuthzActor, input: StaffVisitInput, now = new Date(), opts: { calendarApi?: CalendarApi } = {}) {
@@ -49,6 +51,8 @@ export async function createStaffVisit(actor: AuthzActor, input: StaffVisitInput
   const dup = await db.visit.findUnique({ where: { createRequestId: requestId } });
   if (dup) return { visit: dup, google: dup.googleCreatedAt ? ("created" as const) : ("already" as const) };
   if (!input.allowOverlap) await assertNoOverlap(consultant.id, start!, end);
+  const prev = input.fromVisitId ? await db.visit.findUnique({ where: { id: input.fromVisitId }, select: { id: true, status: true, clientId: true } }) : null;
+  if (input.fromVisitId && (!prev || !["RESCHEDULED", "NO_SHOW", "CANCELED"].includes(prev.status))) throw new AppError("INVALID_STATE", "Só dá para remarcar visita remarcada, cancelada ou em que o cliente não compareceu.");
 
   const visit = await db.$transaction(async (tx) => {
     const link = await resolveClient(tx, { clientName: name, phoneRaw: input.phoneRaw?.trim() || null });
@@ -62,11 +66,15 @@ export async function createStaffVisit(actor: AuthzActor, input: StaffVisitInput
       externalRef: ref,
       consultantId: consultant.id,
       assignmentStatus: "MANUAL" as const,
-      assignmentNote: "PRE_ATENDIMENTO",
+      assignmentNote: prev ? "REAGENDADA" : "PRE_ATENDIMENTO",
       ...link,
+      // remarcação: mesmo cliente da visita anterior (o cadastro não se perde)
+      ...(prev?.clientId ? { clientId: prev.clientId } : {}),
+      ...(prev ? { rescheduledFromId: prev.id } : {}),
     };
     const v = await tx.visit.create({ data: { origin: "MANUAL", createRequestId: requestId, propertyCode: code, propertyId: await ensureProperty(tx, code), linkCode: newLinkCode(), ...shared } });
     for (const c of extra) await tx.visit.create({ data: { origin: "MANUAL", companionOfId: v.id, propertyCode: c, propertyId: await ensureProperty(tx, c), ...shared } });
+    if (prev) await tx.visitOutcomeHistory.create({ data: { visitId: prev.id, status: prev.status, note: `Remarcada pelo pré-atendimento para ${fmt.shortDate(start!)} às ${fmt.time(start!)}`, authorId: actor.id } });
     await audit(tx, { actorId: actor.id, action: "visit.scheduled_by_staff", entityType: "Visit", entityId: v.id, changes: { consultora: consultant.id, imoveis: codes, inicio: start!.toISOString() } });
     return v;
   });

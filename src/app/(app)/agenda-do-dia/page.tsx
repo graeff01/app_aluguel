@@ -105,8 +105,12 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   };
   // mesma visita com vários imóveis: códigos ainda em aberto de cada visita
   const openCodes = new Map<string, { id: string; code: string | null }[]>();
-  const track = (list: Row[]) => {
+  // visitas que não aconteceram e já têm a visita nova marcada: sem o botão "Remarcar"
+  const rescheduled = new Set<string>();
+  const track = async (list: Row[]) => {
     for (const v of list) if (v.status === "SCHEDULED") openCodes.set(v.companionOfId ?? v.id, [...(openCodes.get(v.companionOfId ?? v.id) ?? []), { id: v.id, code: v.propertyCode }]);
+    const ids = list.filter((v) => v.status !== "SCHEDULED" && v.status !== "DONE").map((v) => v.id);
+    if (ids.length) for (const n of await db.visit.findMany({ where: { rescheduledFromId: { in: ids } }, select: { rescheduledFromId: true } })) rescheduled.add(n.rescheduledFromId!);
   };
   const row = (v: Row, showConsultant: boolean) => (
     <li key={v.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-5 py-2.5 last:border-b-0">
@@ -172,6 +176,13 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           />
         </span>
       )}
+      {["RESCHEDULED", "NO_SHOW", "CANCELED"].includes(v.status) && !v.swappedTo && !v.companionOfId && !rescheduled.has(v.id) && (
+        <span className="basis-full sm:basis-auto">
+          <Link href={`/agenda-do-dia/nova?de=${v.id}`} className="press inline-flex min-h-9 items-center rounded-full border border-line-strong px-3 text-[12px] font-semibold text-ink-2 hover:bg-tint">
+            Remarcar
+          </Link>
+        </span>
+      )}
       {v.status === "SCHEDULED" && (
         <span className="basis-full sm:basis-auto">
           <Link href={`/agenda-do-dia/${v.id}/editar`} className="press inline-flex min-h-9 items-center rounded-full border border-line-strong px-3 text-[12px] font-semibold text-ink-2 hover:bg-tint">
@@ -226,7 +237,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   if (view === "dia") {
     const day = isDayKey(sp.dia) ? sp.dia : today;
     const a = await dayAgenda(actor, day, who);
-    track(a.groups.flatMap((g) => g.items));
+    await track(a.groups.flatMap((g) => g.items));
     return (
       <div className="mx-auto max-w-3xl">
         <PageHeader eyebrow={fmt.longDate(new Date(day + "T15:00:00Z"))} title={day === today ? "Visitas de hoje" : day === tomorrow ? "Visitas de amanhã" : "Visitas do dia"} subtitle={<AutoRefresh seconds={60} />} action={<LinkButton href="/agenda-do-dia/nova">+ Nova visita</LinkButton>} />
@@ -263,7 +274,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const prev = view === "semana" ? addDays(from, -7) : prevMonth(from);
   const isCurrent = view === "semana" ? from === mondayOf(today) : from === monthOf(today);
   const a = await rangeAgenda(actor, from, to, who);
-  track(a.days.flatMap((d) => d.items));
+  await track(a.days.flatMap((d) => d.items));
   const title = view === "semana" ? `Semana de ${from.slice(8, 10)}/${from.slice(5, 7)} a ${addDays(to, -1).slice(8, 10)}/${addDays(to, -1).slice(5, 7)}` : monthTitle(from).replace(/^./, (c) => c.toUpperCase());
   const nav = (href: string, label: string, aria: string) => (
     <Link href={href} aria-label={aria} className="press inline-flex min-h-10 items-center rounded-full border border-line-strong px-3.5 text-[14px] font-semibold">

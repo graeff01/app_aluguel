@@ -12,6 +12,13 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-11-24-b",
+    title: "Remarcar pela agenda do sistema",
+    changes: [
+      { text: "Visita remarcada, cancelada ou em que o cliente não compareceu ganha o botão “Remarcar” na agenda do sistema: abre a nova visita já com cliente, telefone e imóvel; é só escolher dia, horário e consultora (pode trocar). Vai para a agenda Google como REAGENDADA.", who: ["PRE_SERVICE", "MANAGER"], href: "/agenda-do-dia" },
+    ],
+  },
+  {
     id: "2026-11-24",
     title: "Histórico único do cliente",
     changes: [

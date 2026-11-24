@@ -172,7 +172,7 @@ export async function buildVisitEvent(visitId: string) {
   const central = conn?.calendarId?.includes("@") ? conn.calendarId : conn?.googleEmail;
   const guests = [...new Set([central, ...cc].filter(Boolean) as string[])];
   const details = [
-    v.rescheduledFromId ? "Visita remarcada pela consultora no app Visitas Locação." : v.preAnalysisId ? "Visita marcada a partir da pré-análise aprovada (app Visitas Locação)." : v.assignmentNote === "PRE_ATENDIMENTO" ? "Visita agendada pelo pré-atendimento no app Visitas Locação." : "Visita marcada pela consultora no app Visitas Locação.",
+    v.rescheduledFromId ? (v.scheduledById ? "Visita remarcada pela consultora no app Visitas Locação." : "Visita remarcada pelo pré-atendimento no app Visitas Locação.") : v.preAnalysisId ? "Visita marcada a partir da pré-análise aprovada (app Visitas Locação)." : v.assignmentNote === "PRE_ATENDIMENTO" ? "Visita agendada pelo pré-atendimento no app Visitas Locação." : "Visita marcada pela consultora no app Visitas Locação.",
     `Ref.: ${v.linkCode ?? ""} (não apague esta linha: liga o evento à visita no app)`,
   ].join("\n");
   const location = cleanAddress(v.property?.address) ?? (v.property?.neighborhood ? `${v.property.neighborhood}, ${v.property.city ?? "Canoas"} - RS` : "");

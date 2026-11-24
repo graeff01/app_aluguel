@@ -455,6 +455,24 @@ describe("agenda nos dois sentidos", () => {
     expect(all.every((v) => v.syncConflict === "NONE")).toBe(true);
   });
 
+  it("Jasmin remarca a visita que ficou como remarcada: novo dia, outra consultora, ligada à anterior", async () => {
+    const { createStaffVisit } = await import("@/server/staff-visit");
+    const { api } = await ready();
+    const first = await createStaffVisit(jasmin, input({ clientName: "Juliana Romeira", propertyCodes: "276997" }), NOW, { calendarApi: api });
+    // realizada não se remarca por aqui
+    await db.visit.update({ where: { id: first.visit.id }, data: { status: "DONE", evaluation: "UNDECIDED", note: "decidindo", concludedAt: NOW } });
+    await expect(createStaffVisit(jasmin, input({ fromVisitId: first.visit.id }), NOW, { calendarApi: api })).rejects.toMatchObject({ code: "INVALID_STATE" });
+    await db.visit.update({ where: { id: first.visit.id }, data: { status: "RESCHEDULED", evaluation: null, note: "cliente pediu outro dia" } });
+
+    const r = await createStaffVisit(jasmin, input({ clientName: "Juliana Romeira", propertyCodes: "276997", consultantId: u.b.id, fromVisitId: first.visit.id, scheduledStart: toLocalInput(new Date("2026-10-16T19:30:00Z")) }), NOW, { calendarApi: api });
+    expect(r.visit).toMatchObject({ rescheduledFromId: first.visit.id, assignmentNote: "REAGENDADA", consultantId: u.b.id, clientId: first.visit.clientId });
+    const ev = (await api.getEvent("central@exemplo.test", "app-2"))!;
+    expect(ev.summary).toContain("REAGENDADA");
+    expect(ev.description).toContain("remarcada pelo pré-atendimento");
+    expect((ev.attendees ?? []).map((a) => a.email)).toContain("consultora.b@exemplo.test");
+    expect(await db.visitOutcomeHistory.count({ where: { visitId: first.visit.id, note: { startsWith: "Remarcada pelo pré-atendimento para" } } })).toBe(1);
+  });
+
   it("horário corrigido no app move o evento (também visita vinda da agenda); acompanhante não muda sozinha", async () => {
     const { correctVisitData } = await import("@/server/visits");
     const { api, sync } = await ready();
