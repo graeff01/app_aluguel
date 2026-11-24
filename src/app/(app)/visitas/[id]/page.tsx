@@ -15,6 +15,7 @@ import { Tabs } from "@/components/tabs";
 import { PropertyCard } from "@/components/property-preview";
 import { AfterVisitMessage } from "@/components/after-visit-message";
 import { db } from "@/lib/db";
+import { BackLink } from "@/components/back-link";
 
 export const metadata = { title: "Visita" };
 
@@ -32,9 +33,7 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
 
   return (
     <>
-      <Link href="/hoje" className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
-        ← Voltar
-      </Link>
+      <BackLink fallback={global ? "/hoje" : "/minhas"} history={!sp.salvo && !sp.corrigido && !sp.criada} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink" />
       {sp.salvo && <Alert tone="good" title="Resultado salvo no servidor." />}
       {sp.corrigido && <Alert tone="good" title="Dados corrigidos." />}
       {sp.criada && <Alert tone="good" title="Visita cadastrada." />}
