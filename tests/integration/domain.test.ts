@@ -292,3 +292,34 @@ describe("revisita e quem agendou", () => {
     expect((await getVisitDetail(u.a, second.id, NOW)).visit.revisit).toBeNull();
   });
 });
+
+describe("histórico único do cliente", () => {
+  it("visita negativa mostra que o cliente alugou outro imóvel; o Histórico marca as visitas dele", async () => {
+    const client = await db.client.create({ data: { name: "Gabriela Teste" } });
+    const at = (iso: string) => ({ scheduledStart: new Date(iso), scheduledEnd: new Date(new Date(iso).getTime() + 3600_000) });
+    const base = { origin: "MANUAL" as const, assignmentStatus: "MANUAL" as const, clientId: client.id, clientName: "Gabriela", phoneNormalized: "+5551998761234", consultantId: u.a.id, status: "DONE" as const };
+    const liked = await db.visit.create({ data: { ...base, ...at("2026-10-01T14:00:00Z"), propertyCode: "851787", evaluation: "POSITIVE", note: "gostou", concludedAt: NOW } });
+    const neg = await db.visit.create({ data: { ...base, ...at("2026-10-01T15:00:00Z"), propertyCode: "999111", evaluation: "UNDECIDED", note: "achou pequeno", concludedAt: NOW } });
+    // sem cadastro ligado, mas com o mesmo telefone: entra no histórico
+    const loose = await db.visit.create({ data: { ...base, ...at("2026-09-20T15:00:00Z"), clientId: null, propertyCode: "777222", status: "SCHEDULED" } });
+    await db.visit.update({ where: { id: neg.id }, data: { clientId: null } });
+
+    let d = await getVisitDetail(u.a, neg.id, NOW);
+    expect(d.rented).toBeNull();
+    expect(d.relatedVisits.map((r) => r.propertyCode).sort()).toEqual(["777222", "851787"]);
+    expect(d.relatedVisits.some((r) => r.id === loose.id)).toBe(true);
+
+    const property = await db.property.create({ data: { code: "851787" } });
+    await db.opportunity.create({ data: { clientId: client.id, propertyId: property.id, status: "CLOSED_WON", stage: "SIGNED", signedAt: new Date("2026-10-05T12:00:00Z"), responsibleId: u.a.id, closedResponsibleId: u.a.id, firstDoneVisitAt: NOW, closedAt: NOW } });
+    d = await getVisitDetail(u.a, neg.id, NOW);
+    expect(d.rented).toMatchObject({ code: "851787" });
+    // a consultora B não vê as visitas da A
+    await db.visit.update({ where: { id: neg.id }, data: { consultantId: u.b.id } });
+    expect((await getVisitDetail(u.b, neg.id, NOW)).relatedVisits).toHaveLength(0);
+
+    await db.visit.update({ where: { id: neg.id }, data: { clientId: client.id } });
+    const h = await listHistory(u.manager, {});
+    expect(h.items.find((v) => v.id === neg.id)?.rentedCode).toBe("851787");
+    expect(h.items.find((v) => v.id === liked.id)?.rentedCode).toBe("851787");
+  });
+});

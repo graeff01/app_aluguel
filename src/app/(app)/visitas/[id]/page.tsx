@@ -7,7 +7,7 @@ import { fmt } from "@/lib/time";
 import { formatPhone } from "@/lib/phone";
 import { ASSIGNMENT_NOTE_LABEL } from "@/lib/parser";
 import { CONFLICT_LABEL, EVALUATION_LABEL, MATCH_LABEL, OPP_STATUS_LABEL, STATUS_LABEL, revisitLabel, scheduledByConsultant, scheduledByLabel } from "@/lib/labels";
-import { Alert, Badge, KeyValue, LinkButton, Panel, Section } from "@/components/ui";
+import { Alert, Badge, KeyValue, LinkButton, Panel, Section, cx } from "@/components/ui";
 import { VisitStatusBadge } from "@/components/visit-badges";
 import { VisitAdminTools } from "./admin-tools";
 import { ContactButtons } from "@/components/contact-buttons";
@@ -24,7 +24,7 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
   const { id } = await params;
   const sp = await searchParams;
   const now = new Date();
-  const { visit, relatedVisits, sameEvent, awaiting, charged, settings } = await orNotFound(getVisitDetail(actor, id, now));
+  const { visit, relatedVisits, rented, sameEvent, awaiting, charged, settings } = await orNotFound(getVisitDetail(actor, id, now));
   const global = hasGlobalView(actor);
   const canCorrect = canCorrectVisitData(actor, visit, settings);
   const consultants = global ? await db.user.findMany({ where: { role: "CONSULTANT", active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
@@ -111,6 +111,48 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
           </p>
         )}
       </div>
+      {(relatedVisits.length > 0 || rented) && (
+        <section aria-labelledby="t-historico-cliente" className="mb-6 max-w-xl rounded-3xl border border-line bg-surface p-4 shadow-card">
+          <h2 id="t-historico-cliente" className="text-[15px] font-bold">
+            Histórico de {visit.clientName?.split(" ")[0] ?? "cliente"}
+          </h2>
+          {rented && (
+            <p className="mt-2 rounded-xl bg-good-soft px-3 py-2 text-[14px] font-semibold text-good">
+              ✓ Alugou conosco o imóvel <span className="num">{rented.code}</span> · contrato em {fmt.date(rented.signedAt)}
+            </p>
+          )}
+          <ul className="mt-2 divide-y divide-line text-[14px]">
+            {[{ ...visit, current: true, negativeReason: visit.negativeReason ? { label: visit.negativeReason.label } : null }, ...relatedVisits.map((r) => ({ ...r, current: false }))]
+              .sort((a, b) => b.scheduledStart.getTime() - a.scheduledStart.getTime())
+              .map((r) => {
+                const result = r.status === "DONE" ? (r.evaluation ? EVALUATION_LABEL[r.evaluation] : "Realizada") : STATUS_LABEL[r.status];
+                const tone = rented?.code === r.propertyCode ? "text-good" : r.evaluation === "NEGATIVE" ? "text-bad" : r.evaluation === "POSITIVE" ? "text-good" : "text-ink-2";
+                const row = (
+                  <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-2">
+                    <span>
+                      {fmt.shortDate(r.scheduledStart).replace(".", "")} · imóvel <span className="num font-semibold">{r.propertyCode ?? "—"}</span>
+                      {r.current && <span className="text-ink-3"> (esta visita)</span>}
+                    </span>
+                    <span className={cx("text-[13px] font-semibold", tone)}>
+                      {rented?.code === r.propertyCode ? "Alugou" : result}
+                      {r.evaluation === "NEGATIVE" && r.negativeReason && rented?.code !== r.propertyCode ? ` — ${r.negativeReason.label}` : ""}
+                    </span>
+                  </span>
+                );
+                return (
+                  <li key={r.id}>
+                    {r.current ? row : (
+                      <Link href={`/visitas/${r.id}`} className="block hover:bg-bg">
+                        {row}
+                      </Link>
+                    )}
+                  </li>
+                );
+              })}
+          </ul>
+          {!global && <p className="mt-1 text-[12px] text-ink-3">Aparecem as visitas deste cliente com você.</p>}
+        </section>
+      )}
       <Tabs
         tabs={[
           {
@@ -205,36 +247,6 @@ export default async function VisitPage({ params, searchParams }: { params: Prom
               </>
             ) : (
               <p className="text-ink-3">Nenhum registro ainda.</p>
-            ),
-          },
-          {
-            id: "cliente",
-            label: "Cliente",
-            count: relatedVisits.length,
-            content: relatedVisits.length ? (
-              <>
-      {relatedVisits.length > 0 && (
-        <Section title="Outras visitas deste cliente">
-          <ul className="divide-y divide-line overflow-hidden rounded-3xl border border-line bg-surface shadow-card">
-            {relatedVisits.map((r) => (
-              <li key={r.id}>
-                <Link href={`/visitas/${r.id}`} className="block px-4 py-3 hover:bg-bg">
-                  <span className="flex justify-between gap-2">
-                    <span>
-                      {fmt.date(r.scheduledStart)} · imóvel {r.propertyCode ?? "—"}
-                    </span>
-                    <VisitStatusBadge v={r} now={now} />
-                  </span>
-                  {r.note && <span className="mt-1 line-clamp-2 block text-sm text-ink-3">{r.note}</span>}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
-              </>
-            ) : (
-              <p className="text-ink-3">Nenhuma outra visita deste cliente{global ? "" : " com você"}.</p>
             ),
           },
           ...(global || visit.sourceEvent?.description

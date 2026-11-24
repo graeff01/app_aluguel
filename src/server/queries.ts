@@ -45,7 +45,17 @@ export const visitListSelect = {
   followUpDoneAt: true,
 } satisfies Prisma.VisitSelect;
 
-export type VisitListItem = Prisma.VisitGetPayload<{ select: typeof visitListSelect }> & { revisit?: Revisit | null };
+export type VisitListItem = Prisma.VisitGetPayload<{ select: typeof visitListSelect }> & { revisit?: Revisit | null; /** imóvel que o cliente alugou conosco (contrato assinado), se alugou */ rentedCode?: string | null };
+
+/** Imóvel que cada cliente alugou conosco (contrato assinado mais recente), para marcar as outras visitas dele. */
+export async function rentedByClient(clientIds: (string | null)[]) {
+  const ids = [...new Set(clientIds.filter((x): x is string => !!x))];
+  if (!ids.length) return new Map<string, { code: string; signedAt: Date }>();
+  const deals = await db.opportunity.findMany({ where: { clientId: { in: ids }, signedAt: { not: null } }, select: { clientId: true, signedAt: true, property: { select: { code: true } } }, orderBy: { signedAt: "desc" } });
+  const m = new Map<string, { code: string; signedAt: Date }>();
+  for (const d of deals) if (!m.has(d.clientId)) m.set(d.clientId, { code: d.property.code, signedAt: d.signedAt! });
+  return m;
+}
 
 async function chargeStart() {
   const s = await getSettings();
@@ -172,7 +182,9 @@ export async function listHistory(actor: AuthzActor, f: HistoryFilter) {
     db.visit.findMany({ where, select: visitListSelect, orderBy: { scheduledStart: "desc" }, skip: (page - 1) * take, take }),
     db.visit.count({ where }),
   ]);
-  return { items: await withRevisits(items, visitScope(actor)), total, page, pages: Math.max(1, Math.ceil(total / take)) };
+  const rented = await rentedByClient(items.map((v) => v.clientId));
+  const withR = await withRevisits(items, visitScope(actor));
+  return { items: withR.map((v) => ({ ...v, rentedCode: (v.clientId && rented.get(v.clientId)?.code) || null })), total, page, pages: Math.max(1, Math.ceil(total / take)) };
 }
 
 /** Detalhe com histórico; visitas relacionadas do cliente restritas ao escopo da usuária. */
@@ -193,14 +205,20 @@ export async function getVisitDetail(actor: AuthzActor, id: string, now = new Da
   });
   if (!visit || !canViewVisit(actor, visit)) throw notFound();
   const [{ revisit }] = await withRevisits([visit], visitScope(actor));
-  const relatedVisits = visit.clientId
+  // o mesmo cliente: pelo cadastro; sem cadastro ligado, pelo telefone
+  const sameClient = visit.clientId ? { clientId: visit.clientId } : visit.phoneNormalized ? { phoneNormalized: visit.phoneNormalized } : null;
+  const relatedVisits = sameClient
     ? await db.visit.findMany({
-        where: { ...visitScope(actor), clientId: visit.clientId, id: { not: visit.id } },
-        select: { ...visitListSelect, note: true },
+        where: { ...visitScope(actor), ...sameClient, id: { not: visit.id }, excluded: false, swappedTo: null },
+        select: { ...visitListSelect, note: true, negativeReason: { select: { label: true } } },
         orderBy: { scheduledStart: "desc" },
         take: 20,
       })
     : [];
+  // contrato assinado do cliente (qualquer consultora): a visita negativa de outro imóvel não é "cliente perdido"
+  const rentedIds = [visit.clientId, ...relatedVisits.map((r) => r.clientId)];
+  const rentedMap = await rentedByClient(rentedIds);
+  const rented = [...new Set(rentedIds.filter((x): x is string => !!x))].map((id) => rentedMap.get(id)).find(Boolean) ?? null;
   // mesmo evento com vários imóveis: as outras visitas do mesmo horário
   const groupId = visit.companionOfId ?? visit.id;
   const sameEvent = await db.visit.findMany({
@@ -211,7 +229,7 @@ export async function getVisitDetail(actor: AuthzActor, id: string, now = new Da
   const settings = await getSettings();
   const charged = visit.scheduledStart >= startOfDayInTz(dateOnlyKey(settings.resultsStartDate));
   const awaiting = visit.status === "SCHEDULED" && visit.scheduledEnd <= now && charged && !visit.excluded;
-  return { visit: { ...visit, revisit }, relatedVisits, sameEvent, awaiting, charged, settings };
+  return { visit: { ...visit, revisit }, relatedVisits, rented, sameEvent, awaiting, charged, settings };
 }
 
 // ─────────────── Revisão (gestão) ───────────────

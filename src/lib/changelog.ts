@@ -12,6 +12,14 @@ const STAFF: Audience[] = ["PRE_SERVICE", "MANAGER"];
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-11-24",
+    title: "Histórico único do cliente",
+    changes: [
+      { text: "Na visita, o “Histórico do cliente” aparece no topo: todas as visitas dele (de cada imóvel, com o resultado) e, se alugou conosco, qual imóvel e quando. Assim a visita negativa de um imóvel mostra que o cliente fechou outro.", who: ["CONSULTANT", "MANAGER"] },
+      { text: "No Histórico, a visita de quem alugou conosco ganha a marca “Cliente alugou o …”.", who: ["MANAGER"], href: "/historico" },
+    ],
+  },
+  {
     id: "2026-11-23",
     title: "Agenda Google fora do ar? O app guarda e manda depois",
     changes: [

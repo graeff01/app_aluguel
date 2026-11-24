@@ -40,8 +40,9 @@ export function VisitCard({ v, now = new Date(), showConsultant, showDate }: { v
             {showConsultant && <span>{v.consultant?.name ?? <span className="text-warn">sem consultora</span>}</span>}
             {overdue24 && <span className="font-semibold text-accent-strong">há mais de 24 h</span>}
           </div>
-          {(v.syncConflict !== "NONE" || v.assignmentStatus === "NEEDS_REVIEW" || v.revisit || byConsultant) && (
+          {(v.syncConflict !== "NONE" || v.assignmentStatus === "NEEDS_REVIEW" || v.revisit || byConsultant || v.rentedCode) && (
             <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {v.rentedCode && <Badge tone="good">{v.rentedCode === v.propertyCode ? "Alugou este imóvel" : `Cliente alugou o ${v.rentedCode}`}</Badge>}
               {v.revisit && (
                 <Badge tone="info">
                   Revisita · {revisitLabel(v.revisit).replace("Cliente já visitou ", "já visitou ")}
