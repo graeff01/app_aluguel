@@ -471,6 +471,11 @@ describe("agenda nos dois sentidos", () => {
     expect(ev.description).toContain("remarcada pelo pré-atendimento");
     expect((ev.attendees ?? []).map((a) => a.email)).toContain("consultora.b@exemplo.test");
     expect(await db.visitOutcomeHistory.count({ where: { visitId: first.visit.id, note: { startsWith: "Remarcada pelo pré-atendimento para" } } })).toBe(1);
+    // no Histórico, a remarcada mostra para quando e com quem
+    const { listHistory } = await import("@/server/queries");
+    const h = await listHistory(u.manager, { status: "RESCHEDULED" });
+    expect(h.total).toBe(1);
+    expect(h.items[0].rescheduledTo).toMatchObject({ start: new Date("2026-10-16T19:30:00Z"), consultant: "Consultora B" });
   });
 
   it("horário corrigido no app move o evento (também visita vinda da agenda); acompanhante não muda sozinha", async () => {

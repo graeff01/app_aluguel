@@ -47,7 +47,7 @@ export const visitListSelect = {
   opportunity: { select: { status: true, stage: true } },
 } satisfies Prisma.VisitSelect;
 
-export type VisitListItem = Prisma.VisitGetPayload<{ select: typeof visitListSelect }> & { revisit?: Revisit | null; /** imóvel que o cliente alugou conosco (contrato assinado), se alugou */ rentedCode?: string | null };
+export type VisitListItem = Prisma.VisitGetPayload<{ select: typeof visitListSelect }> & { revisit?: Revisit | null; /** imóvel que o cliente alugou conosco (contrato assinado), se alugou */ rentedCode?: string | null; /** visita nova marcada no lugar desta (remarcada) */ rescheduledTo?: { start: Date; consultant: string | null } | null };
 
 /** Imóvel que cada cliente alugou conosco (contrato assinado mais recente), para marcar as outras visitas dele. */
 export async function rentedByClient(clientIds: (string | null)[]) {
@@ -192,8 +192,12 @@ export async function listHistory(actor: AuthzActor, f: HistoryFilter) {
     db.visit.count({ where }),
   ]);
   const rented = await rentedByClient(items.map((v) => v.clientId));
+  // remarcada / não compareceu / cancelada que já tem a visita nova: para quando e com quem
+  const gone = items.filter((v) => v.status !== "SCHEDULED" && v.status !== "DONE").map((v) => v.id);
+  const next = gone.length ? await db.visit.findMany({ where: { rescheduledFromId: { in: gone }, companionOfId: null }, select: { rescheduledFromId: true, scheduledStart: true, consultant: { select: { name: true } } }, orderBy: { createdAt: "asc" } }) : [];
+  const nextOf = new Map(next.map((n) => [n.rescheduledFromId!, { start: n.scheduledStart, consultant: n.consultant?.name ?? null }]));
   const withR = await withRevisits(items, visitScope(actor));
-  return { items: withR.map((v) => ({ ...v, rentedCode: (v.clientId && rented.get(v.clientId)?.code) || null })), total, page, pages: Math.max(1, Math.ceil(total / take)) };
+  return { items: withR.map((v) => ({ ...v, rentedCode: (v.clientId && rented.get(v.clientId)?.code) || null, rescheduledTo: nextOf.get(v.id) ?? null })), total, page, pages: Math.max(1, Math.ceil(total / take)) };
 }
 
 /** Detalhe com histórico; visitas relacionadas do cliente restritas ao escopo da usuária. */

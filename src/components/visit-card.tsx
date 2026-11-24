@@ -40,8 +40,14 @@ export function VisitCard({ v, now = new Date(), showConsultant, showDate }: { v
             {showConsultant && <span>{v.consultant?.name ?? <span className="text-warn">sem consultora</span>}</span>}
             {overdue24 && <span className="font-semibold text-accent-strong">há mais de 24 h</span>}
           </div>
-          {(v.syncConflict !== "NONE" || v.assignmentStatus === "NEEDS_REVIEW" || v.revisit || byConsultant || v.rentedCode) && (
+          {(v.syncConflict !== "NONE" || v.assignmentStatus === "NEEDS_REVIEW" || v.revisit || byConsultant || v.rentedCode || v.rescheduledTo) && (
             <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {v.rescheduledTo && (
+                <Badge tone="info">
+                  ↻ Remarcada para {fmt.shortDate(v.rescheduledTo.start).replace(".", "")} às {fmt.time(v.rescheduledTo.start)}
+                  {v.rescheduledTo.consultant && v.rescheduledTo.consultant !== v.consultant?.name ? ` · com ${v.rescheduledTo.consultant.split(" ")[0]}` : ""}
+                </Badge>
+              )}
               {v.rentedCode && <Badge tone="good">{v.rentedCode === v.propertyCode ? "Alugou este imóvel" : `Cliente alugou o ${v.rentedCode}`}</Badge>}
               {v.revisit && (
                 <Badge tone="info">

@@ -92,6 +92,13 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
         </div>
       </form>
       </details>
+      {result.total > 0 && (
+        <p className="mb-3 text-right text-[14px] text-ink-2" aria-live="polite">
+          <strong className="num text-[16px] text-ink">{result.total.toLocaleString("pt-BR")}</strong> visita{result.total === 1 ? "" : "s"} encontrada{result.total === 1 ? "" : "s"}
+          {activeFilters ? " com os filtros" : ""}
+          {result.pages > 1 ? <span className="text-ink-3"> · página {result.page} de {result.pages}</span> : null}
+        </p>
+      )}
       {result.items.length === 0 ? (
         <Empty title="Nenhuma visita encontrada" />
       ) : (
