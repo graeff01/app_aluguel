@@ -165,3 +165,17 @@ describe("cancelamento: evento movido para depois das 21h", () => {
     expect((await db.visit.findFirstOrThrow({ where: { sourceEvent: { googleEventId: "d2" } } })).status).toBe("SCHEDULED");
   });
 });
+
+describe("pré-análises por consultora", () => {
+  it("gestão e pré-atendimento filtram por consultora; a consultora segue vendo só as dela", async () => {
+    const { listPreAnalyses } = await import("@/server/pre-analysis");
+    const jas = { id: (await db.user.create({ data: { name: "Jasmin Filtro", email: "jas.filtro@exemplo.test", role: "PRE_SERVICE" } })).id, role: "PRE_SERVICE" as const };
+    const a = await createPreAnalysis(jas, valid({ consultantId: u.a.id }), NOW);
+    await createPreAnalysis(jas, valid({ consultantId: u.b.id, cpf: "168.995.350-09" }), new Date(NOW.getTime() + 60_000));
+    expect((await listPreAnalyses(jas)).length).toBe(2);
+    expect((await listPreAnalyses(jas, { consultantId: u.a.id })).map((x) => x.id)).toEqual([a.id]);
+    expect((await listPreAnalyses(u.manager, { consultantId: u.b.id })).map((x) => x.consultant.id)).toEqual([u.b.id]);
+    // a consultora não usa o filtro para ver as de outra
+    expect((await listPreAnalyses(u.a, { consultantId: u.b.id })).map((x) => x.id)).toEqual([a.id]);
+  });
+});

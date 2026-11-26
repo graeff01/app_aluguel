@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { db } from "@/lib/db";
 import { requireActor } from "@/lib/require";
 import { canCreatePreAnalysis, hasGlobalView, isPreService } from "@/lib/authz";
 import { listPreAnalyses, preAnalysisStats } from "@/server/pre-analysis";
@@ -24,12 +25,25 @@ function monthRange(now: Date) {
   return { from: startOfDayInTz(`${k}-01`), to: startOfDayInTz(`${next}-01`), label: new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "America/Sao_Paulo" }).format(now) };
 }
 
-export default async function PreAnalysesPage({ searchParams }: { searchParams: Promise<{ aba?: string; q?: string; excluida?: string }> }) {
+export default async function PreAnalysesPage({ searchParams }: { searchParams: Promise<{ aba?: string; q?: string; excluida?: string; consultora?: string }> }) {
   const actor = await requireActor({ preService: true });
   const sp = await searchParams;
   const tab = sp.aba === "respondidas" ? "respondidas" : "abertas";
   const now = new Date();
-  const rows = await listPreAnalyses(actor, { tab, q: sp.q });
+  const byConsultant = actor.role !== "CONSULTANT";
+  const rows = await listPreAnalyses(actor, { tab, q: sp.q, consultantId: byConsultant ? sp.consultora : undefined });
+  // consultoras que recebem pré-análises (para o filtro)
+  const consultants = byConsultant ? await db.user.findMany({ where: { role: "CONSULTANT", OR: [{ active: true }, { preAnalysesAssigned: { some: {} } }] }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
+  const link = (o: { aba?: string; consultora?: string }) => {
+    const p = new URLSearchParams();
+    const aba = "aba" in o ? o.aba : tab === "respondidas" ? "respondidas" : undefined;
+    const c = "consultora" in o ? o.consultora : sp.consultora;
+    if (aba) p.set("aba", aba);
+    if (c) p.set("consultora", c);
+    if (sp.q) p.set("q", sp.q);
+    const qs = p.toString();
+    return `/pre-analises${qs ? `?${qs}` : ""}`;
+  };
   const showStats = hasGlobalView(actor) || isPreService(actor);
   const range = monthRange(now);
   const stats = showStats ? await preAnalysisStats(actor, range.from, range.to) : null;
@@ -126,18 +140,36 @@ export default async function PreAnalysesPage({ searchParams }: { searchParams: 
         <Segmented
           label="Situação"
           items={[
-            { href: "/pre-analises", label: "Em aberto", active: tab === "abertas" },
-            { href: "/pre-analises?aba=respondidas", label: "Respondidas", active: tab === "respondidas" },
+            { href: link({ aba: undefined }), label: "Em aberto", active: tab === "abertas" },
+            { href: link({ aba: "respondidas" }), label: "Respondidas", active: tab === "respondidas" },
           ]}
         />
         <form role="search" className="w-full sm:w-72">
           {tab === "respondidas" && <input type="hidden" name="aba" value="respondidas" />}
+          {sp.consultora && <input type="hidden" name="consultora" value={sp.consultora} />}
           <label htmlFor="q" className="sr-only">
             Buscar por nome
           </label>
           <input id="q" name="q" type="search" defaultValue={sp.q} placeholder="Buscar por nome" className="block min-h-11 w-full rounded-full border border-line-strong bg-surface px-5 text-[15px] shadow-card focus:border-ink focus:outline-none" />
         </form>
       </div>
+
+      {consultants.length > 1 && (
+        <nav aria-label="Filtrar por consultora" className="mb-4 flex flex-wrap items-center gap-2">
+          {[{ id: "", name: "Todas" }, ...consultants].map((c) => {
+            const on = (sp.consultora ?? "") === c.id;
+            return (
+              <Link key={c.id || "todas"} href={link({ consultora: c.id || undefined })} aria-current={on ? "true" : undefined} className={cx("press inline-flex min-h-10 items-center rounded-full border px-4 text-[13px] font-semibold", on ? "border-ink bg-ink text-bg" : "border-line-strong bg-surface text-ink-2 hover:bg-tint")}>
+                {c.id ? c.name.split(" ")[0] : c.name}
+              </Link>
+            );
+          })}
+          <span className="ml-auto text-[13px] text-ink-2">
+            <strong className="num text-ink">{rows.length}</strong> {tab === "abertas" ? "em aberto" : `respondida${rows.length === 1 ? "" : "s"}`}
+            {sp.consultora ? ` para ${consultants.find((c) => c.id === sp.consultora)?.name.split(" ")[0] ?? "a consultora"}` : ""}
+          </span>
+        </nav>
+      )}
 
       {rows.length === 0 ? (
         <Empty title={tab === "abertas" ? "Nada em aberto" : "Nenhuma respondida ainda"} icon="✓">
