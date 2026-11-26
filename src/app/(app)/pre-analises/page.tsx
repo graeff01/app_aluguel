@@ -18,6 +18,18 @@ const STATUS_CLS: Record<string, string> = {
   REJECTED: "bg-bad-soft text-bad",
 };
 
+/** Mês "YYYY-MM" (ou o atual): início, fim e nome; e os vizinhos para as setas. */
+function monthOf(key: string | undefined, now: Date) {
+  const k = key && /^\d{4}-(0[1-9]|1[0-2])$/.test(key) ? key : dayKey(now).slice(0, 7);
+  const [y, m] = k.split("-").map(Number);
+  const shift = (d: number) => {
+    const t = y * 12 + (m - 1) + d;
+    return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, "0")}`;
+  };
+  const label = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, 15)));
+  return { key: k, from: startOfDayInTz(`${k}-01`), to: startOfDayInTz(`${shift(1)}-01`), label, prev: shift(-1), next: shift(1), current: k === dayKey(now).slice(0, 7) };
+}
+
 function monthRange(now: Date) {
   const k = dayKey(now).slice(0, 7);
   const [y, m] = k.split("-").map(Number);
@@ -25,21 +37,25 @@ function monthRange(now: Date) {
   return { from: startOfDayInTz(`${k}-01`), to: startOfDayInTz(`${next}-01`), label: new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "America/Sao_Paulo" }).format(now) };
 }
 
-export default async function PreAnalysesPage({ searchParams }: { searchParams: Promise<{ aba?: string; q?: string; excluida?: string; consultora?: string }> }) {
+export default async function PreAnalysesPage({ searchParams }: { searchParams: Promise<{ aba?: string; q?: string; excluida?: string; consultora?: string; mes?: string }> }) {
   const actor = await requireActor({ preService: true });
   const sp = await searchParams;
   const tab = sp.aba === "respondidas" ? "respondidas" : "abertas";
   const now = new Date();
   const byConsultant = actor.role !== "CONSULTANT";
-  const rows = await listPreAnalyses(actor, { tab, q: sp.q, consultantId: byConsultant ? sp.consultora : undefined });
+  // respondidas: por mês da resposta (o atual por padrão); em aberto: todas
+  const month = monthOf(sp.mes, now);
+  const rows = await listPreAnalyses(actor, { tab, q: sp.q, consultantId: byConsultant ? sp.consultora : undefined, ...(tab === "respondidas" ? { answeredFrom: month.from, answeredTo: month.to } : {}) });
   // consultoras que recebem pré-análises (para o filtro)
   const consultants = byConsultant ? await db.user.findMany({ where: { role: "CONSULTANT", OR: [{ active: true }, { preAnalysesAssigned: { some: {} } }] }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
-  const link = (o: { aba?: string; consultora?: string }) => {
+  const link = (o: { aba?: string; consultora?: string; mes?: string }) => {
     const p = new URLSearchParams();
     const aba = "aba" in o ? o.aba : tab === "respondidas" ? "respondidas" : undefined;
     const c = "consultora" in o ? o.consultora : sp.consultora;
+    const mes = "mes" in o ? o.mes : sp.mes;
     if (aba) p.set("aba", aba);
     if (c) p.set("consultora", c);
+    if (mes && aba === "respondidas") p.set("mes", mes);
     if (sp.q) p.set("q", sp.q);
     const qs = p.toString();
     return `/pre-analises${qs ? `?${qs}` : ""}`;
@@ -147,6 +163,7 @@ export default async function PreAnalysesPage({ searchParams }: { searchParams: 
         <form role="search" className="w-full sm:w-72">
           {tab === "respondidas" && <input type="hidden" name="aba" value="respondidas" />}
           {sp.consultora && <input type="hidden" name="consultora" value={sp.consultora} />}
+          {sp.mes && tab === "respondidas" && <input type="hidden" name="mes" value={sp.mes} />}
           <label htmlFor="q" className="sr-only">
             Buscar por nome
           </label>
@@ -165,9 +182,29 @@ export default async function PreAnalysesPage({ searchParams }: { searchParams: 
             );
           })}
           <span className="ml-auto text-[13px] text-ink-2">
-            <strong className="num text-ink">{rows.length}</strong> {tab === "abertas" ? "em aberto" : `respondida${rows.length === 1 ? "" : "s"}`}
+            <strong className="num text-ink">{rows.length}</strong> {tab === "abertas" ? "em aberto" : `respondida${rows.length === 1 ? "" : "s"} em ${month.label.split(" ")[0]}`}
             {sp.consultora ? ` para ${consultants.find((c) => c.id === sp.consultora)?.name.split(" ")[0] ?? "a consultora"}` : ""}
           </span>
+        </nav>
+      )}
+      {tab === "respondidas" && (
+        <nav aria-label="Mês" className="mb-4 flex items-center gap-1">
+          <Link href={link({ mes: month.prev })} aria-label="Mês anterior" className="press grid size-10 place-items-center rounded-full border border-line-strong bg-surface text-[18px]">
+            ‹
+          </Link>
+          <span className="min-w-40 text-center text-[15px] font-semibold capitalize">{month.label}</span>
+          {month.current ? (
+            <span aria-hidden className="grid size-10 place-items-center text-[18px] text-ink-3/40">›</span>
+          ) : (
+            <Link href={link({ mes: month.next })} aria-label="Próximo mês" className="press grid size-10 place-items-center rounded-full border border-line-strong bg-surface text-[18px]">
+              ›
+            </Link>
+          )}
+          {!month.current && (
+            <Link href={link({ mes: undefined })} className="ml-2 text-[13px] font-semibold text-ink-2 underline underline-offset-2">
+              Mês atual
+            </Link>
+          )}
         </nav>
       )}
 

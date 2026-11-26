@@ -162,7 +162,7 @@ export async function createPreAnalysis(actor: AuthzActor, input: z.input<typeof
 
 // ─────────────── leitura ───────────────
 
-export async function listPreAnalyses(actor: AuthzActor, f: { tab?: "abertas" | "respondidas"; q?: string; consultantId?: string } = {}) {
+export async function listPreAnalyses(actor: AuthzActor, f: { tab?: "abertas" | "respondidas"; q?: string; consultantId?: string; answeredFrom?: Date; answeredTo?: Date } = {}) {
   assert(canCreatePreAnalysis(actor) || actor.role === "CONSULTANT");
   const open = f.tab !== "respondidas";
   return db.preAnalysis.findMany({
@@ -172,6 +172,8 @@ export async function listPreAnalyses(actor: AuthzActor, f: { tab?: "abertas" | 
       ...(f.q ? { fullName: { contains: f.q.trim(), mode: "insensitive" } } : {}),
       // filtro por consultora (gestão e pré-atendimento; a consultora já vê só as dela)
       ...(f.consultantId && actor.role !== "CONSULTANT" ? { consultantId: f.consultantId } : {}),
+      // respondidas de um mês (pela data da resposta)
+      ...(!open && (f.answeredFrom || f.answeredTo) ? { resultAt: { ...(f.answeredFrom ? { gte: f.answeredFrom } : {}), ...(f.answeredTo ? { lt: f.answeredTo } : {}) } } : {}),
     },
     orderBy: open ? { createdAt: "asc" } : { resultAt: "desc" },
     take: 200,

@@ -179,3 +179,18 @@ describe("pré-análises por consultora", () => {
     expect((await listPreAnalyses(u.a, { consultantId: u.b.id })).map((x) => x.id)).toEqual([a.id]);
   });
 });
+
+describe("pré-análises respondidas por mês", () => {
+  it("o filtro de mês usa a data da resposta", async () => {
+    const { listPreAnalyses } = await import("@/server/pre-analysis");
+    const jas = { id: (await db.user.create({ data: { name: "Jasmin Mês", email: "jas.mes@exemplo.test", role: "PRE_SERVICE" } })).id, role: "PRE_SERVICE" as const };
+    const out = await createPreAnalysis(jas, valid(), NOW);
+    const nov = await createPreAnalysis(jas, valid({ cpf: "168.995.350-09" }), new Date(NOW.getTime() + 60_000));
+    await resolvePreAnalysis(u.a, out.id, { status: "APPROVED", note: "Aprovado sem fiador" }, new Date("2026-10-20T15:00:00Z"));
+    await resolvePreAnalysis(u.a, nov.id, { status: "REJECTED", note: "Renda insuficiente" }, new Date("2026-11-03T15:00:00Z"));
+    const ids = (from: string, to: string) => listPreAnalyses(jas, { tab: "respondidas", answeredFrom: new Date(from), answeredTo: new Date(to) }).then((r) => r.map((x) => x.id));
+    expect(await ids("2026-10-01T03:00:00Z", "2026-11-01T03:00:00Z")).toEqual([out.id]);
+    expect(await ids("2026-11-01T03:00:00Z", "2026-12-01T03:00:00Z")).toEqual([nov.id]);
+    expect((await listPreAnalyses(jas, { tab: "respondidas" })).length).toBe(2);
+  });
+});

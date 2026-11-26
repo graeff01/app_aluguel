@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/back-link";
 import Link from "next/link";
 import { ClientFileLink } from "@/components/client-file-link";
 import { db } from "@/lib/db";
@@ -49,9 +50,9 @@ export default async function PreAnalysisPage({ params, searchParams }: { params
   const sizeLabel = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
   return (
     <div className="mx-auto max-w-3xl">
-      <Link href="/pre-analises" className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
+      <BackLink fallback="/pre-analises" history={!sp.enviada} className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink">
         ← Pré-análises
-      </Link>
+      </BackLink>
       {sp.enviada && <p role="status" className="mb-5 rounded-2xl bg-good-soft px-4 py-3 text-sm font-semibold text-good">✓ Enviada para {p.consultant.name}. Ela foi avisada no app.</p>}
       <PageHeader
         eyebrow="Pré-análise"
